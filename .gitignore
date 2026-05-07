@@ -7,3 +7,5 @@ __pycache__/
 *$py.class
 
 .venv
+
+config/certs/ca.pem
