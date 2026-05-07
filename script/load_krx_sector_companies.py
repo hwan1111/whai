@@ -1,11 +1,16 @@
 import argparse
 import json
+import sys
 from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from src.db_client import MySQLClient
 from src.pykrx_client import get_price_data
 
-CONFIG_FILE = Path(__file__).resolve().parents[1] / "config" / "krx_sector_top3.json"
+CONFIG_FILE = ROOT_DIR / "config" / "krx_sector_companies.json"
 
 
 def load_sector_list(config_path: Path) -> list[dict[str, str]]:
@@ -16,7 +21,7 @@ def load_sector_list(config_path: Path) -> list[dict[str, str]]:
     sectors = []
     for sector in data.get("sectors", []):
         sector_name = sector.get("name")
-        for company in sector.get("top", []):
+        for company in sector.get("companies", []):
             ticker = company.get("code", "").strip()
             if not ticker:
                 continue
@@ -67,7 +72,7 @@ def build_price_rows(df) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="KRX 섹터 top3 종목을 JSON에서 읽어와 company/price 테이블에 적재합니다."
+        description="KRX 섹터별 대표 종목을 JSON에서 읽어와 company/price 테이블에 적재합니다."
     )
     parser.add_argument(
         "--dry-run",

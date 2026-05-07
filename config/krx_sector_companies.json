@@ -1,0 +1,42 @@
+{
+  "source": "KRX DataMarketplace 2026-05-07",
+  "date_range": "2020-01-01 to present",
+  "description": "Selected KOSPI sectors with representative companies for data ingestion.",
+  "sectors": [
+    {
+      "name": "반도체",
+      "companies": [
+        {"name": "삼성전자", "code": "005930"},
+        {"name": "SK하이닉스", "code": "000660"}
+      ]
+    },
+    {
+      "name": "자동차",
+      "companies": [
+        {"name": "현대차", "code": "005380"},
+        {"name": "기아", "code": "000270"}
+      ]
+    },
+    {
+      "name": "방산",
+      "companies": [
+        {"name": "LIG디펜스앤에어로스페이스", "code": "079550"},
+        {"name": "한화에어로스페이스", "code": "012450"}
+      ]
+    },
+    {
+      "name": "금융",
+      "companies": [
+        {"name": "KB금융", "code": "105560"},
+        {"name": "신한지주", "code": "055550"}
+      ]
+    },
+    {
+      "name": "화학",
+      "companies": [
+        {"name": "LG화학", "code": "051910"},
+        {"name": "SK이노베이션", "code": "096770"}
+      ]
+    }
+  ]
+}
