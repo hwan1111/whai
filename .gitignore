@@ -1,1 +1,4 @@
 .env
+.venv
+config/certs/ca.pem
+.vscode
