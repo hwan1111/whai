@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WHAi — 로그인</title>
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-text">WH<span>Ai</span></div>
+      <div class="auth-logo-sub">다중 자산 지표 통합 분석 AI</div>
+    </div>
+    <div class="auth-title">로그인</div>
+    <div class="auth-sub">계속하려면 계정에 로그인하세요.</div>
+    <form onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label class="form-label">이메일</label>
+        <input class="form-input" type="email" id="email" placeholder="example@whai.kr" autocomplete="email" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">비밀번호</label>
+        <input class="form-input" type="password" id="password" placeholder="비밀번호 입력" autocomplete="current-password" required>
+      </div>
+      <div class="auth-error" id="auth-error">이메일 또는 비밀번호가 올바르지 않습니다.</div>
+      <button class="btn-login" type="submit">로그인</button>
+    </form>
+    <div class="auth-hint">
+      데모 계정: demo@whai.kr / 1234
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script>
+    if (getUser()) window.location.replace('pages/dashboard.html');
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const pw = document.getElementById('password').value;
+      if (email === 'demo@whai.kr' && pw === '1234') {
+        login('민', 'demo');
+        window.location.href = 'pages/dashboard.html';
+      } else {
+        document.getElementById('auth-error').style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>
