@@ -1,7 +1,12 @@
 .env
-.venv
+.env.local
+.vscode
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
+
+.venv
+
+config/certs/ca.pem
