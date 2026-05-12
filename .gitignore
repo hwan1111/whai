@@ -1,5 +1,8 @@
 .env
+.env.local
 .vscode
+CLAUDE.md
+.claude
 
 # Python
 __pycache__/
@@ -8,4 +11,10 @@ __pycache__/
 
 .venv
 
-config/certs/ca.pem
+config/certs/
+
+data
+
+docs/
+
+mlruns
