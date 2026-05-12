@@ -4,8 +4,8 @@ function _rootPath() {
   return window.location.pathname.includes('/pages/') ? '../' : './';
 }
 
-function login(name, id) {
-  localStorage.setItem(WHAI_SESSION_KEY, JSON.stringify({ name, id }));
+function login(name, id, token) {
+  localStorage.setItem(WHAI_SESSION_KEY, JSON.stringify({ name, id, token }));
 }
 
 function logout() {
@@ -18,8 +18,19 @@ function getUser() {
   return s ? JSON.parse(s) : null;
 }
 
+function getToken() {
+  return getUser()?.token ?? null;
+}
+
 function requireAuth() {
   if (!getUser()) {
     window.location.replace(_rootPath() + 'index.html');
   }
+}
+
+function toggleEye(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isHidden = input.type === 'password';
+  input.type = isHidden ? 'text' : 'password';
+  btn.style.opacity = isHidden ? '1' : '0.4';
 }
