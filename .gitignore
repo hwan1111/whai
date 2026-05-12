@@ -1,4 +1,6 @@
 .env
+.env.local
+.env.example
 .vscode
 
 # Python
@@ -6,6 +8,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-.venv
+.venv/
+data/
+*.zip
+*.log
+docs/
 
 config/certs/ca.pem

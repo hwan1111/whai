@@ -42,3 +42,8 @@ numpy>=1.24.0
 # Optional: Task scheduling
 celery==5.3.4
 redis==5.0.1
+
+# News Collector & Playwright
+beautifulsoup4
+boto3
+playwright
