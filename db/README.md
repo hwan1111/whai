@@ -7,7 +7,7 @@ Aiven MySQL 관리, 마이그레이션, 모니터링을 위한 디렉토리.
 ```
 Aiven MySQL (mysql-12676458-whai.b.aivencloud.com)
 ├── whai_service     ← 서비스 데이터 (포트폴리오, 거래, 뉴스 등)
-└── whai_admin       ← 관리/모니터링 (MLflow, 로깅, 감사 등)
+└── mlflow       ← 관리/모니터링 (MLflow, 로깅, 감사 등)
 ```
 
 ## 디렉토리 구조
@@ -31,7 +31,7 @@ python db/scripts/init_databases.py
 ```
 이 명령어가:
 - `whai_service` 데이터베이스 생성
-- `whai_admin` 데이터베이스 생성
+- `mlflow` 데이터베이스 생성
 
 ### 2️⃣ 연결 확인
 ```bash
@@ -49,8 +49,8 @@ python script/run_mlflow.py
 
 ```env
 # 서비스 데이터베이스 (기본 애플리케이션)
-DATABASE_URL=mysql+pymysql://user:pass@host:port/whai_service?ssl_ca=...
+SERVICE_DATABASE_URL=mysql+pymysql://user:pass@host:port/whai_service?ssl_ca=...
 
 # 관리 데이터베이스 (MLflow 등)
-ADMIN_DATABASE_URL=mysql+pymysql://user:pass@host:port/whai_admin?ssl_ca=...
+MLFLOW_DATABASE_URL=mysql+pymysql://user:pass@host:port/mlflow?ssl_ca=...
 ```
