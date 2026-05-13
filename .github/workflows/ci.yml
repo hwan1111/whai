@@ -65,7 +65,7 @@ jobs:
           # 테스트가 없으면 연결 테스트만 실행
           pytest test/test_aiven_connection.py -v || python test/test_aiven_connection.py
         env:
-          DATABASE_URL: mysql+pymysql://root:root@localhost:3306/test_db
+          SERVICE_DATABASE_URL: mysql+pymysql://root:root@localhost:3306/test_db
         continue-on-error: true
 
       - name: Upload coverage

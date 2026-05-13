@@ -19,33 +19,33 @@ class AivenConfig:
         elif os.path.exists(env_file):
             load_dotenv(env_file)
 
-        self.service_db_url = os.getenv("DATABASE_URL")
-        self.admin_db_url = os.getenv("ADMIN_DATABASE_URL")
+        self._service_db_url = os.getenv("SERVICE_DATABASE_URL")
+        self._mlflow_db_url = os.getenv("MLFLOW_DATABASE_URL")
         self.mlflow_backend_uri = os.getenv("MLFLOW_BACKEND_STORE_URI")
 
     @property
     def service_db(self) -> str:
         """Get service database URL (applications data)."""
-        if not self.service_db_url:
-            raise ValueError("DATABASE_URL not set in .env")
-        return self.service_db_url
+        if not self._service_db_url:
+            raise ValueError("SERVICE_DATABASE_URL not set in .env")
+        return self._service_db_url
 
     @property
     def admin_db(self) -> str:
         """Get admin database URL (MLflow, logging, monitoring)."""
-        if not self.admin_db_url:
-            raise ValueError("ADMIN_DATABASE_URL not set in .env")
-        return self.admin_db_url
+        if not self._mlflow_db_url:
+            raise ValueError("MLFLOW_DATABASE_URL not set in .env")
+        return self._mlflow_db_url
 
     @property
     def mlflow_db_url(self) -> str:
         """Get MLflow backend store URI.
 
-        Returns admin_db if MLFLOW_BACKEND_STORE_URI is set, otherwise uses admin_db.
+        Returns MLFLOW_BACKEND_STORE_URI if set, otherwise uses mlflow_db.
         """
         if self.mlflow_backend_uri:
             return self.mlflow_backend_uri
-        return self.admin_db
+        return self.mlflow_db
 
     def get_host_port(self, db_url: str = None) -> tuple[str, int]:
         """Extract host and port from database URL.
@@ -88,11 +88,11 @@ class AivenConfig:
         """String representation."""
         try:
             service_db_name = self.get_database_name(self.service_db)
-            admin_db_name = self.get_database_name(self.admin_db)
+            mlflow_db_name = self.get_database_name(self.mlflow_db)
             return (
                 f"<AivenConfig "
                 f"service_db={service_db_name} "
-                f"admin_db={admin_db_name}>"
+                f"mlflow_db={mlflow_db_name}>"
             )
         except:
             return "<AivenConfig (unconfigured)>"
