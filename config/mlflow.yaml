@@ -1,0 +1,6 @@
+server:
+  port: 5001
+  host: 127.0.0.1
+  backend_store_uri: ${MLFLOW_DATABASE_URL}
+  default_artifact_root: ${MLFLOW_ARTIFACTS_BUCKET}
+  log_level: info
