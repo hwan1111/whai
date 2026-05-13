@@ -11,12 +11,9 @@ from dotenv import load_dotenv
 def load_env():
     """Load environment from .env.local or .env"""
     env_local = Path(__file__).parent.parent / ".env.local"
-    env_file = Path(__file__).parent.parent / ".env"
 
     if env_local.exists():
         load_dotenv(env_local)
-    elif env_file.exists():
-        load_dotenv(env_file)
 
 
 def expand_env_vars(value: str) -> str:
@@ -45,7 +42,7 @@ def expand_env_vars(value: str) -> str:
 
 def load_mlflow_config() -> dict:
     """Load MLflow configuration from mlflow.yaml"""
-    config_path = Path(__file__).parent.parent / "mlflow.yaml"
+    config_path = Path(__file__).parent.parent / "config/mlflow.yaml"
 
     if not config_path.exists():
         raise FileNotFoundError(f"mlflow.yaml not found at {config_path}")
@@ -72,12 +69,13 @@ def run_mlflow_server(config: dict) -> None:
         cmd.extend(["--backend-store-uri", backend_uri])
 
     if "default_artifact_root" in config:
-        cmd.extend(["--default-artifact-root", config["default_artifact_root"]])
+        artifact_root = expand_env_vars(config["default_artifact_root"])
+        cmd.extend(["--default-artifact-root", artifact_root])
 
     print(f"🚀 Starting MLflow server")
     print(f"   Port: {config.get('port')}")
     print(f"   Host: {config.get('host')}")
-    print(f"   Backend: Aiven MySQL (whai_admin)\n")
+    print(f"   Backend: Aiven MySQL (mlflow)\n")
 
     subprocess.run(cmd)
 
