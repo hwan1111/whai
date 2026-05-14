@@ -1,1 +1,18 @@
 .env
+.env.local
+config/certs/ca.pem
+.venv
+data/
+
+# 로컬 분석/테스트 파일
+test.py
+test2.py
+tt.py
+test_date.parquet
+test_date2.parquet
+
+# 로컬 임시 파일
+dart_noise_reduction.md
+docs_cache/
+mockup.html
+mockup_preview.html
