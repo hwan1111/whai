@@ -44,7 +44,7 @@
       <div id="analysis-content" style="display:none">
       <div class="grid g21 mb">
         <div class="other-card">
-          <div class="other-card-title">상관계수 매트릭스 <span id="corr-period-label" style="font-size:9px;color:#94a3b8;font-weight:400;text-transform:none">Pearson · 6개월 일별 수익률</span></div>
+          <div class="other-card-title">상관계수 매트릭스 <span id="corr-period-label" style="font-size:9px;color:#94a3b8;font-weight:400;text-transform:none">Pearson · 6개월 수익률</span></div>
           <div id="matrix-container"></div>
           <div style="display:flex;gap:10px;margin-top:12px;font-size:10px;color:#64748b;flex-wrap:wrap">
             <span>범례:</span>
@@ -104,88 +104,60 @@
     '051910': 'LG화학',   '096770': 'SK이노베',
   };
 
-  /* ── 기간별 수익률 / 샤프 데이터 ── */
-  const PERIOD_DATA = {
-    '1W': {
-      label: '1주', days: 5,
-      RETURNS: { '005930':3.9, '000660':9.8, '005380':2.3, '000270':1.5,
-                 '079550':9.8,'012450':18.9, '105560':2.1, '055550':1.6, '051910':-2.3,'096770':1.4 },
-      SHARPE:  { '005930':1.95,'000660':2.58, '005380':0.85,'000270':0.65,
-                 '079550':2.42,'012450':3.28, '105560':1.05,'055550':0.92,'051910':-1.35,'096770':0.75 },
-    },
-    '1M': {
-      label: '1개월', days: 22,
-      RETURNS: { '005930':6.2, '000660':10.2, '005380':2.7, '000270':2.0,
-                 '079550':12.8,'012450':21.4, '105560':3.4, '055550':2.8, '051910':-4.5,'096770':2.5 },
-      SHARPE:  { '005930':1.82,'000660':2.41, '005380':0.71,'000270':0.52,
-                 '079550':2.34,'012450':3.12, '105560':0.95,'055550':0.74,'051910':-1.21,'096770':0.61 },
-    },
-    '3M': {
-      label: '3개월', days: 66,
-      RETURNS: { '005930':11.5,'000660':22.3, '005380':6.5, '000270':4.8,
-                 '079550':30.5,'012450':56.4, '105560':8.2, '055550':6.4, '051910':-7.8,'096770':5.8 },
-      SHARPE:  { '005930':1.58,'000660':2.12, '005380':0.76,'000270':0.58,
-                 '079550':2.21,'012450':2.98, '105560':1.02,'055550':0.82,'051910':-0.68,'096770':0.51 },
-    },
-    '6M': {
-      label: '6개월', days: 180,
-      RETURNS: { '005930':18.4,'000660':28.5, '005380':8.2, '000270':6.1,
-                 '079550':38.5,'012450':82.1, '105560':12.3,'055550':9.8, '051910':-8.4,'096770':5.2 },
-      SHARPE:  { '005930':1.42,'000660':1.85, '005380':0.82,'000270':0.61,
-                 '079550':2.15,'012450':2.71, '105560':1.08,'055550':0.88,'051910':-0.41,'096770':0.42 },
-    },
-    '1Y': {
-      label: '1년', days: 365,
-      RETURNS: { '005930':23.1,'000660':36.8, '005380':16.5,'000270':13.8,
-                 '079550':72.5,'012450':142.5,'105560':17.8,'055550':15.2,'051910':-18.5,'096770':14.8 },
-      SHARPE:  { '005930':1.21,'000660':1.52, '005380':0.88,'000270':0.71,
-                 '079550':1.98,'012450':2.42, '105560':1.14,'055550':0.92,'051910':-0.28,'096770':0.58 },
-    },
-    '3Y': {
-      label: '3년', days: 1095,
-      RETURNS: { '005930':18.5,'000660':78.5, '005380':42.5,'000270':35.2,
-                 '079550':192.8,'012450':358.5, '105560':42.8,'055550':35.5,'051910':-58.2,'096770':28.5 },
-      SHARPE:  { '005930':0.98,'000660':1.35, '005380':0.75,'000270':0.62,
-                 '079550':1.88,'012450':2.15, '105560':1.02,'055550':0.85,'051910':-0.42,'096770':0.48 },
-    },
-    'ALL': {
-      label: '전체', days: 1825,
-      RETURNS: { '005930':45.2,'000660':168.5, '005380':115.8,'000270':98.2,
-                 '079550':332.8,'012450':512.5, '105560':95.5,'055550':78.8,'051910':-58.5,'096770':52.5 },
-      SHARPE:  { '005930':0.85,'000660':1.22, '005380':0.68,'000270':0.58,
-                 '079550':1.75,'012450':1.98, '105560':0.95,'055550':0.78,'051910':-0.35,'096770':0.42 },
-    },
-  };
+  const PERIOD_LABEL = { '1W':'1주', '1M':'1개월', '3M':'3개월', '6M':'6개월', '1Y':'1년', '3Y':'3년', 'ALL':'전체' };
 
-  /* ── 기간별 상관계수 스케일 (짧을수록 낮음, 길수록 높음) ── */
-  const CORR_SCALE = { '1W': 0.72, '1M': 0.83, '3M': 0.92, '6M': 1.0, '1Y': 1.06, '3Y': 1.11, 'ALL': 1.16 };
+  const dataCache = {};
 
-  /* ── 상관계수 기준값 (6M) ── */
-  const CORR_DATA = {
-    '000660-005930':0.72,'005380-005930':0.38,'000270-005930':0.35,
-    '005930-079550':0.12,'005930-012450':0.18,'005930-105560':0.33,
-    '005930-055550':0.28,'005930-051910':0.49,'005930-096770':0.41,
-    '000270-000660':0.31,'000660-005380':0.28,'000660-079550':0.15,
-    '000660-012450':0.22,'000660-105560':0.25,'000660-055550':0.21,
-    '000660-051910':0.45,'000660-096770':0.38,
-    '000270-005380':0.81,'005380-079550':0.21,'005380-012450':0.19,
-    '005380-105560':0.42,'005380-055550':0.38,'005380-051910':0.25,
-    '005380-096770':0.31,
-    '000270-079550':0.18,'000270-012450':0.16,'000270-105560':0.38,
-    '000270-055550':0.34,'000270-051910':0.22,'000270-096770':0.28,
-    '012450-079550':0.65,'079550-105560':0.14,'055550-079550':0.11,
-    '051910-079550':0.08,'079550-096770':0.12,
-    '012450-105560':0.17,'012450-055550':0.14,'012450-051910':0.15,
-    '012450-096770':0.11,
-    '105560-055550':0.76,'051910-105560':0.35,'096770-105560':0.29,
-    '051910-055550':0.31,'055550-096770':0.25,
-    '051910-096770':0.58,
-  };
+  async function fetchHistory(ticker, period) {
+    const key = `${ticker}_${period}`;
+    if (dataCache[key]) return dataCache[key];
+    try {
+      const headers = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
+      const res = await fetch(`${API_BASE}/prices/${ticker}/history?period=${period}`, { headers });
+      if (!res.ok) return null;
+      const rows = await res.json();
+      if (rows.length < 2) return null;
 
-  function getCorr(a, b) {
-    if (a === b) return 1.0;
-    const base = CORR_DATA[[a,b].sort().join('-')] ?? 0.15;
-    return Math.min(0.99, +(base * CORR_SCALE[currentPeriod]).toFixed(2));
+      const dates  = rows.map(r => r.date);
+      const closes = rows.map(r => Number(r.close));
+      const totalReturn = rows[rows.length - 1].return_pct;
+
+      const dailyReturns = [];
+      for (let i = 1; i < closes.length; i++)
+        dailyReturns.push((closes[i] - closes[i - 1]) / closes[i - 1]);
+      const dailyReturnDates = dates.slice(1);
+
+      const result = { dates, closes, dailyReturns, dailyReturnDates, totalReturn, sharpe: calcSharpe(dailyReturns) };
+      dataCache[key] = result;
+      return result;
+    } catch { return null; }
+  }
+
+  function calcSharpe(dr) {
+    if (dr.length < 2) return 0;
+    const mean = dr.reduce((a, b) => a + b, 0) / dr.length;
+    const std  = Math.sqrt(dr.reduce((a, b) => a + (b - mean) ** 2, 0) / dr.length);
+    return std === 0 ? 0 : parseFloat((mean / std * Math.sqrt(252)).toFixed(2));
+  }
+
+  function calcPearson(d1, d2) {
+    const map1 = {}, map2 = {};
+    d1.dailyReturnDates.forEach((d, i) => { map1[d] = d1.dailyReturns[i]; });
+    d2.dailyReturnDates.forEach((d, i) => { map2[d] = d2.dailyReturns[i]; });
+    const common = d1.dailyReturnDates.filter(d => map2[d] !== undefined);
+    if (common.length < 2) return 0;
+    const r1 = common.map(d => map1[d]);
+    const r2 = common.map(d => map2[d]);
+    const n = r1.length;
+    const m1 = r1.reduce((a, b) => a + b, 0) / n;
+    const m2 = r2.reduce((a, b) => a + b, 0) / n;
+    let num = 0, den1 = 0, den2 = 0;
+    for (let i = 0; i < n; i++) {
+      const a = r1[i] - m1, b = r2[i] - m2;
+      num += a * b; den1 += a * a; den2 += b * b;
+    }
+    const denom = Math.sqrt(den1 * den2);
+    return denom === 0 ? 0 : parseFloat((num / denom).toFixed(2));
   }
 
   function corrStyle(v) {
@@ -215,21 +187,24 @@
     }
   });
 
-  function renderAll() {
+  async function renderAll() {
     renderAnalysisChips();
     const hasStocks = selected.length >= 2;
     document.getElementById('analysis-empty').style.display   = hasStocks ? 'none' : 'flex';
     document.getElementById('analysis-content').style.display = hasStocks ? 'block' : 'none';
     if (!hasStocks) return;
 
-    const pd = PERIOD_DATA[currentPeriod];
-    const labelMap = { '1W':'1주 일별', '1M':'1개월 일별', '3M':'3개월 일별', '6M':'6개월 일별', '1Y':'1년 일별', '3Y':'3년 일별', 'ALL':'전체 연별' };
-    document.getElementById('corr-period-label').textContent = `Pearson · ${labelMap[currentPeriod]} 수익률`;
-    document.getElementById('return-period-label').textContent = `${pd.label} 수익률`;
-    document.getElementById('ai-src-days').textContent = `📊 ${labelMap[currentPeriod]} 데이터`;
-    renderMatrix();
-    renderRiskReturn();
-    renderAI();
+    document.getElementById('corr-period-label').textContent  = `Pearson · ${PERIOD_LABEL[currentPeriod]} 수익률`;
+    document.getElementById('return-period-label').textContent = `${PERIOD_LABEL[currentPeriod]} 수익률`;
+    document.getElementById('ai-src-days').textContent         = `📊 ${PERIOD_LABEL[currentPeriod]} 데이터`;
+
+    const results = await Promise.all(selected.map(id => fetchHistory(id, currentPeriod)));
+    const stockData = {};
+    selected.forEach((id, i) => { if (results[i]) stockData[id] = results[i]; });
+
+    renderMatrix(stockData);
+    renderRiskReturn(stockData);
+    renderAI(stockData);
   }
 
   function renderAnalysisChips() {
@@ -239,9 +214,9 @@
       ).join('') + `<div class="chip chip-add" onclick="togglePicker()">+ 종목 추가</div>`;
   }
 
-  function renderMatrix() {
+  function renderMatrix(stockData) {
     const el = document.getElementById('matrix-container');
-    if (selected.length === 0) {
+    if (!selected.length) {
       el.innerHTML = '<p style="color:#94a3b8;font-size:12px;padding:8px 0">종목을 선택해주세요.</p>';
       return;
     }
@@ -253,8 +228,10 @@
       selected.forEach(col => {
         if (row === col) {
           h += `<td class="mc" style="background:#f1f5f9;border:1px solid #e2e8f0"></td>`;
+        } else if (!stockData[row] || !stockData[col]) {
+          h += `<td class="mc" style="background:#f8fafc;color:#94a3b8">—</td>`;
         } else {
-          const v = getCorr(row, col);
+          const v = calcPearson(stockData[row], stockData[col]);
           h += `<td class="mc" style="${corrStyle(v)}">${v.toFixed(2)}</td>`;
         }
       });
@@ -264,22 +241,22 @@
     el.innerHTML = h;
   }
 
-  function renderRiskReturn() {
-    const { RETURNS, SHARPE } = PERIOD_DATA[currentPeriod];
-
+  function renderRiskReturn(stockData) {
     document.getElementById('returns-container').innerHTML = selected.map(id => {
-      const r = RETURNS[id] ?? 0;
-      const pos = r >= 0;
+      const d = stockData[id];
+      if (!d) return `<div class="ret-box" style="background:#f8fafc"><div class="ret-label">${SHORT[id]}</div><div class="ret-value" style="color:#94a3b8">—</div></div>`;
+      const r = d.totalReturn, pos = r >= 0;
       return `<div class="ret-box" style="background:${pos?'#f0fdf4':'#fef2f2'}">
         <div class="ret-label">${SHORT[id]}</div>
         <div class="ret-value ${pos?'positive':'negative'}">${pos?'+':''}${r.toFixed(1)}%</div>
       </div>`;
     }).join('');
 
-    const maxS = Math.max(...selected.map(id => Math.abs(SHARPE[id] ?? 0)), 1);
-    document.getElementById('sharpe-container').innerHTML = selected.map(id => {
-      const s = SHARPE[id] ?? 0;
-      const pos = s >= 0;
+    const sharpeVals = selected.map(id => stockData[id]?.sharpe ?? 0);
+    const maxS = Math.max(...sharpeVals.map(Math.abs), 1);
+    document.getElementById('sharpe-container').innerHTML = selected.map((id, i) => {
+      if (!stockData[id]) return '';
+      const s = sharpeVals[i], pos = s >= 0;
       const pct = Math.min(Math.abs(s) / maxS * 100, 100).toFixed(0);
       return `<div class="factor-row" style="margin-bottom:7px">
         <div class="factor-label" style="width:80px">${SHORT[id]}</div>
@@ -289,25 +266,25 @@
     }).join('');
   }
 
-  function renderAI() {
-    const { RETURNS, label } = PERIOD_DATA[currentPeriod];
-    document.getElementById('ai-title').textContent = `${selected.length}개 종목 통합 인사이트 — ${label}`;
-    if (selected.length < 2) {
-      document.getElementById('ai-text').innerHTML = '종목을 2개 이상 선택하면 AI 분석이 시작됩니다.';
+  function renderAI(stockData) {
+    document.getElementById('ai-title').textContent = `${selected.length}개 종목 통합 인사이트 — ${PERIOD_LABEL[currentPeriod]}`;
+    const withData = selected.filter(id => stockData[id]);
+    if (withData.length < 2) {
+      document.getElementById('ai-text').innerHTML = '데이터를 불러오는 중입니다.';
       return;
     }
-    const best = selected.reduce((a, b) => (RETURNS[a]??0) > (RETURNS[b]??0) ? a : b);
-    const worst = selected.reduce((a, b) => (RETURNS[a]??0) < (RETURNS[b]??0) ? a : b);
+    const best  = withData.reduce((a, b) => stockData[a].totalReturn > stockData[b].totalReturn ? a : b);
+    const worst = withData.reduce((a, b) => stockData[a].totalReturn < stockData[b].totalReturn ? a : b);
     const pairs = [];
-    for (let i = 0; i < selected.length; i++)
-      for (let j = i + 1; j < selected.length; j++)
-        pairs.push([selected[i], selected[j], getCorr(selected[i], selected[j])]);
+    for (let i = 0; i < withData.length; i++)
+      for (let j = i + 1; j < withData.length; j++)
+        pairs.push([withData[i], withData[j], calcPearson(stockData[withData[i]], stockData[withData[j]])]);
     pairs.sort((a, b) => a[2] - b[2]);
-    const lowCorr = pairs[0];
-    const bestRet = RETURNS[best] ?? 0;
-    const worstRet = RETURNS[worst] ?? 0;
+    const lowCorr  = pairs[0];
+    const bestRet  = stockData[best].totalReturn;
+    const worstRet = stockData[worst].totalReturn;
     document.getElementById('ai-text').innerHTML =
-      `<strong>${SHORT[best]}</strong>(${bestRet>=0?'+':''}${bestRet.toFixed(1)}%)이 선택 종목 중 가장 높은 수익률을 기록했습니다. ` +
+      `<strong>${SHORT[best]}</strong>(${bestRet >= 0 ? '+' : ''}${bestRet.toFixed(1)}%)이 선택 종목 중 가장 높은 수익률을 기록했습니다. ` +
       `${SHORT[lowCorr[0]]}와 ${SHORT[lowCorr[1]]}의 상관계수는 <strong>${lowCorr[2].toFixed(2)}</strong>로 ` +
       `가장 낮아 분산 효과가 큽니다. ` +
       (worstRet < 0

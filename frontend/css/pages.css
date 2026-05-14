@@ -1,6 +1,4 @@
 .grid { display: grid; gap: 14px; }
-.spinner { width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:var(--primary);border-radius:50%;animation:spin 0.7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .g21 { grid-template-columns: 2fr 1fr; }
 .g11 { grid-template-columns: 1fr 1fr; }
 .mb { margin-bottom: 14px; }
