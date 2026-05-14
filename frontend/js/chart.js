@@ -2,7 +2,7 @@ const SW = 860, SH = 300, ML = 52, MR = 72, MT = 22, MB = 38;
 const CW = SW - ML - MR, CH = SH - MT - MB;
 
 let currentPeriod = '6M';
-let activeAssets = ['KOSPI'];
+let activeAssets = ['005930'];
 
 function toX(i, n) { return ML + (i / (n - 1)) * CW; }
 function toY(v, minV, maxV) { return MT + ((maxV - v) / (maxV - minV)) * CH; }
@@ -18,13 +18,23 @@ function niceTicks(min, max, target) {
   return ticks;
 }
 
-function renderChart() {
+async function render() {
+  await Promise.all(activeAssets.map(id => fetchAssetData(id, currentPeriod)));
+  const pd = buildPeriodData(currentPeriod, activeAssets);
+  renderChips();
+  _renderChart(pd);
+  _renderLegend(pd);
+  document.querySelectorAll('[data-id]').forEach(el => {
+    el.classList.toggle('in-chart', activeAssets.includes(el.dataset.id));
+  });
+}
+
+function _renderChart(pd) {
   const svg = document.getElementById('main-chart');
-  if (activeAssets.length === 0) {
+  if (!pd || activeAssets.length === 0) {
     svg.innerHTML = `<text x="430" y="155" text-anchor="middle" font-size="14" fill="#94a3b8">지표를 추가해주세요</text>`;
     return;
   }
-  const pd = DATA[currentPeriod];
   const n = pd.labels.length;
 
   let allV = [0];
@@ -76,6 +86,20 @@ function renderChart() {
   svg.innerHTML = h;
 }
 
+function _renderLegend(pd) {
+  document.getElementById('chart-legend').innerHTML = activeAssets.map(a => {
+    const vals = pd?.d[a];
+    const last = vals ? vals[vals.length - 1] : 0;
+    const sign = last >= 0 ? '+' : '';
+    const col = last >= 0 ? '#16a34a' : '#dc2626';
+    return `<div class="leg-item">
+      <div class="leg-dot" style="background:${ASSETS[a].color}"></div>
+      <span class="leg-name">${ASSETS[a].label}</span>
+      <span class="leg-val" style="color:${col}">${sign}${last.toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+}
+
 function renderChips() {
   const kospiMeta = ASSETS['KOSPI'];
   const kospiActive = activeAssets.includes('KOSPI');
@@ -102,21 +126,6 @@ function renderChips() {
   document.getElementById('active-chips').innerHTML = kospiChip + otherChips;
 }
 
-function renderLegend() {
-  const pd = DATA[currentPeriod];
-  document.getElementById('chart-legend').innerHTML = activeAssets.map(a => {
-    const vals = pd.d[a];
-    const last = vals ? vals[vals.length - 1] : 0;
-    const sign = last >= 0 ? '+' : '';
-    const col = last >= 0 ? '#16a34a' : '#dc2626';
-    return `<div class="leg-item">
-      <div class="leg-dot" style="background:${ASSETS[a].color}"></div>
-      <span class="leg-name">${ASSETS[a].label}</span>
-      <span class="leg-val" style="color:${col}">${sign}${last.toFixed(1)}%</span>
-    </div>`;
-  }).join('');
-}
-
 function renderDropdown() {
   const groups = [
     { label: '지수',   ids: ['KOSPI'] },
@@ -140,27 +149,18 @@ function renderDropdown() {
   `).join('');
 }
 
-function render() {
-  renderChips();
-  renderChart();
-  renderLegend();
-  document.querySelectorAll('[data-id]').forEach(el => {
-    el.classList.toggle('in-chart', activeAssets.includes(el.dataset.id));
-  });
-}
-
-function toggleAsset(id) {
+async function toggleAsset(id) {
   if (activeAssets.includes(id)) {
     activeAssets = activeAssets.filter(a => a !== id);
   } else {
     activeAssets.push(id);
   }
-  render();
+  await render();
 }
 
-function removeAsset(id) {
+async function removeAsset(id) {
   activeAssets = activeAssets.filter(a => a !== id);
-  render();
+  await render();
 }
 
 function toggleDropdown(e) {
@@ -176,10 +176,10 @@ document.addEventListener('click', () => {
   if (dd) dd.style.display = 'none';
 });
 
-document.getElementById('period-sel').addEventListener('click', e => {
+document.getElementById('period-sel').addEventListener('click', async e => {
   const btn = e.target.closest('.per-btn');
   if (!btn) return;
   currentPeriod = btn.dataset.p;
   document.querySelectorAll('.per-btn').forEach(b => b.classList.toggle('active', b === btn));
-  render();
+  await render();
 });

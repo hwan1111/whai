@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.db import engine, Base
-from backend.routers import auth, news
+from backend.routers import auth, news, prices, exchange_rates
 import backend.models.user  # noqa: F401 — Base에 모델 등록
 import backend.models.user_profile  # noqa: F401
 import backend.models.news  # noqa: F401
@@ -24,6 +24,8 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(news.router, prefix="/api/v1")
+app.include_router(prices.router, prefix="/api/v1")
+app.include_router(exchange_rates.router, prefix="/api/v1")
 
 
 @app.get("/health")
