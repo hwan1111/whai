@@ -33,10 +33,6 @@
     <div class="auth-hint">
       계정이 없으신가요? <a href="#" class="auth-link" onclick="showRegister()">회원가입</a>
     </div>
-    <div class="auth-demo">
-      <span class="auth-demo-label">데모 계정</span>
-      아이디 <strong>id123</strong> · 비밀번호 <strong>pw123</strong>
-    </div>
   </div>
 
   <!-- 회원가입 카드 -->
@@ -90,6 +86,17 @@
           </select>
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">투자성향 <span class="optional">(선택)</span></label>
+        <div class="invest-group" id="invest-group">
+          <div class="invest-option" data-val="SAFE">안정형</div>
+          <div class="invest-option" data-val="STAB">안정추구형</div>
+          <div class="invest-option" data-val="NEUT">위험중립형</div>
+          <div class="invest-option" data-val="GROW">적극투자형</div>
+          <div class="invest-option" data-val="AGGR">공격투자형</div>
+        </div>
+      </div>
+
       <div class="auth-error" id="register-error"></div>
       <button class="btn-login" type="submit" id="register-btn">가입하기</button>
     </form>
@@ -100,7 +107,7 @@
 
   <script src="js/auth.js"></script>
   <script>
-    const API = 'http://localhost:8002/api/v1';
+    const API = 'http://127.0.0.1:8000/api/v1';
 
     if (getUser()) window.location.replace('pages/dashboard.html');
 
@@ -115,9 +122,21 @@
       }
     })();
 
+    let investListenerAttached = false;
     function showRegister() {
       document.getElementById('login-card').style.display = 'none';
       document.getElementById('register-card').style.display = '';
+      if (!investListenerAttached) {
+        document.getElementById('invest-group').addEventListener('click', function(e) {
+          const opt = e.target.closest('.invest-option');
+          if (!opt) return;
+          const val = opt.dataset.val;
+          selectedInvest = selectedInvest === val ? null : val;
+          document.querySelectorAll('#invest-group .invest-option').forEach(o => o.classList.remove('selected'));
+          if (selectedInvest) opt.classList.add('selected');
+        });
+        investListenerAttached = true;
+      }
     }
 
     function showLogin() {
@@ -126,9 +145,6 @@
     }
 
     // ── 로그인 ──
-    const DEMO_ID = 'id123';
-    const DEMO_PW = 'pw123';
-
     async function handleLogin(e) {
       e.preventDefault();
       const user_id = document.getElementById('login-id').value.trim();
@@ -137,13 +153,6 @@
       const btn = document.getElementById('login-btn');
 
       errEl.style.display = 'none';
-
-      if (user_id === DEMO_ID && password === DEMO_PW) {
-        login('데모 사용자', DEMO_ID, null);
-        window.location.href = 'pages/dashboard.html';
-        return;
-      }
-
       btn.disabled = true;
       btn.textContent = '로그인 중...';
       try {
@@ -184,6 +193,8 @@
       el.textContent = msg;
       el.className = 'field-hint ' + type;
     }
+
+    let selectedInvest = null;
 
     document.getElementById('reg-id').addEventListener('input', function () {
       const val = this.value.trim();
@@ -260,6 +271,7 @@
         password:   pw,
         birth_year: document.getElementById('reg-birth').value ? parseInt(document.getElementById('reg-birth').value) : null,
         gender:     document.getElementById('reg-gender').value || null,
+        invest_type: selectedInvest,
       };
 
       const btn = document.getElementById('register-btn');

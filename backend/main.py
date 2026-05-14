@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.db import engine, Base
 from backend.routers import auth
 import backend.models.user  # noqa: F401 — Base에 모델 등록
+import backend.models.user_profile  # noqa: F401
 
 try:
     Base.metadata.create_all(bind=engine)

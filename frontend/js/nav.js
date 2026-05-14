@@ -14,7 +14,7 @@ const PAGE_TITLES = {
   myreport:  '내 리포트',
 };
 
-const API_BASE = 'http://localhost:8002/api/v1';
+const API_BASE = 'http://127.0.0.1:8000/api/v1';
 
 function initLayout(pageKey) {
   requireAuth();
