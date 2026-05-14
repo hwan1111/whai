@@ -1,0 +1,13 @@
+{
+  "tickers": [
+    {
+      "ticker": "005930",
+      "company": "삼성전자",
+      "data_source": "local"
+    }
+  ],
+  "default_data_source": "local",
+  "s3_bucket": "fisa-news-archive",
+  "s3_prefix": "raw",
+  "notes": "Add more tickers as data becomes available. Data sources: 'local' (file system), 'data_team_api' (future)"
+}

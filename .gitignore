@@ -2,6 +2,8 @@
 .env.local
 .env.example
 .vscode
+CLAUDE.md
+.claude
 
 # Python
 __pycache__/
@@ -14,4 +16,6 @@ data/
 *.log
 docs/
 
-config/certs/ca.pem
+config/certs/
+
+mlruns
