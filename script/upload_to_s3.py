@@ -1,5 +1,6 @@
 import os
 import glob
+import json
 import boto3
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -33,32 +34,46 @@ for folder in TARGET_FOLDERS:
 
 total_files = len(json_files)
 
-print(f"🚀 총 {total_files}개의 뉴스 파일을 찾았습니다.")
-print(f"[{BUCKET_NAME}] 버킷으로 병렬 업로드를 시작합니다 (초고속 모드)...\n")
+print(f"[시작] 총 {total_files}개의 뉴스 파일을 찾았습니다.")
+print(f"[{BUCKET_NAME}] 버킷으로 병렬 업로드를 시작합니다...\n")
 
 # 4. 단일 파일 업로드 함수
 def upload_file_to_s3(filepath):
     # 로컬 경로 예: data/news/삼성전자_005930/2020-01-01.json
-    
+
     # 파일명 추출 (예: 2020-01-01.json)
     filename = os.path.basename(filepath)
-    
+
     # 상위 폴더명 추출 (예: 삼성전자_005930)
     folder_name = os.path.basename(os.path.dirname(filepath))
-    
+
     # 티커 추출 (예: 005930)
     ticker = folder_name.split('_')[-1]
-    
+
     # 연도와 월 추출
     year = filename[:4]
     month = filename[5:7]
-    
+
     # 팀 규칙에 맞춘 최종 S3 경로 생성
     # 규칙: raw/{ticker}/{year}/{month}/{filename}
     s3_key = f"raw/{ticker}/{year}/{month}/{filename}"
-    
-    # S3 업로드 실행
-    s3.upload_file(filepath, BUCKET_NAME, s3_key)
+
+    # JSON 읽기 → fulltext_length 필드 추가 → S3에 업로드
+    with open(filepath, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    fulltext = data.get('fulltext')  # None 또는 문자열
+    data['fulltext_length'] = len(fulltext) if fulltext else 0
+
+    body = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
+
+    # put_object로 수정된 내용을 직접 업로드 (로컬 파일은 변경하지 않음)
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=s3_key,
+        Body=body,
+        ContentType='application/json; charset=utf-8'
+    )
     return True
 
 # 5. 병렬 처리 (10개씩 동시에 업로드)
@@ -78,4 +93,4 @@ with ThreadPoolExecutor(max_workers=10) as executor:
         except Exception as e:
             print(f"업로드 오류 발생: {e}")
 
-print(f"\n✅ S3 업로드 완벽 종료! (성공: {success_count}/{total_files}개)")
+print(f"\n[완료] S3 업로드 완료! (성공: {success_count}/{total_files}개)")
