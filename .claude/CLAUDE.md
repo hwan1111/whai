@@ -26,10 +26,11 @@ This is a greenfield ML/data engineering project with a monorepo layout. The dir
 
 | Layer | Technology |
 |-------|------------|
-| Language | Python 3.12.12 — use 3.12 features freely, no backward compatibility needed |
+| Language | Python 3.12.10 — use 3.12 features freely, no backward compatibility needed |
 | Container | Docker on Ubuntu 22.04 — all shell scripts and system commands target this environment |
-| DB (primary) | MySQL via Aiven (managed) — SSL is required; configure connections accordingly in `config/` |
+| DB (primary) | MySQL via Aiven |
 | DB (archive) | AWS S3 — large CSV/Parquet datasets live here, not in `data/`; use boto3 or s3fs for access |
+| DB (search) | Opensearch via Aiven
 | In-memory | Pandas DataFrame — keep inference results as DataFrames to support downstream XAI computation |
 | Pipeline | Apache Airflow |
 | Deploy | AWS EC2 |

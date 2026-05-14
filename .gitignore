@@ -1,8 +1,23 @@
 .env
 .env.local
-config/certs/ca.pem
+.vscode
+CLAUDE.md
+.claude
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
 .venv
+
+config/certs/
+
 data/
+
+docs/
+
+mlruns
 
 # 로컬 분석/테스트 파일
 test.py
