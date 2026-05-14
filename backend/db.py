@@ -1,18 +1,25 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-load_dotenv(".env")
-load_dotenv(".env.local", override=True)
+ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / ".env.local", override=True)
 
-_url = (
-    f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}"
-    f"@{os.getenv('MYSQL_HOST')}:{os.getenv('MYSQL_PORT', 3306)}/{os.getenv('MYSQL_DATABASE')}"
-    f"?charset=utf8mb4"
-)
+_raw_url = os.getenv("SERVICE_DATABASE_URL", "")
+CA_PATH = str(ROOT / "config" / "certs" / "ca.pem")
 
-engine = create_engine(_url, pool_pre_ping=True)
+# ssl_ca=${CA_PATH} 리터럴 치환
+if "ssl_ca=" in _raw_url:
+    _base_url = _raw_url.split("?")[0]
+    _url = f"{_base_url}?charset=utf8mb4"
+    _connect_args = {"ssl": {"ca": CA_PATH}}
+else:
+    _url = _raw_url
+    _connect_args = {}
+
+engine = create_engine(_url, connect_args=_connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

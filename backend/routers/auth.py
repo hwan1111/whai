@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.db import get_db
 from backend.models.user import User
+from backend.models.user_profile import UserProfile
 from backend.schemas.auth import ChangePasswordRequest, LoginRequest, RegisterRequest, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -46,8 +47,8 @@ def check_id(user_id: str, db: Session = Depends(get_db)) -> dict:
     try:
         exists = db.get(User, user_id) is not None
         return {"available": not exists}
-    except Exception:
-        raise HTTPException(status_code=503, detail="db_unavailable")
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"db_unavailable: {type(e).__name__}: {e}")
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -63,6 +64,8 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)) -> dict:
         gender=body.gender,
     )
     db.add(user)
+    if body.invest_type:
+        db.add(UserProfile(user_id=body.user_id, invest_type=body.invest_type))
     db.commit()
     return {"message": "회원가입이 완료되었습니다."}
 
