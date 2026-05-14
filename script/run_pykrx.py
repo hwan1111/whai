@@ -22,6 +22,10 @@ def load_tickers() -> dict[str, str]:
     return {r.ticker: r.name for r in rows}
 
 
+KOSPI_TICKER    = "000000"
+KOSPI_KRX_CODE  = "1001"   # pykrx 지수 코드
+
+
 def load_price(tickers: dict[str, str]) -> None:
     try:
         from pykrx import stock as krx
@@ -33,17 +37,24 @@ def load_price(tickers: dict[str, str]) -> None:
     for ticker, name in tickers.items():
         print(f"  {ticker} ({name}) 조회 중...", end=" ", flush=True)
         try:
-            df = krx.get_market_ohlcv_by_date(START, END, ticker)
+            if ticker == KOSPI_TICKER:
+                df = krx.get_index_ohlcv_by_date(START, END, KOSPI_KRX_CODE)
+            else:
+                df = krx.get_market_ohlcv_by_date(START, END, ticker)
+
             if df.empty:
                 print("데이터 없음")
                 continue
+
+            close_col  = "종가"
+            volume_col = "거래량" if "거래량" in df.columns else None
 
             rows = [
                 {
                     "ticker": ticker,
                     "date":   idx.strftime("%Y-%m-%d"),
-                    "close":  int(row["종가"]),
-                    "volume": int(row["거래량"]),
+                    "close":  int(row[close_col]),
+                    "volume": int(row[volume_col]) if volume_col else 0,
                 }
                 for idx, row in df.iterrows()
             ]
