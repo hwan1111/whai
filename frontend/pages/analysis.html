@@ -150,7 +150,10 @@
     },
   };
 
-  /* ── 상관계수 (기간 무관, 고정) ── */
+  /* ── 기간별 상관계수 스케일 (짧을수록 낮음, 길수록 높음) ── */
+  const CORR_SCALE = { '1W': 0.72, '1M': 0.83, '3M': 0.92, '6M': 1.0, '1Y': 1.06, '3Y': 1.11, 'ALL': 1.16 };
+
+  /* ── 상관계수 기준값 (6M) ── */
   const CORR_DATA = {
     '000660-005930':0.72,'005380-005930':0.38,'000270-005930':0.35,
     '005930-079550':0.12,'005930-012450':0.18,'005930-105560':0.33,
@@ -174,7 +177,8 @@
 
   function getCorr(a, b) {
     if (a === b) return 1.0;
-    return CORR_DATA[[a,b].sort().join('-')] ?? 0.15;
+    const base = CORR_DATA[[a,b].sort().join('-')] ?? 0.15;
+    return Math.min(0.99, +(base * CORR_SCALE[currentPeriod]).toFixed(2));
   }
 
   function corrStyle(v) {
