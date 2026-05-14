@@ -60,7 +60,7 @@ def load_price():
                 {
                     "ticker": ticker,
                     "date":   idx.strftime("%Y-%m-%d"),
-                    "close":  float(row["종가"]),
+                    "close":  int(row["종가"]),
                     "volume": int(row["거래량"]),
                 }
                 for idx, row in df.iterrows()
