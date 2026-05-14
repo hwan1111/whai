@@ -1,7 +1,7 @@
-"""KRX 종목 주가 데이터를 pykrx로 가져와 price / company 테이블에 적재."""
+"""KRX 종목 주가 데이터를 pykrx로 가져와 price 테이블에 적재."""
 
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -9,38 +9,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import text
 from backend.db import engine
 
-TICKERS = {
-    "005930": ("삼성전자",   "반도체"),
-    "000660": ("SK하이닉스", "반도체"),
-    "005380": ("현대차",     "자동차"),
-    "000270": ("기아",       "자동차"),
-    "079550": ("LIG넥스원",  "방산"),
-    "012450": ("한화에어로스페이스", "방산"),
-    "105560": ("KB금융",     "금융"),
-    "055550": ("신한지주",   "금융"),
-    "051910": ("LG화학",     "화학"),
-    "096770": ("SK이노베이션", "화학"),
-}
-
 START = "20230101"
 END   = date.today().strftime("%Y%m%d")
 
 
-def load_company():
-    rows = [
-        {"ticker": t, "name": name, "sector": sector, "currency_code": "KRW"}
-        for t, (name, sector) in TICKERS.items()
-    ]
-    with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO company (ticker, name, sector, currency_code)
-            VALUES (:ticker, :name, :sector, :currency_code)
-            ON DUPLICATE KEY UPDATE name=VALUES(name), sector=VALUES(sector)
-        """), rows)
-    print(f"company: {len(rows)}개 종목 적재 완료")
+def load_tickers() -> dict[str, str]:
+    """company 테이블에서 KRW 종목 ticker, name 조회."""
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT ticker, name FROM company WHERE currency_code = 'KRW' ORDER BY ticker"
+        )).fetchall()
+    return {r.ticker: r.name for r in rows}
 
 
-def load_price():
+def load_price(tickers: dict[str, str]) -> None:
     try:
         from pykrx import stock as krx
     except ImportError:
@@ -48,8 +30,8 @@ def load_price():
         sys.exit(1)
 
     total = 0
-    for ticker in TICKERS:
-        print(f"  {ticker} ({TICKERS[ticker][0]}) 조회 중...", end=" ", flush=True)
+    for ticker, name in tickers.items():
+        print(f"  {ticker} ({name}) 조회 중...", end=" ", flush=True)
         try:
             df = krx.get_market_ohlcv_by_date(START, END, ticker)
             if df.empty:
@@ -82,7 +64,11 @@ def load_price():
 
 
 if __name__ == "__main__":
-    print(f"=== KRX 데이터 적재 ({START} ~ {END}) ===\n")
-    load_company()
-    print()
-    load_price()
+    tickers = load_tickers()
+    if not tickers:
+        print("company 테이블에 종목이 없습니다. 먼저 company 데이터를 적재해주세요.")
+        sys.exit(1)
+
+    print(f"=== KRX 데이터 적재 ({START} ~ {END}) ===")
+    print(f"대상 종목: {len(tickers)}개 — {', '.join(tickers.values())}\n")
+    load_price(tickers)
