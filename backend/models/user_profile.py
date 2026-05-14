@@ -6,7 +6,7 @@ from backend.db import Base
 class UserProfile(Base):
     __tablename__ = "user_profile"
 
-    user_id = Column(String(20), ForeignKey("member.user_id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True)
+    user_id = Column(String(20), ForeignKey("user.user_id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True)
     profile_image_url = Column(String(500), nullable=True)
     original_file_name = Column(String(255), nullable=True)
     age_group = Column(String(50), nullable=True)

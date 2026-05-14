@@ -11,7 +11,7 @@ class GenderEnum(str, enum.Enum):
 
 
 class User(Base):
-    __tablename__ = "member"
+    __tablename__ = "user"
 
     user_id = Column(String(50), primary_key=True)
     name = Column(String(100), nullable=False)
