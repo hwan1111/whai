@@ -6,12 +6,23 @@ import re
 _RESERVED_IDS = {"demo", "id123", "admin", "root", "system"}
 
 
+_INVEST_TYPES = {"SAFE", "STAB", "NEUT", "GROW", "AGGR"}
+
+
 class RegisterRequest(BaseModel):
     user_id: str
     name: str
     password: str
     birth_year: Optional[int] = None
     gender: Optional[str] = None
+    invest_type: Optional[str] = None
+
+    @field_validator("invest_type")
+    @classmethod
+    def validate_invest_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _INVEST_TYPES:
+            raise ValueError("invest_type은 SAFE, STAB, NEUT, GROW, AGGR 중 하나여야 합니다.")
+        return v
 
     @field_validator("user_id")
     @classmethod

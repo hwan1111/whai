@@ -59,9 +59,12 @@ function renderChart() {
     const col = ASSETS[a].color;
     const pts = vals.map((v, i) => `${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`).join(' ');
     const isFx = a.startsWith('KRW/');
-    const lineAttr = isFx
-      ? 'stroke-dasharray="7,4" stroke-linecap="butt" stroke-width="1.8"'
-      : 'stroke-linecap="round" stroke-width="2"';
+    const isKospi = a === 'KOSPI';
+    const lineAttr = isKospi
+      ? 'stroke-dasharray="1,5" stroke-linecap="round" stroke-width="2.5"'
+      : isFx
+        ? 'stroke-dasharray="7,4" stroke-linecap="butt" stroke-width="1.8"'
+        : 'stroke-linecap="round" stroke-width="2"';
     h += `<polyline points="${pts}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
     const lv = vals[n - 1];
     const lx = toX(n - 1, n), ly = toY(lv, minV, maxV);
@@ -74,14 +77,29 @@ function renderChart() {
 }
 
 function renderChips() {
-  document.getElementById('active-chips').innerHTML = activeAssets.map(a => {
+  const kospiMeta = ASSETS['KOSPI'];
+  const kospiActive = activeAssets.includes('KOSPI');
+  const kospiChip = kospiActive
+    ? `<span class="a-chip" style="color:${kospiMeta.color};border-color:${kospiMeta.color};background:${kospiMeta.color}18">
+        <span style="width:7px;height:7px;border-radius:50%;background:${kospiMeta.color};display:inline-block"></span>
+        ${kospiMeta.label}
+        <span class="rm" onclick="event.stopPropagation();removeAsset('KOSPI')">✕</span>
+      </span>`
+    : `<span class="a-chip" onclick="toggleAsset('KOSPI')" style="color:#94a3b8;border-color:#cbd5e1;background:#f8fafc;opacity:0.55;cursor:pointer">
+        <span style="width:7px;height:7px;border-radius:50%;background:#94a3b8;display:inline-block"></span>
+        ${kospiMeta.label}
+      </span>`;
+
+  const otherChips = activeAssets.filter(a => a !== 'KOSPI').map(a => {
     const meta = ASSETS[a];
     return `<span class="a-chip" style="color:${meta.color};border-color:${meta.color};background:${meta.color}18">
       <span style="width:7px;height:7px;border-radius:50%;background:${meta.color};display:inline-block"></span>
       ${meta.label}
-      <span class="rm" onclick="removeAsset('${a}')">✕</span>
+      <span class="rm" onclick="event.stopPropagation();removeAsset('${a}')">✕</span>
     </span>`;
   }).join('');
+
+  document.getElementById('active-chips').innerHTML = kospiChip + otherChips;
 }
 
 function renderLegend() {
