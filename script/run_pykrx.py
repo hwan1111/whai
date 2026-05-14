@@ -1,4 +1,6 @@
-"""KRX 종목 주가 데이터를 pykrx로 가져와 price 테이블에 적재."""
+"""KRX 종목 주가 데이터를 pykrx로 가져와 price 테이블에 적재.
+KOSPI 지수(000000)는 pykrx index API 대신 yfinance(^KS11)를 사용한다.
+"""
 
 import sys
 from datetime import date
@@ -9,8 +11,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import text
 from backend.db import engine
 
-START = "20230101"
-END   = date.today().strftime("%Y%m%d")
+START     = "20230101"
+START_ISO = "2023-01-01"
+END       = date.today().strftime("%Y%m%d")
+
+KOSPI_TICKER  = "000000"
+KOSPI_YF_CODE = "^KS11"
 
 
 def load_tickers() -> dict[str, str]:
@@ -22,8 +28,30 @@ def load_tickers() -> dict[str, str]:
     return {r.ticker: r.name for r in rows}
 
 
-KOSPI_TICKER    = "000000"
-KOSPI_KRX_CODE  = "1001"   # pykrx 지수 코드
+def _fetch_kospi() -> list[dict]:
+    """yfinance로 KOSPI 지수 데이터 수집."""
+    try:
+        import yfinance as yf
+    except ImportError:
+        print("yfinance 미설치: pip install yfinance")
+        return []
+
+    df = yf.download(KOSPI_YF_CODE, start=START_ISO,
+                     end=date.today().strftime("%Y-%m-%d"), progress=False)
+    if df.empty:
+        return []
+
+    close  = df["Close"].squeeze()
+    volume = df["Volume"].squeeze()
+    return [
+        {
+            "ticker": KOSPI_TICKER,
+            "date":   idx.strftime("%Y-%m-%d"),
+            "close":  round(float(close[idx])),
+            "volume": int(volume[idx]),
+        }
+        for idx in df.index
+    ]
 
 
 def load_price(tickers: dict[str, str]) -> None:
@@ -38,26 +66,25 @@ def load_price(tickers: dict[str, str]) -> None:
         print(f"  {ticker} ({name}) 조회 중...", end=" ", flush=True)
         try:
             if ticker == KOSPI_TICKER:
-                df = krx.get_index_ohlcv_by_date(START, END, KOSPI_KRX_CODE)
+                rows = _fetch_kospi()
             else:
                 df = krx.get_market_ohlcv_by_date(START, END, ticker)
+                if df.empty:
+                    print("데이터 없음")
+                    continue
+                rows = [
+                    {
+                        "ticker": ticker,
+                        "date":   idx.strftime("%Y-%m-%d"),
+                        "close":  int(row["종가"]),
+                        "volume": int(row["거래량"]),
+                    }
+                    for idx, row in df.iterrows()
+                ]
 
-            if df.empty:
+            if not rows:
                 print("데이터 없음")
                 continue
-
-            close_col  = "종가"
-            volume_col = "거래량" if "거래량" in df.columns else None
-
-            rows = [
-                {
-                    "ticker": ticker,
-                    "date":   idx.strftime("%Y-%m-%d"),
-                    "close":  int(row[close_col]),
-                    "volume": int(row[volume_col]) if volume_col else 0,
-                }
-                for idx, row in df.iterrows()
-            ]
 
             with engine.begin() as conn:
                 conn.execute(text("""
@@ -81,5 +108,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print(f"=== KRX 데이터 적재 ({START} ~ {END}) ===")
-    print(f"대상 종목: {len(tickers)}개 — {', '.join(tickers.values())}\n")
+    print(f"대상 종목: {len(tickers)}개 - {', '.join(tickers.values())}\n")
     load_price(tickers)
