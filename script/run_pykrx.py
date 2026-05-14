@@ -3,7 +3,7 @@ KOSPI 지수(000000)는 pykrx index API 대신 yfinance(^KS11)를 사용한다.
 """
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -37,7 +37,7 @@ def _fetch_kospi() -> list[dict]:
         return []
 
     df = yf.download(KOSPI_YF_CODE, start=START_ISO,
-                     end=date.today().strftime("%Y-%m-%d"), progress=False)
+                     end=(date.today() + timedelta(days=1)).strftime("%Y-%m-%d"), progress=False)
     if df.empty:
         return []
 

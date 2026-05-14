@@ -24,18 +24,24 @@
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:12px;color:#64748b">분석 기간:</span>
           <div class="range-sel" id="period-sel">
-            <div class="rbtn" data-p="1W">1주</div>
+            <div class="rbtn active" data-p="1W">1주</div>
             <div class="rbtn" data-p="1M">1개월</div>
             <div class="rbtn" data-p="3M">3개월</div>
-            <div class="rbtn active" data-p="6M">6개월</div>
+            <div class="rbtn" data-p="6M">6개월</div>
             <div class="rbtn" data-p="1Y">1년</div>
             <div class="rbtn" data-p="3Y">3년</div>
             <div class="rbtn" data-p="ALL">전체</div>
           </div>
-          <div style="margin-left:auto"><button class="btn btn-primary" onclick="renderAll()">▶ 분석 실행</button></div>
         </div>
       </div>
 
+      <div id="analysis-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;gap:14px">
+        <div style="font-size:40px">🧩</div>
+        <div style="font-size:15px;font-weight:600;color:#475569">종목을 추가해주세요</div>
+        <div style="font-size:12px;color:#94a3b8">2개 이상의 종목을 선택하면 상관계수·리스크 지표·AI 분석이 표시됩니다</div>
+      </div>
+
+      <div id="analysis-content" style="display:none">
       <div class="grid g21 mb">
         <div class="other-card">
           <div class="other-card-title">상관계수 매트릭스 <span id="corr-period-label" style="font-size:9px;color:#94a3b8;font-weight:400;text-transform:none">Pearson · 6개월 일별 수익률</span></div>
@@ -49,7 +55,7 @@
         </div>
         <div class="other-card">
           <div class="other-card-title">리스크 · 수익 지표</div>
-          <div style="font-size:10px;color:#64748b;margin-bottom:7px" id="return-period-label">6개월 연환산 수익률</div>
+          <div style="font-size:10px;color:#64748b;margin-bottom:7px" id="return-period-label">수익률</div>
           <div id="returns-container" class="grid g11" style="gap:6px;margin-bottom:12px"></div>
           <div class="divider"></div>
           <div style="font-size:10px;color:#64748b;margin-bottom:9px">
@@ -65,12 +71,13 @@
         <div class="ai-box">
           <div class="ai-header">
             <span class="ai-badge">AI 복합 분석</span>
-            <span class="ai-title" id="ai-title">종목 통합 인사이트 — 6개월</span>
+            <span class="ai-title" id="ai-title">종목 통합 인사이트</span>
           </div>
           <div class="ai-text" id="ai-text"></div>
-          <div class="ai-sources"><span class="ai-src-tag">📰 뉴스 5건</span><span class="ai-src-tag">📄 리포트 3건</span><span id="ai-src-days" class="ai-src-tag">📊 180일 데이터</span></div>
+          <div class="ai-sources"><span class="ai-src-tag">📰 뉴스 5건</span><span class="ai-src-tag">📄 리포트 3건</span><span id="ai-src-days" class="ai-src-tag">📊 데이터</span></div>
         </div>
       </div>
+      </div><!-- #analysis-content -->
 
     </div>
   </div>
@@ -189,9 +196,9 @@
     return 'background:#e0e7ff;color:#3730a3';
   }
 
-  let selected = ['005930', '012450', '105560', '051910'];
+  let selected = [];
   let pickerOpen = false;
-  let currentPeriod = '6M';
+  let currentPeriod = '1W';
 
   document.addEventListener('DOMContentLoaded', () => {
     const periodSel = document.getElementById('period-sel');
@@ -209,12 +216,17 @@
   });
 
   function renderAll() {
+    renderAnalysisChips();
+    const hasStocks = selected.length >= 2;
+    document.getElementById('analysis-empty').style.display   = hasStocks ? 'none' : 'flex';
+    document.getElementById('analysis-content').style.display = hasStocks ? 'block' : 'none';
+    if (!hasStocks) return;
+
     const pd = PERIOD_DATA[currentPeriod];
     const labelMap = { '1W':'1주 일별', '1M':'1개월 일별', '3M':'3개월 일별', '6M':'6개월 일별', '1Y':'1년 일별', '3Y':'3년 일별', 'ALL':'전체 연별' };
     document.getElementById('corr-period-label').textContent = `Pearson · ${labelMap[currentPeriod]} 수익률`;
     document.getElementById('return-period-label').textContent = `${pd.label} 수익률`;
-    document.getElementById('ai-src-days').textContent = `📊 ${pd.days}일 데이터`;
-    renderAnalysisChips();
+    document.getElementById('ai-src-days').textContent = `📊 ${labelMap[currentPeriod]} 데이터`;
     renderMatrix();
     renderRiskReturn();
     renderAI();
@@ -239,8 +251,12 @@
     selected.forEach(row => {
       h += `<tr><th class="mh" style="text-align:right;padding-right:5px">${SHORT[row]}</th>`;
       selected.forEach(col => {
-        const v = getCorr(row, col);
-        h += `<td class="mc" style="${corrStyle(v)}">${v.toFixed(2)}</td>`;
+        if (row === col) {
+          h += `<td class="mc" style="background:#f1f5f9;border:1px solid #e2e8f0"></td>`;
+        } else {
+          const v = getCorr(row, col);
+          h += `<td class="mc" style="${corrStyle(v)}">${v.toFixed(2)}</td>`;
+        }
       });
       h += '</tr>';
     });

@@ -23,6 +23,20 @@
         </div>
       </div>
 
+      <!-- 빈 상태 -->
+      <div id="stock-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;gap:14px">
+        <div style="font-size:40px">📊</div>
+        <div style="font-size:15px;font-weight:600;color:#475569">종목을 선택해주세요</div>
+        <div style="font-size:12px;color:#94a3b8">위 드롭다운에서 분석할 종목을 선택하면 차트와 지표가 표시됩니다</div>
+      </div>
+
+      <!-- 로딩 -->
+      <div id="stock-loading" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px 0">
+        <div style="font-size:15px;font-weight:600;color:#64748b">데이터를 불러오는 중...</div>
+      </div>
+
+      <!-- 콘텐츠 -->
+      <div id="stock-content" style="display:none">
       <div class="other-card mb" style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:12px">
           <div class="tk-icon" style="width:46px;height:46px;border-radius:10px;background:#fff;border:1px solid #e8ecf0;padding:3px;overflow:hidden" id="stock-logo">
@@ -46,7 +60,7 @@
             <div class="range-sel" id="period-sel">
               <div class="rbtn" data-p="1W">1주</div>
               <div class="rbtn" data-p="1M">1개월</div>
-              <div class="rbtn active" data-p="3M">3개월</div>
+              <div class="rbtn active" data-p="1W">1주</div>
               <div class="rbtn" data-p="6M">6개월</div>
               <div class="rbtn" data-p="1Y">1년</div>
               <div class="rbtn" data-p="3Y">3년</div>
@@ -109,6 +123,7 @@
         <div class="other-card-title">관련 뉴스</div>
         <div id="stock-news"><div style="color:#94a3b8;font-size:12px;padding:16px 0;text-align:center">종목을 선택하면 뉴스가 표시됩니다.</div></div>
       </div>
+      </div><!-- #stock-content -->
 
     </div><!-- .content -->
   </div><!-- .main -->
@@ -169,9 +184,15 @@
     '1Y':'1년', '3Y':'3년', 'ALL':'전체',
   };
 
-  let currentStock = '012450';
-  let currentPeriod = '3M';
+  let currentStock = null;
+  let currentPeriod = '1W';
   const _apiHeaders = () => getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
+
+  function _showState(state) {
+    document.getElementById('stock-empty').style.display   = state === 'empty'   ? 'flex' : 'none';
+    document.getElementById('stock-loading').style.display = state === 'loading' ? 'flex' : 'none';
+    document.getElementById('stock-content').style.display = state === 'content' ? 'block': 'none';
+  }
 
   function renderStockDropdown() {
     const grouped = {};
@@ -180,17 +201,20 @@
       grouped[cfg.sector].push([id, cfg.name]);
     });
     const sel = document.getElementById('stock-selector');
-    sel.innerHTML = Object.entries(grouped).map(([sector, stocks]) =>
-      `<optgroup label="${sector}">${stocks.map(([id, name]) =>
-        `<option value="${id}">${name}</option>`).join('')}</optgroup>`
-    ).join('');
-    sel.value = currentStock;
+    sel.innerHTML = `<option value="">종목을 선택하세요</option>` +
+      Object.entries(grouped).map(([sector, stocks]) =>
+        `<optgroup label="${sector}">${stocks.map(([id, name]) =>
+          `<option value="${id}">${name}</option>`).join('')}</optgroup>`
+      ).join('');
+    sel.value = '';
   }
 
   async function selectStock(id) {
-    if (!STOCK_CONFIG[id]) return;
+    if (!id || !STOCK_CONFIG[id]) { _showState('empty'); return; }
     currentStock = id;
     document.getElementById('stock-selector').value = id;
+    _showState('loading');
+    await new Promise(r => requestAnimationFrame(r));
 
     const cfg = STOCK_CONFIG[id];
     document.getElementById('stock-name').innerHTML =
@@ -217,6 +241,7 @@
     });
 
     await Promise.all([loadStockPrice(id), loadStockChart(id, currentPeriod), loadStockNews(id)]);
+    _showState('content');
   }
 
   async function loadStockPrice(ticker) {
@@ -372,7 +397,7 @@
   });
 
   renderStockDropdown();
-  selectStock('012450');
+  _showState('empty');
 </script>
 </body>
 </html>

@@ -233,25 +233,47 @@
 <script>
   initLayout('myreport');
 
-  /* ── 자산 마스터 ── */
+  /* ── 자산 마스터 (price는 API에서 로드) ── */
   const ASSET_INFO = {
-    '005930': { name:'삼성전자',      price:75400,   color:'#dc2626', sector:'반도체', unit:'주' },
-    '000660': { name:'SK하이닉스',   price:198500,  color:'#16a34a', sector:'반도체', unit:'주' },
-    '005380': { name:'현대차',        price:224000,  color:'#f59e0b', sector:'자동차', unit:'주' },
-    '000270': { name:'기아',          price:96500,   color:'#8b5cf6', sector:'자동차', unit:'주' },
-    '079550': { name:'LIG디펜스',    price:228000,  color:'#06b6d4', sector:'방산',   unit:'주' },
-    '012450': { name:'한화에어로',   price:485000,  color:'#f97316', sector:'방산',   unit:'주' },
-    '105560': { name:'KB금융',        price:89300,   color:'#6366f1', sector:'금융',   unit:'주' },
-    '055550': { name:'신한지주',      price:56200,   color:'#0d9488', sector:'금융',   unit:'주' },
-    '051910': { name:'LG화학',        price:305000,  color:'#ec4899', sector:'화학',   unit:'주' },
-    '096770': { name:'SK이노베이션', price:98700,   color:'#84cc16', sector:'화학',   unit:'주' },
-    'KRW/USD': { name:'USD 달러',    price:1356.50, color:'#78716c', sector:'외화',   unit:'달러' },
-    'KRW/JPY': { name:'JPY 엔',      price:9.02,    color:'#a16207', sector:'외화',   unit:'엔' },
-    'KRW/EUR': { name:'EUR 유로',    price:1463.20, color:'#9333ea', sector:'외화',   unit:'유로' },
-    'KRW/CNY': { name:'CNY 위안',    price:186.40,  color:'#0891b2', sector:'외화',   unit:'위안' },
-    'KRW/CHF': { name:'CHF 프랑',    price:1543.20, color:'#0f766e', sector:'외화',   unit:'프랑' },
-    'KRW/GBP': { name:'GBP 파운드', price:1784.50, color:'#b91c1c', sector:'외화',   unit:'파운드' },
+    '005930': { name:'삼성전자',      price:0, color:'#dc2626', sector:'반도체', unit:'주' },
+    '000660': { name:'SK하이닉스',   price:0, color:'#16a34a', sector:'반도체', unit:'주' },
+    '005380': { name:'현대차',        price:0, color:'#f59e0b', sector:'자동차', unit:'주' },
+    '000270': { name:'기아',          price:0, color:'#8b5cf6', sector:'자동차', unit:'주' },
+    '079550': { name:'LIG디펜스',    price:0, color:'#06b6d4', sector:'방산',   unit:'주' },
+    '012450': { name:'한화에어로',   price:0, color:'#f97316', sector:'방산',   unit:'주' },
+    '105560': { name:'KB금융',        price:0, color:'#6366f1', sector:'금융',   unit:'주' },
+    '055550': { name:'신한지주',      price:0, color:'#0d9488', sector:'금융',   unit:'주' },
+    '051910': { name:'LG화학',        price:0, color:'#ec4899', sector:'화학',   unit:'주' },
+    '096770': { name:'SK이노베이션', price:0, color:'#84cc16', sector:'화학',   unit:'주' },
+    'KRW/USD': { name:'USD 달러',    price:0, color:'#78716c', sector:'외화',   unit:'달러' },
+    'KRW/JPY': { name:'JPY 엔',      price:0, color:'#a16207', sector:'외화',   unit:'엔' },
+    'KRW/EUR': { name:'EUR 유로',    price:0, color:'#9333ea', sector:'외화',   unit:'유로' },
+    'KRW/CNY': { name:'CNY 위안',    price:0, color:'#0891b2', sector:'외화',   unit:'위안' },
+    'KRW/CHF': { name:'CHF 프랑',    price:0, color:'#0f766e', sector:'외화',   unit:'프랑' },
+    'KRW/GBP': { name:'GBP 파운드', price:0, color:'#b91c1c', sector:'외화',   unit:'파운드' },
   };
+
+  async function loadAssetPrices() {
+    const headers = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
+    try {
+      const [priceRes, fxRes] = await Promise.all([
+        fetch(`${API_BASE}/prices/latest`, { headers }),
+        fetch(`${API_BASE}/exchange-rates/latest`, { headers }),
+      ]);
+      if (priceRes.ok) {
+        const prices = await priceRes.json();
+        prices.forEach(({ ticker, close }) => {
+          if (ASSET_INFO[ticker]) ASSET_INFO[ticker].price = close;
+        });
+      }
+      if (fxRes.ok) {
+        const rates = await fxRes.json();
+        rates.forEach(({ pair, rate }) => {
+          if (ASSET_INFO[pair]) ASSET_INFO[pair].price = rate;
+        });
+      }
+    } catch { /* silent */ }
+  }
 
   /* ── 숫자 포맷 ── */
   const fmt = n => Math.round(n).toLocaleString('ko-KR');
@@ -287,6 +309,8 @@
   let reports = loadReports();
   let newHoldings = [];
   let currentReportId = null;
+
+  loadAssetPrices().then(() => showView('list'));
 
   /* ── 뷰 전환 ── */
   function showView(v) {

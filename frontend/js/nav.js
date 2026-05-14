@@ -1,9 +1,9 @@
 const NAV_ITEMS = [
-  { key: 'dashboard', icon: '⊞', label: '대시보드',   href: 'dashboard.html' },
-  { key: 'stock',     icon: '📈', label: '종목 분석', href: 'stock.html' },
-  { key: 'analysis',  icon: '🔗', label: '복합 분석', href: 'analysis.html' },
-  { key: 'news',      icon: '📰', label: '뉴스',       href: 'news.html' },
-  { key: 'myreport',  icon: '📋', label: '내 리포트', href: 'my-report.html' },
+  { key: 'dashboard', icon: '🖥️', label: '대시보드',   href: 'dashboard.html' },
+  { key: 'stock',     icon: '📊', label: '종목 분석', href: 'stock.html' },
+  { key: 'analysis',  icon: '🧩', label: '복합 분석', href: 'analysis.html' },
+  { key: 'news',      icon: '🗞️', label: '뉴스',       href: 'news.html' },
+  { key: 'myreport',  icon: '📄', label: '내 리포트', href: 'my-report.html' },
 ];
 
 const PAGE_TITLES = {
@@ -34,7 +34,7 @@ function initLayout(pageKey) {
       `).join('')}
     </nav>
     <div class="sidebar-footer">
-      데이터 기준: 2026-05-07<br>
+      데이터 기준: <span id="nav-data-date">—</span><br>
       <span style="color:#334155">KRX · Frankfurter (ECB)</span>
     </div>
   `;
@@ -44,7 +44,7 @@ function initLayout(pageKey) {
       <div class="page-title">${PAGE_TITLES[pageKey] || ''}</div>
     </div>
     <div class="header-right">
-      <span style="font-size:11px;color:#94a3b8">마지막 업데이트: 15:32 KST</span>
+      <span style="font-size:11px;color:#94a3b8" id="nav-update-time">마지막 업데이트: —</span>
       <div style="position:relative">
         <div class="avatar" id="avatar-btn" onclick="toggleUserMenu(event)">${initial}</div>
         <div class="user-menu" id="user-menu">
@@ -74,6 +74,27 @@ function initLayout(pageKey) {
   });
 
   _injectModals();
+  _loadNavDate();
+}
+
+async function _loadNavDate() {
+  try {
+    const headers = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
+    const res = await fetch(`${API_BASE}/prices/latest`, { headers });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.length) return;
+
+    const latestDate = data.reduce((a, b) => a.date > b.date ? a : b).date;
+    const dateEl = document.getElementById('nav-data-date');
+    const timeEl = document.getElementById('nav-update-time');
+    if (dateEl) dateEl.textContent = latestDate;
+    if (timeEl) {
+      const now = new Date();
+      const hhmm = now.toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit', hour12:false });
+      timeEl.textContent = `마지막 업데이트: ${hhmm} KST`;
+    }
+  } catch { /* silent */ }
 }
 
 function toggleUserMenu(e) {

@@ -9,6 +9,9 @@
 .per-btn:hover { border-color: #93c5fd; color: var(--primary); }
 .per-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
+.kospi-widget { display:flex;align-items:center;gap:14px;padding:6px 18px;border-radius:8px;border:1px solid var(--border);background:white;cursor:pointer;transition:all 0.15s; }
+.kospi-widget:hover { border-color:#94a3b8;background:#f8fafc; }
+.kospi-widget.in-chart { border-color:var(--primary);background:#eff6ff; }
 .add-ind-wrap { position: relative; }
 .btn-add-ind { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px dashed #93c5fd; background: #eff6ff; color: var(--primary); font-family: inherit; }
 .btn-add-ind:hover { background: #dbeafe; }

@@ -1,6 +1,6 @@
 // ── Asset metadata (colors, display labels) ──────────────────
 const ASSETS = {
-  'KOSPI':   { label: 'KOSPI 지수', color: '#94A3B8' },
+  '000000':  { label: 'KOSPI 지수', color: '#94A3B8' },
   '005930':  { label: '삼성전자',   color: '#034EA2' },
   '000660':  { label: 'SK하이닉스', color: '#E31837' },
   '005380':  { label: '현대차',     color: '#002C5F' },

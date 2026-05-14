@@ -29,21 +29,32 @@
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary)">기간</div>
                 <div class="period-sel" id="period-sel">
-                  <button class="per-btn" data-p="1W">1주</button>
+                  <button class="per-btn active" data-p="1W">1주</button>
                   <button class="per-btn" data-p="1M">1개월</button>
                   <button class="per-btn" data-p="3M">3개월</button>
-                  <button class="per-btn active" data-p="6M">6개월</button>
+                  <button class="per-btn" data-p="6M">6개월</button>
                   <button class="per-btn" data-p="1Y">1년</button>
                   <button class="per-btn" data-p="3Y">3년</button>
                   <button class="per-btn" data-p="ALL">전체</button>
                 </div>
               </div>
               <div class="ind-dropdown" id="ind-dropdown" style="display:none"></div>
+              <div class="kospi-widget" data-id="000000" onclick="toggleAsset('000000')">
+                <div style="font-size:20px;font-weight:800;color:#475569;letter-spacing:1px">KOSPI</div>
+                <div style="width:1px;height:28px;background:#e2e8f0"></div>
+                <div style="font-size:26px;font-weight:700;color:var(--text-primary);letter-spacing:-0.5px" id="price-000000">—</div>
+                <div class="tk-chg" style="font-size:13px" id="chg-000000">—</div>
+              </div>
             </div>
 
             <div class="active-chips" id="active-chips"></div>
 
-            <div class="chart-card">
+            <div class="chart-card" style="position:relative">
+              <div id="chart-empty" style="display:none;position:absolute;inset:0;z-index:10;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:white;border-radius:12px">
+                <div style="font-size:48px">🖥️</div>
+                <div style="font-size:16px;font-weight:700;color:#334155">종목을 선택해주세요</div>
+                <div style="font-size:12px;color:#94a3b8">오른쪽 목록에서 종목을 클릭하면 차트가 표시됩니다</div>
+              </div>
               <div class="chart-svg-wrap">
                 <svg id="main-chart" viewBox="0 0 860 300" preserveAspectRatio="none"></svg>
               </div>
@@ -276,7 +287,9 @@
       data.forEach(({ ticker, close, change_pct }) => {
         const priceEl = document.getElementById(`price-${ticker}`);
         const chgEl   = document.getElementById(`chg-${ticker}`);
-        if (priceEl) priceEl.textContent = _fmtPrice(close);
+        if (priceEl) priceEl.textContent = ticker === '000000'
+          ? Number(close).toLocaleString('ko-KR')
+          : _fmtPrice(close);
         if (chgEl) {
           const { text, cls } = _fmtChg(change_pct);
           chgEl.textContent = text;

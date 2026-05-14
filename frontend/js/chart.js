@@ -1,8 +1,8 @@
 const SW = 860, SH = 300, ML = 52, MR = 72, MT = 22, MB = 38;
 const CW = SW - ML - MR, CH = SH - MT - MB;
 
-let currentPeriod = '6M';
-let activeAssets = ['005930'];
+let currentPeriod = '1W';
+let activeAssets = ['000000'];
 
 function toX(i, n) { return ML + (i / (n - 1)) * CW; }
 function toY(v, minV, maxV) { return MT + ((maxV - v) / (maxV - minV)) * CH; }
@@ -31,10 +31,13 @@ async function render() {
 
 function _renderChart(pd) {
   const svg = document.getElementById('main-chart');
+  const emptyEl = document.getElementById('chart-empty');
   if (!pd || activeAssets.length === 0) {
-    svg.innerHTML = `<text x="430" y="155" text-anchor="middle" font-size="14" fill="#94a3b8">지표를 추가해주세요</text>`;
+    svg.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'flex';
     return;
   }
+  if (emptyEl) emptyEl.style.display = 'none';
   const n = pd.labels.length;
 
   let allV = [0];
@@ -69,7 +72,7 @@ function _renderChart(pd) {
     const col = ASSETS[a].color;
     const pts = vals.map((v, i) => `${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`).join(' ');
     const isFx = a.startsWith('KRW/');
-    const isKospi = a === 'KOSPI';
+    const isKospi = a === '000000';
     const lineAttr = isKospi
       ? 'stroke-dasharray="1,5" stroke-linecap="round" stroke-width="2.5"'
       : isFx
@@ -101,20 +104,11 @@ function _renderLegend(pd) {
 }
 
 function renderChips() {
-  const kospiMeta = ASSETS['KOSPI'];
-  const kospiActive = activeAssets.includes('KOSPI');
-  const kospiChip = kospiActive
-    ? `<span class="a-chip" style="color:${kospiMeta.color};border-color:${kospiMeta.color};background:${kospiMeta.color}18">
-        <span style="width:7px;height:7px;border-radius:50%;background:${kospiMeta.color};display:inline-block"></span>
-        ${kospiMeta.label}
-        <span class="rm" onclick="event.stopPropagation();removeAsset('KOSPI')">✕</span>
-      </span>`
-    : `<span class="a-chip" onclick="toggleAsset('KOSPI')" style="color:#94a3b8;border-color:#cbd5e1;background:#f8fafc;opacity:0.55;cursor:pointer">
-        <span style="width:7px;height:7px;border-radius:50%;background:#94a3b8;display:inline-block"></span>
-        ${kospiMeta.label}
-      </span>`;
-
-  const otherChips = activeAssets.filter(a => a !== 'KOSPI').map(a => {
+  const sorted = [
+    ...activeAssets.filter(a => a === '000000'),
+    ...activeAssets.filter(a => a !== '000000'),
+  ];
+  const chips = sorted.map(a => {
     const meta = ASSETS[a];
     return `<span class="a-chip" style="color:${meta.color};border-color:${meta.color};background:${meta.color}18">
       <span style="width:7px;height:7px;border-radius:50%;background:${meta.color};display:inline-block"></span>
@@ -122,13 +116,12 @@ function renderChips() {
       <span class="rm" onclick="event.stopPropagation();removeAsset('${a}')">✕</span>
     </span>`;
   }).join('');
-
-  document.getElementById('active-chips').innerHTML = kospiChip + otherChips;
+  document.getElementById('active-chips').innerHTML = chips;
 }
 
 function renderDropdown() {
   const groups = [
-    { label: '지수',   ids: ['KOSPI'] },
+    { label: '지수',   ids: ['000000'] },
     { label: '반도체', ids: ['005930', '000660'] },
     { label: '자동차', ids: ['005380', '000270'] },
     { label: '방산',   ids: ['079550', '012450'] },
