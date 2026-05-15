@@ -165,7 +165,7 @@ function openProfileModal() {
           <input class="modal-input" id="profile-name-input" style="width:140px;text-align:right" value="${d.name}" maxlength="20">
         </div>
         <div class="modal-row"><span class="modal-label">아이디</span><span class="modal-value">${d.user_id}</span></div>
-        <div class="modal-row"><span class="modal-label">출생연도</span><span class="modal-value">${d.birth_year || '미입력'}</span></div>
+        <div class="modal-row"><span class="modal-label">출생연도</span><span class="modal-value">${(() => { if (!d.birth_year) return '미입력'; const age = new Date().getFullYear() - d.birth_year + 1; return `${d.birth_year}년 (${age}세)`; })()}</span></div>
         <div class="modal-row"><span class="modal-label">성별</span><span class="modal-value">${genderMap[d.gender] || '미입력'}</span></div>
         <div style="margin-top:12px">
           <div class="modal-label" style="margin-bottom:8px">투자성향</div>
