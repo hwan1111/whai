@@ -66,9 +66,12 @@ function buildPeriodData(period, ids) {
     const rows = cache[id];
     if (!rows?.length) continue;
     const byDate = Object.fromEntries(rows.map(r => [r.date, r.return_pct]));
-    // 누락 날짜는 0이 아닌 마지막 알려진 값으로 forward-fill
+    const firstDate = rows[0].date;
+    const lastDate = rows[rows.length - 1].date;
+    // 데이터 범위 밖은 null, 범위 내 누락은 forward-fill
     let last = 0;
     d[id] = sortedDates.map(date => {
+      if (date < firstDate || date > lastDate) return null;
       if (byDate[date] !== undefined) last = byDate[date];
       return last;
     });

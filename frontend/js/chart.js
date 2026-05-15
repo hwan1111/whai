@@ -42,7 +42,7 @@ function _renderChart(pd) {
   const n = pd.labels.length;
 
   let allV = [0];
-  activeAssets.forEach(a => { if (pd.d[a]) allV.push(...pd.d[a]); });
+  activeAssets.forEach(a => { if (pd.d[a]) allV.push(...pd.d[a].filter(v => v !== null)); });
   let minV = Math.min(...allV), maxV = Math.max(...allV);
   const pad = Math.max((maxV - minV) * 0.12, 3);
   minV -= pad; maxV += pad;
@@ -71,7 +71,6 @@ function _renderChart(pd) {
     const vals = pd.d[a];
     if (!vals) return;
     const col = ASSETS[a].color;
-    const pts = vals.map((v, i) => `${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`).join(' ');
     const isFx = a.startsWith('KRW/');
     const isKospi = a === '000000';
     const lineAttr = isKospi
@@ -79,9 +78,25 @@ function _renderChart(pd) {
       : isFx
         ? 'stroke-dasharray="7,4" stroke-linecap="butt" stroke-width="1.8"'
         : 'stroke-linecap="round" stroke-width="2"';
-    h += `<polyline points="${pts}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
-    const lv = vals[n - 1];
-    const lx = toX(n - 1, n), ly = toY(lv, minV, maxV);
+
+    // null 구간에서 선 끊기
+    let seg = [];
+    vals.forEach((v, i) => {
+      if (v === null) {
+        if (seg.length > 1) h += `<polyline points="${seg.join(' ')}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
+        seg = [];
+      } else {
+        seg.push(`${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`);
+      }
+    });
+    if (seg.length > 1) h += `<polyline points="${seg.join(' ')}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
+
+    // 마지막 유효값에 점·레이블
+    let lastIdx = vals.length - 1;
+    while (lastIdx >= 0 && vals[lastIdx] === null) lastIdx--;
+    if (lastIdx < 0) return;
+    const lv = vals[lastIdx];
+    const lx = toX(lastIdx, n), ly = toY(lv, minV, maxV);
     h += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3.5" fill="${col}"/>`;
     const sign = lv >= 0 ? '+' : '';
     h += `<text x="${(lx + 6).toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="10" fill="${col}" font-weight="700">${sign}${lv.toFixed(1)}%</text>`;
@@ -93,7 +108,7 @@ function _renderChart(pd) {
 function _renderLegend(pd) {
   document.getElementById('chart-legend').innerHTML = activeAssets.map(a => {
     const vals = pd?.d[a];
-    const last = vals ? vals[vals.length - 1] : 0;
+    const last = vals ? (vals.filter(v => v !== null).pop() ?? 0) : 0;
     const sign = last >= 0 ? '+' : '';
     const col = last >= 0 ? '#16a34a' : '#dc2626';
     return `<div class="leg-item">
