@@ -60,7 +60,7 @@
             <div class="range-sel" id="period-sel">
               <div class="rbtn" data-p="1W">1주</div>
               <div class="rbtn" data-p="1M">1개월</div>
-              <div class="rbtn active" data-p="1W">1주</div>
+              <div class="rbtn active" data-p="3M">3개월</div>
               <div class="rbtn" data-p="6M">6개월</div>
               <div class="rbtn" data-p="1Y">1년</div>
               <div class="rbtn" data-p="3Y">3년</div>
@@ -185,7 +185,7 @@
   };
 
   let currentStock = null;
-  let currentPeriod = '1W';
+  let currentPeriod = '3M';
   const _apiHeaders = () => getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
 
   function _showState(state) {
