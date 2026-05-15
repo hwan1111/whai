@@ -48,15 +48,16 @@ async function fetchAssetData(id, period) {
 function buildPeriodData(period, ids) {
   const cache = _cache[period] || {};
 
-  // Use first non-empty asset as date axis
-  let baseData = null;
+  // x축: 모든 종목 날짜의 합집합
+  const allDates = new Set();
   for (const id of ids) {
-    if (cache[id]?.length > 0) { baseData = cache[id]; break; }
+    if (cache[id]?.length > 0) cache[id].forEach(r => allDates.add(r.date));
   }
-  if (!baseData) return null;
+  if (allDates.size === 0) return null;
 
-  const labels = baseData.map(d => {
-    const [, m, day] = d.date.split('-');
+  const sortedDates = [...allDates].sort();
+  const labels = sortedDates.map(date => {
+    const [, m, day] = date.split('-');
     return `${+m}/${+day}`;
   });
 
@@ -65,8 +66,12 @@ function buildPeriodData(period, ids) {
     const rows = cache[id];
     if (!rows?.length) continue;
     const byDate = Object.fromEntries(rows.map(r => [r.date, r.return_pct]));
-    // forward-fill missing dates with 0
-    d[id] = baseData.map(r => byDate[r.date] ?? 0);
+    // 누락 날짜는 0이 아닌 마지막 알려진 값으로 forward-fill
+    let last = 0;
+    d[id] = sortedDates.map(date => {
+      if (byDate[date] !== undefined) last = byDate[date];
+      return last;
+    });
   }
 
   return { labels, d };
