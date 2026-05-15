@@ -3,6 +3,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import boto3
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 import bcrypt
 from jose import jwt
@@ -11,6 +13,12 @@ from sqlalchemy.orm import Session
 from backend.db import get_db
 from backend.models.user import User
 from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RegisterRequest, TokenResponse, UpdateProfileRequest
+
+_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "whai-profile-images-kr")
+_S3_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+
+def _s3_client():
+    return boto3.client("s3", region_name=_S3_REGION)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -128,12 +136,21 @@ def change_password(
 
 
 _ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-_UPLOAD_DIR = Path("uploads/profile_images")
+
+
+def _s3_key(user_id: str, ext: str) -> str:
+    return f"profile_images/{user_id}_{uuid.uuid4().hex[:8]}{ext}"
+
+
+def _s3_delete(key: str) -> None:
+    try:
+        _s3_client().delete_object(Bucket=_S3_BUCKET, Key=key)
+    except ClientError:
+        pass
 
 
 @router.post("/me/profile-image")
 async def upload_profile_image(
-    request: Request,
     file: UploadFile = File(...),
     user_id: str = Depends(_get_user_id),
     db: Session = Depends(get_db),
@@ -145,24 +162,29 @@ async def upload_profile_image(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="파일 크기는 5MB 이하여야 합니다.")
 
-    ext = Path(file.filename).suffix.lower() or ".jpg"
-    filename = f"{user_id}_{uuid.uuid4().hex[:8]}{ext}"
-
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
 
-    # 기존 파일 삭제
-    if user.profile_image_url:
-        old_name = user.profile_image_url.rsplit("/", 1)[-1]
-        old_path = _UPLOAD_DIR / old_name
-        if old_path.exists():
-            old_path.unlink()
+    # 기존 S3 오브젝트 삭제
+    if user.profile_image_url and ".amazonaws.com/" in user.profile_image_url:
+        old_key = user.profile_image_url.split(".amazonaws.com/", 1)[-1]
+        _s3_delete(old_key)
 
-    (_UPLOAD_DIR / filename).write_bytes(content)
+    ext = Path(file.filename).suffix.lower() or ".jpg"
+    key = _s3_key(user_id, ext)
 
-    base_url = str(request.base_url).rstrip("/")
-    image_url = f"{base_url}/uploads/profile_images/{filename}"
+    try:
+        _s3_client().put_object(
+            Bucket=_S3_BUCKET,
+            Key=key,
+            Body=content,
+            ContentType=file.content_type,
+        )
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"이미지 업로드에 실패했습니다: {e}")
+
+    image_url = f"https://{_S3_BUCKET}.s3.{_S3_REGION}.amazonaws.com/{key}"
     user.profile_image_url = image_url
     user.original_file_name = file.filename
     db.commit()
@@ -178,14 +200,12 @@ def delete_profile_image(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-    if user.profile_image_url:
-        old_name = user.profile_image_url.rsplit("/", 1)[-1]
-        old_path = _UPLOAD_DIR / old_name
-        if old_path.exists():
-            old_path.unlink()
-        user.profile_image_url = None
-        user.original_file_name = None
-        db.commit()
+    if user.profile_image_url and ".amazonaws.com/" in user.profile_image_url:
+        old_key = user.profile_image_url.split(".amazonaws.com/", 1)[-1]
+        _s3_delete(old_key)
+    user.profile_image_url = None
+    user.original_file_name = None
+    db.commit()
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
