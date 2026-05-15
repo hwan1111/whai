@@ -2,6 +2,8 @@
 .env.local
 .vscode
 CLAUDE.md
+.claude/settings.local.json
+uploads/
 
 # Python
 __pycache__/

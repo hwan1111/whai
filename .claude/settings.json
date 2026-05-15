@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk '{print $5, $9}')",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\minha\\\\whai\" -Recurse -Force)",
+      "Bash(Select-Object FullName)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(c:\\\\Users\\\\minha\\\\whai\\\\.venv\\\\Scripts\\\\pip.exe install *)",
+      "Bash(.venv/Scripts/python.exe -m pip install passlib python-jose)",
+      "Bash(.venv/Scripts/python.exe -m pip install bcrypt)",
+      "Bash(.venv/Scripts/python.exe -m uvicorn backend.main:app --reload --port 8000)",
+      "Bash(.venv/Scripts/python.exe -m pip install uvicorn fastapi sqlalchemy pymysql cryptography pydantic python-dotenv)",
+      "Bash(.venv/Scripts/python.exe -m pip install pymysql)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(python -c ' *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\minha\\\\whai\\\\frontend\" -Recurse -Directory)",
+      "Bash(git add *)",
+      "Bash(git pull *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\minha\\whai\\frontend\\assets\\logos"
+    ]
+  }
+}
