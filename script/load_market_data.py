@@ -1,5 +1,5 @@
 """
-Daily market data loader — KOSPI (1), stocks (10), exchange rates (6).
+Daily market data loader — KOSPI (1), stocks (10), exchange rates (6), fundamentals (10).
 
 Run manually:
     python script/load_market_data.py
@@ -39,13 +39,13 @@ def _latest_price_date(engine, ticker: str) -> date:
         row = conn.execute(
             text("SELECT MAX(date) FROM price WHERE ticker = :t"), {"t": ticker}
         ).fetchone()
-    return row[0] if row[0] else date(2023, 1, 1)
+    return row[0] if row[0] else date(2020, 1, 1)
 
 
 def _latest_exchange_date(engine) -> date:
     with engine.connect() as conn:
         row = conn.execute(text("SELECT MAX(date) FROM exchange_rate")).fetchone()
-    return row[0] if row[0] else date(2023, 1, 1)
+    return row[0] if row[0] else date(2020, 1, 1)
 
 
 def load_kospi(engine) -> int:
@@ -165,8 +165,8 @@ def load_stocks(engine) -> int:
 
 
 def load_exchange_rates(engine) -> int:
-    """Frankfurter API로 6개 환율 증분 적재."""
-    from exchange_rate_fetcher import BASE_CURRENCY, fetch_frankfurter, make_exchange_rate_df
+    """BOK ECOS API로 6개 KRW 환율 증분 적재."""
+    from exchange_rate_fetcher import fetch_bok, make_exchange_rate_df
     from exchange_rate_loader import insert_exchange_rate
 
     last = _latest_exchange_date(engine)
@@ -177,27 +177,27 @@ def load_exchange_rates(engine) -> int:
         print("[환율] 최신 상태")
         return 0
 
-    total = 0
-    current = start
+    start_str = start.strftime("%Y%m%d")
+    end_str = today.strftime("%Y%m%d")
 
-    while current <= today:
-        req = current.strftime("%Y-%m-%d")
-        try:
-            data = fetch_frankfurter(req, base=BASE_CURRENCY)
-            actual = data.get("date")
-            if actual != req:
-                print(f"[환율 SKIP] {req} (휴일 → {actual})")
-            elif data.get("rates"):
-                df = make_exchange_rate_df(data)
-                insert_exchange_rate(engine, df)
-                total += len(df)
-                print(f"[환율] {req} {len(df)}건 적재")
-        except Exception as e:
-            print(f"[환율 ERROR] {req}: {e}")
-        current += timedelta(days=1)
+    try:
+        rows = fetch_bok(start_str, end_str)
+    except Exception as e:
+        print(f"[환율 ERROR] BOK API 호출 실패: {e}")
+        return 0
 
-    print(f"[환율] 총 {total}건 적재")
-    return total
+    if not rows:
+        print(f"[환율] 데이터 없음 ({start} ~ {today})")
+        return 0
+
+    df = make_exchange_rate_df(rows)
+    if df.empty:
+        print(f"[환율] 파싱된 데이터 없음 ({start} ~ {today})")
+        return 0
+
+    insert_exchange_rate(engine, df)
+    print(f"[환율] {len(df)}건 적재 ({start} ~ {today})")
+    return len(df)
 
 
 def load_fundamentals(engine) -> int:

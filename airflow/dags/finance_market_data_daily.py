@@ -1,8 +1,8 @@
 """
-Daily market data sync: KOSPI (1), stocks (10), exchange rates (6).
+Daily market data sync: KOSPI (1), stocks (10), exchange rates (6), fundamentals (10).
 
 Schedule: 15:00 UTC (00:00 KST) every weekday.
-The 3 load tasks run in parallel, each doing incremental inserts.
+The 4 load tasks run in parallel, each doing incremental inserts.
 """
 
 import sys
@@ -27,7 +27,7 @@ default_args = {
 dag = DAG(
     "finance_market_data_daily",
     default_args=default_args,
-    description="KOSPI, 주식 10종, 환율 6쌍 일일 증분 적재",
+    description="KOSPI, 주식 10종, 환율 6쌍, 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
     schedule_interval="0 15 * * 1-5",  # 00:00 KST 평일
     catchup=False,
     tags=["finance", "market-data", "price"],
@@ -63,6 +63,12 @@ def task_load_exchange_rates(**_):
     load_exchange_rates(engine)
 
 
+def task_load_fundamentals(**_):
+    engine = _setup()
+    from script.load_market_data import load_fundamentals
+    load_fundamentals(engine)
+
+
 t_kospi = PythonOperator(
     task_id="load_kospi",
     python_callable=task_load_kospi,
@@ -78,6 +84,11 @@ t_rates = PythonOperator(
     python_callable=task_load_exchange_rates,
     dag=dag,
 )
+t_fundamentals = PythonOperator(
+    task_id="load_fundamentals",
+    python_callable=task_load_fundamentals,
+    dag=dag,
+)
 
-# 3개 task 병렬 실행 (서로 독립적)
-[t_kospi, t_stocks, t_rates]
+# 4개 task 병렬 실행 (서로 독립적)
+[t_kospi, t_stocks, t_rates, t_fundamentals]
