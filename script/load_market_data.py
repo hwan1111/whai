@@ -49,11 +49,11 @@ def _latest_exchange_date(engine) -> date:
 
 
 def load_kospi(engine) -> int:
-    """yfinance로 KOSPI 지수(000000) 증분 적재."""
+    """pykrx로 KOSPI 지수(000000) 증분 적재."""
     try:
-        import yfinance as yf
+        from pykrx import stock as krx
     except ImportError:
-        print("[KOSPI] yfinance 미설치: pip install yfinance")
+        print("[KOSPI] pykrx 미설치")
         return 0
 
     last = _latest_price_date(engine, "000000")
@@ -64,30 +64,23 @@ def load_kospi(engine) -> int:
         print("[KOSPI] 최신 상태")
         return 0
 
-    df = yf.download(
-        "^KS11",
-        start=start.strftime("%Y-%m-%d"),
-        end=(today + timedelta(days=1)).strftime("%Y-%m-%d"),
-        progress=False,
+    df = krx.get_index_ohlcv_by_date(
+        start.strftime("%Y%m%d"),
+        today.strftime("%Y%m%d"),
+        "1001",  # KOSPI 지수 코드
     )
     if df.empty:
         print(f"[KOSPI] 데이터 없음 ({start} ~ {today})")
         return 0
 
-    close = df["Close"].squeeze()
-    volume = df["Volume"].squeeze()
-    # squeeze()가 단일 행일 때 스칼라를 반환하므로 Series로 보장
-    if not hasattr(close, "__len__"):
-        close = df["Close"].iloc[:, 0] if df["Close"].ndim > 1 else df["Close"]
-        volume = df["Volume"].iloc[:, 0] if df["Volume"].ndim > 1 else df["Volume"]
     rows = [
         {
             "ticker": "000000",
             "date": idx.strftime("%Y-%m-%d"),
-            "close": round(float(close.iloc[i])),
-            "volume": int(volume.iloc[i]),
+            "close": round(float(row["종가"])),
+            "volume": int(row["거래량"]),
         }
-        for i, idx in enumerate(df.index)
+        for idx, row in df.iterrows()
     ]
 
     with engine.begin() as conn:
@@ -207,6 +200,69 @@ def load_exchange_rates(engine) -> int:
     return total
 
 
+def load_fundamentals(engine) -> int:
+    """pykrx로 10개 종목 PER·PBR·시가총액 최신 스냅샷 적재."""
+    try:
+        from pykrx import stock as krx
+    except ImportError:
+        print("[펀더멘털] pykrx 미설치")
+        return 0
+
+    with engine.connect() as conn:
+        tickers = [
+            r.ticker for r in conn.execute(
+                text("SELECT ticker FROM company WHERE currency_code='KRW' AND ticker != '000000'")
+            )
+        ]
+
+    if not tickers:
+        print("[펀더멘털] 종목 없음")
+        return 0
+
+    # 가장 최근 영업일 기준 (오늘 데이터 없으면 어제)
+    today_str = date.today().strftime("%Y%m%d")
+    yesterday_str = (date.today() - timedelta(days=1)).strftime("%Y%m%d")
+    today_iso = date.today().strftime("%Y-%m-%d")
+
+    rows = []
+    for ticker in tickers:
+        try:
+            fd = krx.get_market_fundamental_by_date(yesterday_str, today_str, ticker)
+            mc = krx.get_market_cap_by_date(yesterday_str, today_str, ticker)
+            if fd.empty:
+                print(f"[펀더멘털 {ticker}] 데이터 없음")
+                continue
+            frow = fd.iloc[-1]
+            per = float(frow.get("PER", 0)) or None
+            pbr = float(frow.get("PBR", 0)) or None
+            market_cap = int(mc.iloc[-1]["시가총액"]) if not mc.empty else None
+            rows.append({
+                "ticker": ticker,
+                "date": today_iso,
+                "per": per,
+                "pbr": pbr,
+                "market_cap": market_cap,
+            })
+            cap_str = f"{market_cap // 10**12:,}조" if market_cap else "—"
+            print(f"[펀더멘털 {ticker}] PER={per} PBR={pbr} 시가총액={cap_str}")
+        except Exception as e:
+            print(f"[펀더멘털 {ticker}] 실패: {e}")
+
+    if rows:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO fundamental (ticker, date, per, pbr, market_cap)
+                    VALUES (:ticker, :date, :per, :pbr, :market_cap)
+                    ON DUPLICATE KEY UPDATE date=VALUES(date), per=VALUES(per),
+                        pbr=VALUES(pbr), market_cap=VALUES(market_cap)
+                """),
+                rows,
+            )
+    print(f"[펀더멘털] 총 {len(rows)}건 적재")
+    return len(rows)
+
+
 def load_all(engine) -> dict[str, int]:
     """KOSPI, 주식, 환율 증분 적재 실행."""
     print("=== 일일 시장 데이터 적재 시작 ===\n")
@@ -214,11 +270,13 @@ def load_all(engine) -> dict[str, int]:
         "kospi": load_kospi(engine),
         "stocks": load_stocks(engine),
         "exchange_rates": load_exchange_rates(engine),
+        "fundamentals": load_fundamentals(engine),
     }
     total = sum(results.values())
     print(
         f"\n=== 완료: 총 {total}건 "
-        f"(KOSPI {results['kospi']} / 주식 {results['stocks']} / 환율 {results['exchange_rates']}) ==="
+        f"(KOSPI {results['kospi']} / 주식 {results['stocks']} / "
+        f"환율 {results['exchange_rates']} / 펀더멘털 {results['fundamentals']}) ==="
     )
     return results
 

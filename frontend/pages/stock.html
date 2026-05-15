@@ -271,12 +271,18 @@
         if (v >= 1_000)     return (v / 1_000).toFixed(0) + 'K';
         return String(v);
       };
+      const fmtCap = v => {
+        if (!v) return '—';
+        const jo = v / 1e12;
+        if (jo >= 1) return jo.toFixed(0) + '조';
+        return (v / 1e8).toFixed(0) + '억';
+      };
       document.getElementById('m-volume').textContent  = fmtVol(s.volume);
-      document.getElementById('m-mktcap').textContent  = '—';
+      document.getElementById('m-mktcap').textContent  = fmtCap(s.market_cap);
       document.getElementById('m-high52').textContent  = fmt(s.high52);
       document.getElementById('m-low52').textContent   = fmt(s.low52);
-      document.getElementById('m-per').textContent     = '—';
-      document.getElementById('m-pbr').textContent     = '—';
+      document.getElementById('m-per').textContent     = s.per  ? s.per.toFixed(2)  : '—';
+      document.getElementById('m-pbr').textContent     = s.pbr  ? s.pbr.toFixed(2)  : '—';
       document.getElementById('price-high').textContent = s.high52 ? fmt(s.high52) + '원' : '—';
       document.getElementById('price-low').textContent  = s.low52  ? fmt(s.low52)  + '원' : '—';
     } catch { /* silent */ }
