@@ -82,6 +82,13 @@ nav { flex: 1; padding: 8px 0; }
 .btn-danger { background: #fef2f2; color: #b91c1c; }
 .fsel { border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; font-size: 13px; color: var(--text); outline: none; background: white; cursor: pointer; font-family: inherit; }
 .divider { height: 1px; background: var(--border); margin: 12px 0; }
+.invest-opt { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1.5px solid var(--border); background: white; color: var(--text-secondary); font-family: inherit; transition: all 0.15s; }
+.invest-opt:hover { border-color: #93c5fd; color: var(--primary); }
+.invest-opt.selected { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* Toast */
+.toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(12px); background: #1e293b; color: white; font-size: 13px; font-weight: 500; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.2s, transform 0.2s; z-index: 9999; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .tk-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; }
 
 /* AI BOX */

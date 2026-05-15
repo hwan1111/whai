@@ -123,6 +123,11 @@ function toggleUserMenu(e) {
 }
 
 // ── 회원정보 모달 ──
+const _INVEST_MAP = {
+  SAFE: '안정형', STAB: '안정추구형', NEUT: '위험중립형', GROW: '적극투자형', AGGR: '공격투자형',
+};
+const _INVEST_VALS = ['SAFE', 'STAB', 'NEUT', 'GROW', 'AGGR'];
+
 function openProfileModal() {
   document.getElementById('user-menu').classList.remove('open');
   const modal = document.getElementById('modal-profile');
@@ -132,17 +137,92 @@ function openProfileModal() {
   const genderMap = { M: '남성', F: '여성', OTHER: '기타' };
 
   body.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px">불러오는 중...</div>';
+  document.getElementById('profile-save-btn').style.display = 'none';
+  document.getElementById('profile-msg').style.display = 'none';
+
   fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${getToken()}` } })
     .then(r => r.json())
     .then(d => {
+      const investOptions = _INVEST_VALS.map(v =>
+        `<button type="button" class="invest-opt${d.invest_type === v ? ' selected' : ''}" data-val="${v}" onclick="_selectInvest(this)">${_INVEST_MAP[v]}</button>`
+      ).join('');
       body.innerHTML = `
-        <div class="modal-row"><span class="modal-label">이름</span><span class="modal-value">${d.name}</span></div>
+        <div class="modal-row">
+          <span class="modal-label">이름</span>
+          <input class="modal-input" id="profile-name-input" style="width:140px;text-align:right" value="${d.name}" maxlength="20">
+        </div>
         <div class="modal-row"><span class="modal-label">아이디</span><span class="modal-value">${d.user_id}</span></div>
         <div class="modal-row"><span class="modal-label">출생연도</span><span class="modal-value">${d.birth_year || '미입력'}</span></div>
         <div class="modal-row"><span class="modal-label">성별</span><span class="modal-value">${genderMap[d.gender] || '미입력'}</span></div>
+        <div style="margin-top:12px">
+          <div class="modal-label" style="margin-bottom:8px">투자성향</div>
+          <div id="invest-opts" style="display:flex;flex-wrap:wrap;gap:5px">${investOptions}</div>
+        </div>
       `;
+      document.getElementById('profile-save-btn').style.display = 'inline-block';
+      document.getElementById('profile-name-input').addEventListener('input', () => {
+        document.getElementById('profile-msg').style.display = 'none';
+      });
     })
     .catch(() => { body.innerHTML = '<div style="color:#dc2626;font-size:12px">정보를 불러오지 못했습니다.</div>'; });
+}
+
+function _selectInvest(btn) {
+  document.querySelectorAll('#invest-opts .invest-opt').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('profile-msg').style.display = 'none';
+}
+
+async function saveProfile() {
+  const nameInput = document.getElementById('profile-name-input');
+  const selectedInvest = document.querySelector('#invest-opts .invest-opt.selected');
+  const msg = document.getElementById('profile-msg');
+  const btn = document.getElementById('profile-save-btn');
+
+  const name = nameInput?.value.trim();
+  if (!name) {
+    msg.textContent = '이름을 입력해 주세요.';
+    msg.className = 'modal-msg err';
+    msg.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '저장 중...';
+  msg.style.display = 'none';
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ name, invest_type: selectedInvest?.dataset.val ?? null }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.textContent = data.detail || '저장에 실패했습니다.';
+      msg.className = 'modal-msg err';
+      msg.style.display = 'block';
+    } else {
+      const user = getUser();
+      if (user) {
+        user.name = data.name;
+        localStorage.setItem('whai_session', JSON.stringify(user));
+        const nameEl = document.querySelector('.user-menu-name');
+        if (nameEl) nameEl.textContent = data.name;
+      }
+      msg.textContent = '저장되었습니다.';
+      msg.className = 'modal-msg ok';
+      msg.style.display = 'block';
+      setTimeout(() => closeModal('modal-profile'), 1200);
+    }
+  } catch {
+    msg.textContent = '서버에 연결할 수 없습니다.';
+    msg.className = 'modal-msg err';
+    msg.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '저장';
+  }
 }
 
 // ── 비밀번호 변경 모달 ──
@@ -205,6 +285,19 @@ async function submitPasswordChange() {
 
 function closeModal(id) {
   document.getElementById(id).style.display = 'none';
+}
+
+function showToast(msg) {
+  let el = document.getElementById('whai-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'whai-toast';
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
 }
 
 // ── 프로필 사진 모달 ──
@@ -404,8 +497,10 @@ function _injectModals() {
       <div class="modal-box">
         <div class="modal-title">👤 회원정보</div>
         <div id="profile-body"></div>
+        <div class="modal-msg" id="profile-msg" style="display:none"></div>
         <div class="modal-actions">
           <button class="btn btn-ghost" onclick="closeModal('modal-profile')">닫기</button>
+          <button class="btn btn-primary" id="profile-save-btn" style="display:none" onclick="saveProfile()">저장</button>
         </div>
       </div>
     </div>

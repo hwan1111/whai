@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.db import get_db
 from backend.models.user import User
-from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RegisterRequest, TokenResponse
+from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RegisterRequest, TokenResponse, UpdateProfileRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -90,9 +90,27 @@ def me(user_id: str = Depends(_get_user_id), db: Session = Depends(get_db)) -> d
         "name": user.name,
         "birth_year": user.birth_year,
         "gender": user.gender,
+        "invest_type": user.invest_type,
         "created_at": user.created_at.strftime("%Y-%m-%d") if user.created_at else None,
         "profile_image_url": user.profile_image_url,
     }
+
+
+@router.patch("/me")
+def update_profile(
+    body: UpdateProfileRequest,
+    user_id: str = Depends(_get_user_id),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if body.name is not None:
+        user.name = body.name
+    if body.invest_type is not None:
+        user.invest_type = body.invest_type
+    db.commit()
+    return {"message": "프로필이 업데이트되었습니다.", "name": user.name, "invest_type": user.invest_type}
 
 
 @router.post("/change-password")
