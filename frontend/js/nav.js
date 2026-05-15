@@ -72,6 +72,19 @@ function initLayout(pageKey) {
     </div>
   `;
 
+  if (profileImg) {
+    [document.getElementById('avatar-btn'), document.querySelector('.user-menu-avatar')].forEach(el => {
+      if (!el) return;
+      const img = el.querySelector('img');
+      if (img) img.onerror = function () {
+        setProfileImage(null);
+        el.innerHTML = initial;
+        el.style.overflow = '';
+        el.style.padding = '';
+      };
+    });
+  }
+
   document.addEventListener('click', function (e) {
     const menu = document.getElementById('user-menu');
     const btn = document.getElementById('avatar-btn');
