@@ -1,7 +1,7 @@
 const SW = 860, SH = 300, ML = 52, MR = 72, MT = 22, MB = 38;
 const CW = SW - ML - MR, CH = SH - MT - MB;
 
-let currentPeriod = '1W';
+let currentPeriod = '1M';
 let activeAssets = ['000000'];
 
 function toX(i, n) { return ML + (i / (n - 1)) * CW; }
@@ -27,6 +27,7 @@ async function render() {
   document.querySelectorAll('[data-id]').forEach(el => {
     el.classList.toggle('in-chart', activeAssets.includes(el.dataset.id));
   });
+  if (typeof renderFavSection === 'function') renderFavSection();
 }
 
 function _renderChart(pd) {

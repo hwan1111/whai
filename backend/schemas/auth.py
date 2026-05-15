@@ -70,3 +70,8 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     name: str
     user_id: str
+    profile_image_url: Optional[str] = None
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str

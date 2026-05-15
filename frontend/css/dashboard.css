@@ -70,3 +70,19 @@
 .ex-row.in-chart { background: #eff6ff; padding: 6px 4px; }
 .pair-code { font-size: 12px; font-weight: 600; }
 .pair-desc { font-size: 10px; color: var(--text-secondary); }
+
+/* Star button */
+.star-btn { background: none; border: none; cursor: pointer; font-size: 13px; color: #d1d5db; padding: 2px 3px; line-height: 1; flex-shrink: 0; transition: color 0.15s; }
+.star-btn:hover { color: #fbbf24; }
+.star-btn.starred { color: #f59e0b; }
+
+/* Favorites card */
+.fav-empty { font-size: 11px; color: #94a3b8; text-align: center; padding: 8px 0 4px; }
+.fav-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 4px; border-radius: 7px; cursor: pointer; transition: background 0.12s; gap: 6px; }
+.fav-row:hover { background: #f8fafc; }
+.fav-row.in-chart { background: #eff6ff; }
+.fav-left { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; overflow: hidden; }
+.fav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.fav-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-right { text-align: right; flex-shrink: 0; }
+.fav-price { font-size: 11px; font-weight: 700; }

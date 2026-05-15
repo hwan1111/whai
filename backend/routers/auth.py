@@ -1,15 +1,16 @@
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 import bcrypt
 from jose import jwt
 from sqlalchemy.orm import Session
 
 from backend.db import get_db
 from backend.models.user import User
-from backend.models.user_profile import UserProfile
-from backend.schemas.auth import ChangePasswordRequest, LoginRequest, RegisterRequest, TokenResponse
+from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RegisterRequest, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -62,10 +63,9 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)) -> dict:
         password_hash=_hash(body.password),
         birth_year=body.birth_year,
         gender=body.gender,
+        invest_type=body.invest_type,
     )
     db.add(user)
-    if body.invest_type:
-        db.add(UserProfile(user_id=body.user_id, invest_type=body.invest_type))
     db.commit()
     return {"message": "회원가입이 완료되었습니다."}
 
@@ -91,6 +91,7 @@ def me(user_id: str = Depends(_get_user_id), db: Session = Depends(get_db)) -> d
         "birth_year": user.birth_year,
         "gender": user.gender,
         "created_at": user.created_at.strftime("%Y-%m-%d") if user.created_at else None,
+        "profile_image_url": user.profile_image_url,
     }
 
 
@@ -108,6 +109,80 @@ def change_password(
     return {"message": "비밀번호가 변경되었습니다."}
 
 
+_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+_UPLOAD_DIR = Path("uploads/profile_images")
+
+
+@router.post("/me/profile-image")
+async def upload_profile_image(
+    request: Request,
+    file: UploadFile = File(...),
+    user_id: str = Depends(_get_user_id),
+    db: Session = Depends(get_db),
+) -> dict:
+    if file.content_type not in _ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="JPG, PNG, WEBP, GIF만 업로드 가능합니다.")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="파일 크기는 5MB 이하여야 합니다.")
+
+    ext = Path(file.filename).suffix.lower() or ".jpg"
+    filename = f"{user_id}_{uuid.uuid4().hex[:8]}{ext}"
+
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    # 기존 파일 삭제
+    if user.profile_image_url:
+        old_name = user.profile_image_url.rsplit("/", 1)[-1]
+        old_path = _UPLOAD_DIR / old_name
+        if old_path.exists():
+            old_path.unlink()
+
+    (_UPLOAD_DIR / filename).write_bytes(content)
+
+    base_url = str(request.base_url).rstrip("/")
+    image_url = f"{base_url}/uploads/profile_images/{filename}"
+    user.profile_image_url = image_url
+    user.original_file_name = file.filename
+    db.commit()
+
+    return {"profile_image_url": image_url}
+
+
+@router.delete("/me/profile-image", status_code=status.HTTP_204_NO_CONTENT)
+def delete_profile_image(
+    user_id: str = Depends(_get_user_id),
+    db: Session = Depends(get_db),
+) -> None:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if user.profile_image_url:
+        old_name = user.profile_image_url.rsplit("/", 1)[-1]
+        old_path = _UPLOAD_DIR / old_name
+        if old_path.exists():
+            old_path.unlink()
+        user.profile_image_url = None
+        user.original_file_name = None
+        db.commit()
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    body: DeleteAccountRequest,
+    user_id: str = Depends(_get_user_id),
+    db: Session = Depends(get_db),
+) -> None:
+    user = db.get(User, user_id)
+    if not user or not _verify(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
+    db.delete(user)
+    db.commit()
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.get(User, body.user_id)
@@ -118,4 +193,5 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         access_token=_make_token(user.user_id),
         name=user.name,
         user_id=user.user_id,
+        profile_image_url=user.profile_image_url,
     )

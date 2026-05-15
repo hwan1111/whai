@@ -173,6 +173,7 @@
           return;
         }
         login(data.name, data.user_id, data.access_token);
+        setProfileImage(data.profile_image_url || null);
         window.location.href = 'pages/dashboard.html';
       } catch {
         errEl.textContent = '서버에 연결할 수 없습니다.';

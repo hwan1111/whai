@@ -33,7 +33,7 @@ async function fetchAssetData(id, period) {
   try {
     const headers = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
     const url = EXCHANGE_PAIRS.has(id)
-      ? `${API_BASE}/exchange-rates/${encodeURIComponent(id)}/history?period=${period}`
+      ? `${API_BASE}/exchange-rates/history?pair=${encodeURIComponent(id)}&period=${period}`
       : `${API_BASE}/prices/${id}/history?period=${period}`;
     const res = await fetch(url, { headers });
     const data = res.ok ? await res.json() : [];

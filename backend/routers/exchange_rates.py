@@ -71,9 +71,9 @@ def get_latest_exchange_rates(db: Session = Depends(get_db)) -> list[dict]:
     return result
 
 
-@router.get("/{pair}/history")
+@router.get("/history")
 def get_exchange_rate_history(
-    pair: str,
+    pair: str = Query(...),
     period: str = Query(default="3M"),
     db: Session = Depends(get_db),
 ) -> list[dict]:

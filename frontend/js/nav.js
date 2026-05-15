@@ -20,6 +20,11 @@ function initLayout(pageKey) {
   requireAuth();
   const user = getUser();
   const initial = user ? user.name.charAt(0) : '?';
+  const profileImg = getProfileImage();
+  const avatarInner = profileImg
+    ? `<img src="${profileImg}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
+    : initial;
+  const imgStyle = profileImg ? 'overflow:hidden;padding:0;' : '';
 
   document.getElementById('sidebar').innerHTML = `
     <div class="logo">
@@ -46,10 +51,10 @@ function initLayout(pageKey) {
     <div class="header-right">
       <span style="font-size:11px;color:#94a3b8" id="nav-update-time">마지막 업데이트: —</span>
       <div style="position:relative">
-        <div class="avatar" id="avatar-btn" onclick="toggleUserMenu(event)">${initial}</div>
+        <div class="avatar" id="avatar-btn" onclick="toggleUserMenu(event)" style="${imgStyle}">${avatarInner}</div>
         <div class="user-menu" id="user-menu">
           <div class="user-menu-header">
-            <div class="user-menu-avatar">${initial}</div>
+            <div class="user-menu-avatar" style="${imgStyle}">${avatarInner}</div>
             <div>
               <div class="user-menu-name">${user ? user.name : ''}</div>
               <div class="user-menu-id">@${user ? user.id : ''}</div>
@@ -57,9 +62,11 @@ function initLayout(pageKey) {
           </div>
           <div class="user-menu-divider"></div>
           <div class="user-menu-item" onclick="openProfileModal()">👤 회원정보</div>
+          <div class="user-menu-item" onclick="openProfileImgModal()">📷 프로필 사진</div>
           <div class="user-menu-item" onclick="openPasswordModal()">🔑 비밀번호 변경</div>
           <div class="user-menu-divider"></div>
-          <div class="user-menu-item user-menu-danger" onclick="logout()">↩ 로그아웃</div>
+          <div class="user-menu-item user-menu-danger" onclick="logout()">🚪 로그아웃</div>
+          <div class="user-menu-item user-menu-danger" onclick="openWithdrawalModal()">🗑️ 회원탈퇴</div>
         </div>
       </div>
     </div>
@@ -75,6 +82,19 @@ function initLayout(pageKey) {
 
   _injectModals();
   _loadNavDate();
+  if (!getProfileImage()) _syncProfileImageFromServer();
+}
+
+async function _syncProfileImageFromServer() {
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.profile_image_url) {
+      setProfileImage(data.profile_image_url);
+      _applyAvatarImage(data.profile_image_url);
+    }
+  } catch { /* silent */ }
 }
 
 async function _loadNavDate() {
@@ -108,24 +128,11 @@ function openProfileModal() {
   const modal = document.getElementById('modal-profile');
   modal.style.display = 'flex';
 
-  const user = getUser();
-  const token = getToken();
   const body = document.getElementById('profile-body');
-
   const genderMap = { M: '남성', F: '여성', OTHER: '기타' };
 
-  if (!token) {
-    body.innerHTML = `
-      <div class="modal-row"><span class="modal-label">이름</span><span class="modal-value">${user?.name || '-'}</span></div>
-      <div class="modal-row"><span class="modal-label">아이디</span><span class="modal-value">${user?.id || '-'}</span></div>
-      <div class="modal-row"><span class="modal-label">출생연도</span><span class="modal-value">미입력</span></div>
-      <div class="modal-row"><span class="modal-label">성별</span><span class="modal-value">미입력</span></div>
-    `;
-    return;
-  }
-
   body.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px">불러오는 중...</div>';
-  fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+  fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${getToken()}` } })
     .then(r => r.json())
     .then(d => {
       body.innerHTML = `
@@ -200,6 +207,195 @@ function closeModal(id) {
   document.getElementById(id).style.display = 'none';
 }
 
+// ── 프로필 사진 모달 ──
+function openProfileImgModal() {
+  document.getElementById('user-menu').classList.remove('open');
+  document.getElementById('modal-profile-img').style.display = 'flex';
+  document.getElementById('profile-img-input').value = '';
+  document.getElementById('profile-img-upload-btn').style.display = 'none';
+  document.getElementById('profile-img-msg').style.display = 'none';
+  _renderImgPreview(getProfileImage());
+}
+
+function _letterAvatar(initial) {
+  return `<div style="width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:white;font-size:32px;font-weight:700;margin:0 auto">${initial}</div>`;
+}
+
+function _renderImgPreview(url) {
+  const wrap = document.getElementById('profile-img-preview');
+  const deleteBtn = document.getElementById('profile-img-delete-btn');
+  const initial = getUser()?.name?.charAt(0) || '?';
+  if (url) {
+    const img = document.createElement('img');
+    img.src = url;
+    img.style.cssText = 'width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid #e2e8f0;display:block;margin:0 auto';
+    img.onerror = function () {
+      wrap.innerHTML = _letterAvatar(initial);
+      if (deleteBtn) deleteBtn.style.display = 'none';
+    };
+    wrap.innerHTML = '';
+    wrap.appendChild(img);
+    if (deleteBtn) deleteBtn.style.display = 'inline-block';
+  } else {
+    wrap.innerHTML = _letterAvatar(initial);
+    if (deleteBtn) deleteBtn.style.display = 'none';
+  }
+}
+
+async function deleteProfileImage() {
+  const msg = document.getElementById('profile-img-msg');
+  const deleteBtn = document.getElementById('profile-img-delete-btn');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = '삭제 중...';
+  msg.style.display = 'none';
+  try {
+    const res = await fetch(`${API_BASE}/auth/me/profile-image`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) {
+      msg.textContent = '삭제에 실패했습니다.';
+      msg.className = 'modal-msg err';
+      msg.style.display = 'block';
+    } else {
+      setProfileImage(null);
+      const initial = getUser()?.name?.charAt(0) || '?';
+      // 아바타 원래대로
+      const avatarBtn = document.getElementById('avatar-btn');
+      if (avatarBtn) { avatarBtn.innerHTML = initial; avatarBtn.style.overflow = ''; avatarBtn.style.padding = ''; }
+      const menuAvatar = document.querySelector('.user-menu-avatar');
+      if (menuAvatar) { menuAvatar.innerHTML = initial; menuAvatar.style.overflow = ''; menuAvatar.style.padding = ''; }
+      _renderImgPreview(null);
+      document.getElementById('profile-img-upload-btn').style.display = 'none';
+      document.getElementById('profile-img-input').value = '';
+      msg.textContent = '프로필 사진이 삭제되었습니다.';
+      msg.className = 'modal-msg ok';
+      msg.style.display = 'block';
+    }
+  } catch {
+    msg.textContent = '서버에 연결할 수 없습니다.';
+    msg.className = 'modal-msg err';
+    msg.style.display = 'block';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = '삭제';
+  }
+}
+
+function onProfileImgSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wrap = document.getElementById('profile-img-preview');
+    wrap.innerHTML = `<img src="${e.target.result}" style="width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid #2563eb;margin:0 auto;display:block">`;
+  };
+  reader.readAsDataURL(file);
+  document.getElementById('profile-img-upload-btn').style.display = 'inline-block';
+  document.getElementById('profile-img-msg').style.display = 'none';
+}
+
+async function uploadProfileImage() {
+  const input = document.getElementById('profile-img-input');
+  const file = input.files[0];
+  if (!file) return;
+
+  const msg = document.getElementById('profile-img-msg');
+  const btn = document.getElementById('profile-img-upload-btn');
+  btn.disabled = true;
+  btn.textContent = '업로드 중...';
+  msg.style.display = 'none';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/me/profile-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: formData,
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      msg.textContent = data.detail || '업로드에 실패했습니다.';
+      msg.className = 'modal-msg err';
+      msg.style.display = 'block';
+    } else {
+      const data = await res.json();
+      setProfileImage(data.profile_image_url);
+      _applyAvatarImage(data.profile_image_url);
+      msg.textContent = '프로필 사진이 업데이트되었습니다.';
+      msg.className = 'modal-msg ok';
+      msg.style.display = 'block';
+      btn.style.display = 'none';
+    }
+  } catch {
+    msg.textContent = '서버에 연결할 수 없습니다.';
+    msg.className = 'modal-msg err';
+    msg.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '업로드';
+  }
+}
+
+function _applyAvatarImage(url) {
+  const imgTag = `<img src="${url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+  const avatarBtn = document.getElementById('avatar-btn');
+  if (avatarBtn) { avatarBtn.innerHTML = imgTag; avatarBtn.style.cssText += ';overflow:hidden;padding:0'; }
+  const menuAvatar = document.querySelector('.user-menu-avatar');
+  if (menuAvatar) { menuAvatar.innerHTML = imgTag; menuAvatar.style.cssText += ';overflow:hidden;padding:0'; }
+}
+
+// ── 회원탈퇴 모달 ──
+function openWithdrawalModal() {
+  document.getElementById('user-menu').classList.remove('open');
+  document.getElementById('modal-withdrawal').style.display = 'flex';
+  document.getElementById('withdraw-pw').value = '';
+  document.getElementById('withdraw-msg').style.display = 'none';
+}
+
+async function submitWithdrawal() {
+  const pw = document.getElementById('withdraw-pw').value;
+  const msg = document.getElementById('withdraw-msg');
+  msg.style.display = 'none';
+
+  if (!pw) {
+    msg.textContent = '비밀번호를 입력해 주세요.';
+    msg.className = 'modal-msg err';
+    msg.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('withdraw-btn');
+  btn.disabled = true;
+  btn.textContent = '처리 중...';
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ password: pw }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      msg.textContent = data.detail || '탈퇴에 실패했습니다.';
+      msg.className = 'modal-msg err';
+      msg.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '탈퇴하기';
+    } else {
+      logout();
+    }
+  } catch {
+    msg.textContent = '서버에 연결할 수 없습니다.';
+    msg.className = 'modal-msg err';
+    msg.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '탈퇴하기';
+  }
+}
+
 function _injectModals() {
   if (document.getElementById('modal-profile')) return;
   const html = `
@@ -242,6 +438,45 @@ function _injectModals() {
         <div class="modal-actions">
           <button class="btn btn-ghost" onclick="closeModal('modal-password')">취소</button>
           <button class="btn btn-primary" id="pw-change-btn" onclick="submitPasswordChange()">변경하기</button>
+        </div>
+      </div>
+    </div>
+    <!-- 프로필 사진 모달 -->
+    <div class="modal-overlay" id="modal-profile-img" style="display:none" onclick="if(event.target===this)closeModal('modal-profile-img')">
+      <div class="modal-box" style="width:340px">
+        <div class="modal-title">📷 프로필 사진</div>
+        <div style="text-align:center;margin-bottom:16px">
+          <div id="profile-img-preview" style="margin:0 auto 12px"></div>
+          <input type="file" id="profile-img-input" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" onchange="onProfileImgSelect(this)">
+          <div style="display:flex;justify-content:center;gap:8px">
+            <button class="btn btn-ghost" onclick="document.getElementById('profile-img-input').click()">📁 사진 선택</button>
+            <button class="btn btn-danger" id="profile-img-delete-btn" style="display:none" onclick="deleteProfileImage()">삭제</button>
+          </div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:8px">JPG · PNG · WEBP · GIF &nbsp;·&nbsp; 최대 5MB</div>
+        </div>
+        <div class="modal-msg" id="profile-img-msg" style="display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('modal-profile-img')">닫기</button>
+          <button class="btn btn-primary" id="profile-img-upload-btn" style="display:none" onclick="uploadProfileImage()">업로드</button>
+        </div>
+      </div>
+    </div>
+    <!-- 회원탈퇴 모달 -->
+    <div class="modal-overlay" id="modal-withdrawal" style="display:none" onclick="if(event.target===this)closeModal('modal-withdrawal')">
+      <div class="modal-box">
+        <div class="modal-title">🗑️ 회원탈퇴</div>
+        <p style="font-size:13px;color:#64748b;margin-bottom:18px;line-height:1.6">탈퇴하시면 모든 데이터가 삭제되며 복구할 수 없습니다.<br>계속하려면 현재 비밀번호를 입력해 주세요.</p>
+        <div class="modal-field">
+          <div class="modal-label">현재 비밀번호</div>
+          <div class="pw-wrap">
+            <input class="modal-input" type="password" id="withdraw-pw" maxlength="20" placeholder="비밀번호 입력">
+            <button type="button" class="eye-btn" onclick="toggleEye('withdraw-pw', this)">👁</button>
+          </div>
+        </div>
+        <div class="modal-msg" id="withdraw-msg" style="display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('modal-withdrawal')">취소</button>
+          <button class="btn btn-danger" id="withdraw-btn" onclick="submitWithdrawal()">탈퇴하기</button>
         </div>
       </div>
     </div>
