@@ -14,7 +14,7 @@ from backend.db import get_db
 from backend.models.user import User
 from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RegisterRequest, TokenResponse, UpdateProfileRequest
 
-_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "whai-profile-images-kr")
+_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "whai-profile-images")
 _S3_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
 
 def _s3_client():
