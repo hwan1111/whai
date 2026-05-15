@@ -237,7 +237,7 @@
     ['stock-price','stock-change','price-high','price-low','price-pos',
      'm-volume','m-mktcap','m-high52','m-low52','m-per','m-pbr'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.textContent = '—';
+      if (el) el.innerHTML = '—';
     });
 
     await Promise.all([loadStockPrice(id), loadStockChart(id, currentPeriod), loadStockNews(id)]);
@@ -281,7 +281,13 @@
       document.getElementById('m-mktcap').textContent  = fmtCap(s.market_cap);
       document.getElementById('m-high52').textContent  = fmt(s.high52);
       document.getElementById('m-low52').textContent   = fmt(s.low52);
-      document.getElementById('m-per').textContent     = s.per  ? s.per.toFixed(2)  : '—';
+      if (s.per) {
+        document.getElementById('m-per').innerHTML = s.per.toFixed(2);
+      } else {
+        document.getElementById('m-per').innerHTML =
+          `<span style="font-size:11px;font-weight:700;color:#64748b">산출불가</span>` +
+          `<div style="font-size:9px;color:#94a3b8;font-weight:400;margin-top:2px">현재 순손실 중인 기업으로<br>PER을 계산할 수 없어요</div>`;
+      }
       document.getElementById('m-pbr').textContent     = s.pbr  ? s.pbr.toFixed(2)  : '—';
       document.getElementById('price-high').textContent = s.high52 ? fmt(s.high52) + '원' : '—';
       document.getElementById('price-low').textContent  = s.low52  ? fmt(s.low52)  + '원' : '—';
