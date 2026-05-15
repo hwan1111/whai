@@ -2,7 +2,6 @@
 .env.local
 .vscode
 CLAUDE.md
-.claude
 
 # Python
 __pycache__/
