@@ -16,11 +16,7 @@
 
       <div class="other-card mb">
         <div class="other-card-title">분석 자산 선택 (KRX 종목)</div>
-        <div class="chips" id="analysis-chips"></div>
-        <div id="stock-picker" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:10px">
-          <div style="font-size:11px;color:#64748b;margin-bottom:7px">종목 선택</div>
-          <div id="picker-options" style="display:flex;flex-wrap:wrap;gap:5px"></div>
-        </div>
+        <div id="stock-selector" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:12px;color:#64748b">분석 기간:</span>
           <div class="range-sel" id="period-sel">
@@ -39,6 +35,7 @@
         <div style="font-size:40px">🧩</div>
         <div style="font-size:15px;font-weight:600;color:#475569">종목을 추가해주세요</div>
         <div style="font-size:12px;color:#94a3b8">2개 이상의 종목을 선택하면 상관계수·리스크 지표·AI 분석이 표시됩니다</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:6px">종목을 다시 클릭하면 선택 해제됩니다</div>
       </div>
 
       <div id="analysis-content" style="display:none">
@@ -169,7 +166,6 @@
   }
 
   let selected = [];
-  let pickerOpen = false;
   let currentPeriod = '1W';
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -188,7 +184,7 @@
   });
 
   async function renderAll() {
-    renderAnalysisChips();
+    _updateStockButtons();
     const hasStocks = selected.length >= 2;
     document.getElementById('analysis-empty').style.display   = hasStocks ? 'none' : 'flex';
     document.getElementById('analysis-content').style.display = hasStocks ? 'block' : 'none';
@@ -207,11 +203,18 @@
     renderAI(stockData);
   }
 
-  function renderAnalysisChips() {
-    document.getElementById('analysis-chips').innerHTML =
-      selected.map(id =>
-        `<div class="chip">${ALL_STOCKS[id]} <span class="rm" onclick="removeStock('${id}')">✕</span></div>`
-      ).join('') + `<div class="chip chip-add" onclick="togglePicker()">+ 종목 추가</div>`;
+  function _buildStockSelector() {
+    document.getElementById('stock-selector').innerHTML =
+      Object.entries(ALL_STOCKS).map(([id, name]) =>
+        `<button class="rbtn${selected.includes(id) ? ' active' : ''}" id="stock-btn-${id}" onclick="toggleStock('${id}')">${name}</button>`
+      ).join('');
+  }
+
+  function _updateStockButtons() {
+    Object.keys(ALL_STOCKS).forEach(id => {
+      const btn = document.getElementById(`stock-btn-${id}`);
+      if (btn) btn.classList.toggle('active', selected.includes(id));
+    });
   }
 
   function renderMatrix(stockData) {
@@ -292,33 +295,13 @@
         : `전 종목이 플러스 수익률을 기록 중입니다.`);
   }
 
-  function renderPicker() {
-    const available = Object.entries(ALL_STOCKS).filter(([id]) => !selected.includes(id));
-    document.getElementById('picker-options').innerHTML = available.length === 0
-      ? '<span style="font-size:12px;color:#94a3b8">추가 가능한 종목 없음</span>'
-      : available.map(([id, name]) =>
-          `<button class="rbtn" onclick="addStock('${id}')" style="font-size:12px">${name}</button>`
-        ).join('');
-  }
-
-  function togglePicker() {
-    pickerOpen = !pickerOpen;
-    document.getElementById('stock-picker').style.display = pickerOpen ? 'block' : 'none';
-    if (pickerOpen) renderPicker();
-  }
-
-  function removeStock(id) {
-    selected = selected.filter(s => s !== id);
+  function toggleStock(id) {
+    if (selected.includes(id)) selected = selected.filter(s => s !== id);
+    else selected.push(id);
     renderAll();
-    if (pickerOpen) renderPicker();
   }
 
-  function addStock(id) {
-    if (!selected.includes(id)) selected.push(id);
-    renderAll();
-    togglePicker();
-  }
-
+  _buildStockSelector();
   renderAll();
 </script>
 </body>
