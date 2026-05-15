@@ -15,8 +15,8 @@
     <div class="content">
 
       <div class="other-card mb">
-        <div class="other-card-title">분석 자산 선택 (KRX 종목)</div>
-        <div id="stock-selector" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+        <div class="other-card-title">분석 자산 선택</div>
+        <div id="stock-selector" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:12px;color:#64748b">분석 기간:</span>
           <div class="range-sel" id="period-sel">
@@ -43,11 +43,11 @@
         <div class="other-card">
           <div class="other-card-title">상관계수 매트릭스 <span id="corr-period-label" style="font-size:9px;color:#94a3b8;font-weight:400;text-transform:none">Pearson · 6개월 수익률</span></div>
           <div id="matrix-container"></div>
-          <div style="display:flex;gap:10px;margin-top:12px;font-size:10px;color:#64748b;flex-wrap:wrap">
-            <span>범례:</span>
-            <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;background:#1e40af;border-radius:2px"></div>강함(0.7+)</div>
-            <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;background:#a5b4fc;border-radius:2px"></div>보통(0.4~)</div>
-            <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;background:#e0e7ff;border-radius:2px"></div>약함(~0.4)</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:10px;color:#64748b">
+            <span>-1.0</span>
+            <div style="width:140px;height:10px;border-radius:4px;background:linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))"></div>
+            <span>+1.0</span>
+            <span style="margin-left:4px;color:#94a3b8">· 빨강: 음의 상관 / 파랑: 양의 상관</span>
           </div>
         </div>
         <div class="other-card">
@@ -93,38 +93,50 @@
     '051910': 'LG화학',    '096770': 'SK이노베이션',
   };
 
+  const ALL_FX = {
+    'KRW/USD': 'KRW/USD', 'KRW/JPY': 'KRW/JPY', 'KRW/EUR': 'KRW/EUR',
+    'KRW/CNY': 'KRW/CNY', 'KRW/CHF': 'KRW/CHF', 'KRW/GBP': 'KRW/GBP',
+  };
+
   const SHORT = {
+    '000000': 'KOSPI',
     '005930': '삼성전자', '000660': 'SK하이닉스',
     '005380': '현대차',   '000270': '기아',
     '079550': 'LIG디펜스', '012450': '한화에어로',
     '105560': 'KB금융',   '055550': '신한지주',
     '051910': 'LG화학',   '096770': 'SK이노베',
+    'KRW/USD': 'USD', 'KRW/JPY': 'JPY', 'KRW/EUR': 'EUR',
+    'KRW/CNY': 'CNY', 'KRW/CHF': 'CHF', 'KRW/GBP': 'GBP',
   };
 
   const PERIOD_LABEL = { '1W':'1주', '1M':'1개월', '3M':'3개월', '6M':'6개월', '1Y':'1년', '3Y':'3년', 'ALL':'전체' };
 
   const dataCache = {};
 
-  async function fetchHistory(ticker, period) {
-    const key = `${ticker}_${period}`;
+  async function fetchHistory(id, period) {
+    const key = `${id}_${period}`;
     if (dataCache[key]) return dataCache[key];
     try {
       const headers = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
-      const res = await fetch(`${API_BASE}/prices/${ticker}/history?period=${period}`, { headers });
+      const isFx = id.startsWith('KRW/');
+      const url = isFx
+        ? `${API_BASE}/exchange-rates/history?pair=${encodeURIComponent(id)}&period=${period}`
+        : `${API_BASE}/prices/${id}/history?period=${period}`;
+      const res = await fetch(url, { headers });
       if (!res.ok) return null;
       const rows = await res.json();
       if (rows.length < 2) return null;
 
       const dates  = rows.map(r => r.date);
-      const closes = rows.map(r => Number(r.close));
+      const prices = rows.map(r => Number(isFx ? r.rate : r.close));
       const totalReturn = rows[rows.length - 1].return_pct;
 
       const dailyReturns = [];
-      for (let i = 1; i < closes.length; i++)
-        dailyReturns.push((closes[i] - closes[i - 1]) / closes[i - 1]);
+      for (let i = 1; i < prices.length; i++)
+        dailyReturns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
       const dailyReturnDates = dates.slice(1);
 
-      const result = { dates, closes, dailyReturns, dailyReturnDates, totalReturn, sharpe: calcSharpe(dailyReturns) };
+      const result = { dates, closes: prices, dailyReturns, dailyReturnDates, totalReturn, sharpe: calcSharpe(dailyReturns) };
       dataCache[key] = result;
       return result;
     } catch { return null; }
@@ -158,11 +170,23 @@
   }
 
   function corrStyle(v) {
-    if (v >= 0.99) return 'background:#1e40af;color:white';
-    if (v >= 0.7)  return 'background:#3b82f6;color:white';
-    if (v >= 0.5)  return 'background:#93c5fd;color:#1e3a8a';
-    if (v >= 0.3)  return 'background:#bfdbfe;color:#1e3a8a';
-    return 'background:#e0e7ff;color:#3730a3';
+    const t = Math.max(-1, Math.min(1, v));
+    // neutral: rgb(248,250,252)  blue max: rgb(30,64,175)  red max: rgb(185,28,28)
+    const nr = 248, ng = 250, nb = 252;
+    let r, g, b;
+    if (t >= 0) {
+      r = Math.round(nr + (30  - nr) * t);
+      g = Math.round(ng + (64  - ng) * t);
+      b = Math.round(nb + (175 - nb) * t);
+    } else {
+      const s = -t;
+      r = Math.round(nr + (185 - nr) * s);
+      g = Math.round(ng + (28  - ng) * s);
+      b = Math.round(nb + (28  - nb) * s);
+    }
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    const color = brightness < 140 ? 'white' : (t < 0 ? '#7f1d1d' : '#1e3a8a');
+    return `background:rgb(${r},${g},${b});color:${color}`;
   }
 
   let selected = [];
@@ -203,17 +227,27 @@
     renderAI(stockData);
   }
 
+  function _mkBtn(id, label) {
+    return `<button class="rbtn${selected.includes(id) ? ' active' : ''}" data-ticker="${id}" onclick="toggleStock('${id}')">${label}</button>`;
+  }
+
   function _buildStockSelector() {
-    document.getElementById('stock-selector').innerHTML =
-      Object.entries(ALL_STOCKS).map(([id, name]) =>
-        `<button class="rbtn${selected.includes(id) ? ' active' : ''}" id="stock-btn-${id}" onclick="toggleStock('${id}')">${name}</button>`
-      ).join('');
+    const row = (label, btns) =>
+      `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span style="font-size:11px;color:#94a3b8;min-width:30px;flex-shrink:0">${label}</span>
+        ${btns}
+      </div>`;
+
+    document.getElementById('stock-selector').innerHTML = [
+      row('지수', _mkBtn('000000', 'KOSPI 지수')),
+      row('주식', Object.entries(ALL_STOCKS).map(([id, name]) => _mkBtn(id, name)).join('')),
+      row('환율', Object.keys(ALL_FX).map(id => _mkBtn(id, id)).join('')),
+    ].join('');
   }
 
   function _updateStockButtons() {
-    Object.keys(ALL_STOCKS).forEach(id => {
-      const btn = document.getElementById(`stock-btn-${id}`);
-      if (btn) btn.classList.toggle('active', selected.includes(id));
+    document.querySelectorAll('#stock-selector [data-ticker]').forEach(btn => {
+      btn.classList.toggle('active', selected.includes(btn.dataset.ticker));
     });
   }
 
