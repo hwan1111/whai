@@ -22,3 +22,4 @@ mlruns
 *.sql
 .DS_Store
 basic_auth.ini
+uploads/
