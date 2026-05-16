@@ -1,0 +1,38 @@
+services:
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: whai_mlflow_server
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "5001:5000"  # 외부 포트 충돌 방지를 위해 5001 사용
+    volumes:
+      - .:/app
+      - ./config/certs:/app/config/certs:ro
+    environment:
+      # 호스트 유효성 검사
+      - MLFLOW_SERVER_DISABLE_HOST_VALIDATION=true
+      - MLFLOW_SERVER_CORS_ALLOWED_ORIGINS=*
+      - MLFLOW_HTTP_REQUEST_TIMEOUT=600
+      
+      # 인증 설정 (env_file에서 로드)
+      - MLFLOW_AUTH_CONFIG_PATH=${MLFLOW_AUTH_CONFIG_PATH}
+      - MLFLOW_FLASK_SERVER_SECRET_KEY=${MLFLOW_FLASK_SERVER_SECRET_KEY}
+
+      # DB 연결
+      - MLFLOW_BACKEND_STORE_URI=${MLFLOW_DATABASE_URI}
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/app/artifacts
+    working_dir: /app
+    command: >
+      bash -c "
+      mkdir -p /app/artifacts &&
+      pip install --no-cache-dir 'mlflow[auth]'>=2.0 && 
+      mlflow server
+      --backend-store-uri $${MLFLOW_DATABASE_URI}
+      --default-artifact-root $${MLFLOW_ARTIFACTS_BUCKET}
+      --allowed-hosts '*'
+      --host 0.0.0.0
+      --port 5000
+      --serve-artifacts
+      --app-name basic-auth"

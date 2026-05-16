@@ -30,6 +30,7 @@ This is a greenfield ML/data engineering project with a monorepo layout. The dir
 | Frontend | Next.js (App Router) + React — Node.js v24, npm v11 |
 | Container | Docker on Ubuntu 22.04 — all shell scripts and system commands target this environment |
 | DB (primary) | MySQL via Aiven |
+| DB (primary) | MySQL via Aiven |
 | DB (archive) | AWS S3 — large CSV/Parquet datasets live here, not in `data/`; use boto3 or s3fs for access |
 | DB (search) | Opensearch via Aiven |
 | In-memory | Pandas DataFrame — keep inference results as DataFrames to support downstream XAI computation |
