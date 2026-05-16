@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { login, getUser } from '@/lib/auth';
+import { login, getUser, setProfileImage } from '@/lib/auth';
 
 const INVEST_OPTS = [
   { val: 'SAFE', label: '안정형' },
@@ -54,6 +54,7 @@ export default function AuthPage() {
         setLoginError(data.detail || '로그인에 실패했습니다.');
       } else {
         login(data.name, data.user_id, data.access_token);
+        if (data.profile_image_url) setProfileImage(data.profile_image_url);
         router.replace('/dashboard');
       }
     } catch {
@@ -127,6 +128,7 @@ export default function AuthPage() {
         setRegError(data.detail || '회원가입에 실패했습니다.');
       } else {
         login(data.name, data.user_id, data.access_token);
+        if (data.profile_image_url) setProfileImage(data.profile_image_url);
         router.replace('/dashboard');
       }
     } catch {
@@ -174,10 +176,6 @@ export default function AuthPage() {
             <button type="submit" className="btn-login" disabled={loginLoading}>
               {loginLoading ? '로그인 중...' : '로그인'}
             </button>
-            <div className="auth-demo">
-              <span className="auth-demo-label">테스트 계정</span>
-              <strong>ID:</strong> whai_demo &nbsp;|&nbsp; <strong>PW:</strong> demo1234
-            </div>
           </form>
         ) : (
           <form onSubmit={handleRegister}>
