@@ -1,5 +1,6 @@
-// ── Asset metadata (colors, display labels) ──────────────────
-const ASSETS = {
+import { getToken } from './auth';
+
+export const ASSETS = {
   '000000':  { label: 'KOSPI 지수', color: '#94A3B8' },
   '005930':  { label: '삼성전자',   color: '#034EA2' },
   '000660':  { label: 'SK하이닉스', color: '#E31837' },
@@ -19,22 +20,22 @@ const ASSETS = {
   'KRW/GBP': { label: 'KRW/GBP',   color: '#012169' },
 };
 
-const EXCHANGE_PAIRS = new Set([
+export const EXCHANGE_PAIRS = new Set([
   'KRW/USD', 'KRW/JPY', 'KRW/EUR', 'KRW/CNY', 'KRW/CHF', 'KRW/GBP',
 ]);
 
-// Cache: _cache[period][id] = [{date, return_pct}, ...]
 const _cache = {};
 
-async function fetchAssetData(id, period) {
+export async function fetchAssetData(id, period) {
   if (_cache[period]?.[id] !== undefined) return _cache[period][id];
   if (!_cache[period]) _cache[period] = {};
 
   try {
-    const headers = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
+    const token = getToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const url = EXCHANGE_PAIRS.has(id)
-      ? `${API_BASE}/exchange-rates/history?pair=${encodeURIComponent(id)}&period=${period}`
-      : `${API_BASE}/prices/${id}/history?period=${period}`;
+      ? `/api/v1/exchange-rates/history?pair=${encodeURIComponent(id)}&period=${period}`
+      : `/api/v1/prices/${id}/history?period=${period}`;
     const res = await fetch(url, { headers });
     const data = res.ok ? await res.json() : [];
     _cache[period][id] = data;
@@ -45,10 +46,9 @@ async function fetchAssetData(id, period) {
   }
 }
 
-function buildPeriodData(period, ids) {
+export function buildPeriodData(period, ids) {
   const cache = _cache[period] || {};
 
-  // x축: 모든 종목 날짜의 합집합
   const allDates = new Set();
   for (const id of ids) {
     if (cache[id]?.length > 0) cache[id].forEach(r => allDates.add(r.date));
@@ -68,7 +68,6 @@ function buildPeriodData(period, ids) {
     const byDate = Object.fromEntries(rows.map(r => [r.date, r.return_pct]));
     const firstDate = rows[0].date;
     const lastDate = rows[rows.length - 1].date;
-    // 데이터 범위 밖은 null, 범위 내 누락은 forward-fill
     let last = 0;
     d[id] = sortedDates.map(date => {
       if (date < firstDate || date > lastDate) return null;
