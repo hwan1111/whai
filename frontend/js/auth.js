@@ -10,7 +10,17 @@ function login(name, id, token) {
 
 function logout() {
   localStorage.removeItem(WHAI_SESSION_KEY);
+  localStorage.removeItem('whai_profile_img');
   window.location.href = _rootPath() + 'index.html';
+}
+
+function setProfileImage(url) {
+  if (url) localStorage.setItem('whai_profile_img', url);
+  else localStorage.removeItem('whai_profile_img');
+}
+
+function getProfileImage() {
+  return localStorage.getItem('whai_profile_img');
 }
 
 function getUser() {

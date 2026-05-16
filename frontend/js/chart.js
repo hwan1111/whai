@@ -1,8 +1,8 @@
 const SW = 860, SH = 300, ML = 52, MR = 72, MT = 22, MB = 38;
 const CW = SW - ML - MR, CH = SH - MT - MB;
 
-let currentPeriod = '6M';
-let activeAssets = ['KOSPI'];
+let currentPeriod = '1M';
+let activeAssets = ['000000'];
 
 function toX(i, n) { return ML + (i / (n - 1)) * CW; }
 function toY(v, minV, maxV) { return MT + ((maxV - v) / (maxV - minV)) * CH; }
@@ -18,17 +18,31 @@ function niceTicks(min, max, target) {
   return ticks;
 }
 
-function renderChart() {
+async function render() {
+  await Promise.all(activeAssets.map(id => fetchAssetData(id, currentPeriod)));
+  const pd = buildPeriodData(currentPeriod, activeAssets);
+  renderChips();
+  _renderChart(pd);
+  _renderLegend(pd);
+  document.querySelectorAll('[data-id]').forEach(el => {
+    el.classList.toggle('in-chart', activeAssets.includes(el.dataset.id));
+  });
+  if (typeof renderFavSection === 'function') renderFavSection();
+}
+
+function _renderChart(pd) {
   const svg = document.getElementById('main-chart');
-  if (activeAssets.length === 0) {
-    svg.innerHTML = `<text x="430" y="155" text-anchor="middle" font-size="14" fill="#94a3b8">지표를 추가해주세요</text>`;
+  const emptyEl = document.getElementById('chart-empty');
+  if (!pd || activeAssets.length === 0) {
+    svg.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'flex';
     return;
   }
-  const pd = DATA[currentPeriod];
+  if (emptyEl) emptyEl.style.display = 'none';
   const n = pd.labels.length;
 
   let allV = [0];
-  activeAssets.forEach(a => { if (pd.d[a]) allV.push(...pd.d[a]); });
+  activeAssets.forEach(a => { if (pd.d[a]) allV.push(...pd.d[a].filter(v => v !== null)); });
   let minV = Math.min(...allV), maxV = Math.max(...allV);
   const pad = Math.max((maxV - minV) * 0.12, 3);
   minV -= pad; maxV += pad;
@@ -57,17 +71,32 @@ function renderChart() {
     const vals = pd.d[a];
     if (!vals) return;
     const col = ASSETS[a].color;
-    const pts = vals.map((v, i) => `${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`).join(' ');
     const isFx = a.startsWith('KRW/');
-    const isKospi = a === 'KOSPI';
+    const isKospi = a === '000000';
     const lineAttr = isKospi
       ? 'stroke-dasharray="1,5" stroke-linecap="round" stroke-width="2.5"'
       : isFx
         ? 'stroke-dasharray="7,4" stroke-linecap="butt" stroke-width="1.8"'
         : 'stroke-linecap="round" stroke-width="2"';
-    h += `<polyline points="${pts}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
-    const lv = vals[n - 1];
-    const lx = toX(n - 1, n), ly = toY(lv, minV, maxV);
+
+    // null 구간에서 선 끊기
+    let seg = [];
+    vals.forEach((v, i) => {
+      if (v === null) {
+        if (seg.length > 1) h += `<polyline points="${seg.join(' ')}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
+        seg = [];
+      } else {
+        seg.push(`${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`);
+      }
+    });
+    if (seg.length > 1) h += `<polyline points="${seg.join(' ')}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
+
+    // 마지막 유효값에 점·레이블
+    let lastIdx = vals.length - 1;
+    while (lastIdx >= 0 && vals[lastIdx] === null) lastIdx--;
+    if (lastIdx < 0) return;
+    const lv = vals[lastIdx];
+    const lx = toX(lastIdx, n), ly = toY(lv, minV, maxV);
     h += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3.5" fill="${col}"/>`;
     const sign = lv >= 0 ? '+' : '';
     h += `<text x="${(lx + 6).toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="10" fill="${col}" font-weight="700">${sign}${lv.toFixed(1)}%</text>`;
@@ -76,37 +105,10 @@ function renderChart() {
   svg.innerHTML = h;
 }
 
-function renderChips() {
-  const kospiMeta = ASSETS['KOSPI'];
-  const kospiActive = activeAssets.includes('KOSPI');
-  const kospiChip = kospiActive
-    ? `<span class="a-chip" style="color:${kospiMeta.color};border-color:${kospiMeta.color};background:${kospiMeta.color}18">
-        <span style="width:7px;height:7px;border-radius:50%;background:${kospiMeta.color};display:inline-block"></span>
-        ${kospiMeta.label}
-        <span class="rm" onclick="event.stopPropagation();removeAsset('KOSPI')">✕</span>
-      </span>`
-    : `<span class="a-chip" onclick="toggleAsset('KOSPI')" style="color:#94a3b8;border-color:#cbd5e1;background:#f8fafc;opacity:0.55;cursor:pointer">
-        <span style="width:7px;height:7px;border-radius:50%;background:#94a3b8;display:inline-block"></span>
-        ${kospiMeta.label}
-      </span>`;
-
-  const otherChips = activeAssets.filter(a => a !== 'KOSPI').map(a => {
-    const meta = ASSETS[a];
-    return `<span class="a-chip" style="color:${meta.color};border-color:${meta.color};background:${meta.color}18">
-      <span style="width:7px;height:7px;border-radius:50%;background:${meta.color};display:inline-block"></span>
-      ${meta.label}
-      <span class="rm" onclick="event.stopPropagation();removeAsset('${a}')">✕</span>
-    </span>`;
-  }).join('');
-
-  document.getElementById('active-chips').innerHTML = kospiChip + otherChips;
-}
-
-function renderLegend() {
-  const pd = DATA[currentPeriod];
+function _renderLegend(pd) {
   document.getElementById('chart-legend').innerHTML = activeAssets.map(a => {
-    const vals = pd.d[a];
-    const last = vals ? vals[vals.length - 1] : 0;
+    const vals = pd?.d[a];
+    const last = vals ? (vals.filter(v => v !== null).pop() ?? 0) : 0;
     const sign = last >= 0 ? '+' : '';
     const col = last >= 0 ? '#16a34a' : '#dc2626';
     return `<div class="leg-item">
@@ -117,9 +119,25 @@ function renderLegend() {
   }).join('');
 }
 
+function renderChips() {
+  const sorted = [
+    ...activeAssets.filter(a => a === '000000'),
+    ...activeAssets.filter(a => a !== '000000'),
+  ];
+  const chips = sorted.map(a => {
+    const meta = ASSETS[a];
+    return `<span class="a-chip" style="color:${meta.color};border-color:${meta.color};background:${meta.color}18">
+      <span style="width:7px;height:7px;border-radius:50%;background:${meta.color};display:inline-block"></span>
+      ${meta.label}
+      <span class="rm" onclick="event.stopPropagation();removeAsset('${a}')">✕</span>
+    </span>`;
+  }).join('');
+  document.getElementById('active-chips').innerHTML = chips;
+}
+
 function renderDropdown() {
   const groups = [
-    { label: '지수',   ids: ['KOSPI'] },
+    { label: '지수',   ids: ['000000'] },
     { label: '반도체', ids: ['005930', '000660'] },
     { label: '자동차', ids: ['005380', '000270'] },
     { label: '방산',   ids: ['079550', '012450'] },
@@ -140,27 +158,18 @@ function renderDropdown() {
   `).join('');
 }
 
-function render() {
-  renderChips();
-  renderChart();
-  renderLegend();
-  document.querySelectorAll('[data-id]').forEach(el => {
-    el.classList.toggle('in-chart', activeAssets.includes(el.dataset.id));
-  });
-}
-
-function toggleAsset(id) {
+async function toggleAsset(id) {
   if (activeAssets.includes(id)) {
     activeAssets = activeAssets.filter(a => a !== id);
   } else {
     activeAssets.push(id);
   }
-  render();
+  await render();
 }
 
-function removeAsset(id) {
+async function removeAsset(id) {
   activeAssets = activeAssets.filter(a => a !== id);
-  render();
+  await render();
 }
 
 function toggleDropdown(e) {
@@ -176,10 +185,10 @@ document.addEventListener('click', () => {
   if (dd) dd.style.display = 'none';
 });
 
-document.getElementById('period-sel').addEventListener('click', e => {
+document.getElementById('period-sel').addEventListener('click', async e => {
   const btn = e.target.closest('.per-btn');
   if (!btn) return;
   currentPeriod = btn.dataset.p;
   document.querySelectorAll('.per-btn').forEach(b => b.classList.toggle('active', b === btn));
-  render();
+  await render();
 });
