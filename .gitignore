@@ -8,7 +8,7 @@ CLAUDE.md
 __pycache__/
 *.py[cod]
 *$py.class
-
+.python-version
 .venv
 
 config/certs/
@@ -21,5 +21,6 @@ mlruns
 
 *.sql
 .DS_Store
-basic_auth.ini
 uploads/
+=2.0
+basic_auth.ini
