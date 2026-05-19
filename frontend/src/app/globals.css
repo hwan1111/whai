@@ -203,14 +203,14 @@ html, body { height: 100%; }
 .leg-name { color: var(--text-secondary); }
 .leg-val { font-weight: 700; }
 
-.right-panel { position: fixed; right: 0; top: 54px; width: 900px; height: calc(100vh - 54px); z-index: 50; background: var(--bg); display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 18px 20px; box-shadow: -6px 0 28px rgba(15,23,42,0.12); transition: transform 0.28s cubic-bezier(.4,0,.2,1); }
+.right-panel { position: fixed; right: 0; top: 54px; width: 900px; height: calc(100vh - 54px); z-index: 50; background: var(--bg); display: flex; flex-direction: column; justify-content: space-between; overflow-y: auto; padding: 18px 20px; box-shadow: -6px 0 28px rgba(15,23,42,0.12); transition: transform 0.28s cubic-bezier(.4,0,.2,1); }
 .right-panel.right-panel-closed { transform: translateX(100%); pointer-events: none; }
 .right-panel::-webkit-scrollbar { width: 4px; }
 .right-panel::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
-.sidebar-tab { position: fixed; right: 0; top: 50vh; transform: translateY(-50%); z-index: 51; width: 22px; height: 120px; background: white; border: 1px solid #e2e8f0; border-right: none; border-radius: 10px 0 0 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #64748b; padding: 0; box-shadow: -2px 0 8px rgba(0,0,0,0.07); opacity: 0; pointer-events: none; transition: right 0.28s cubic-bezier(.4,0,.2,1), opacity 0.18s, background 0.15s, color 0.15s; }
-.dash-layout:hover .sidebar-tab { opacity: 1; pointer-events: auto; }
-.dash-layout.panel-open .sidebar-tab { right: 900px; }
-.sidebar-tab:hover { background: #eff6ff; color: #2563eb; }
+.sidebar-tab { position: fixed; right: 0; top: 50vh; transform: translateY(-50%); z-index: 51; width: 22px; height: 180px; background: white; border: 1px solid #e2e8f0; border-right: none; border-radius: 10px 0 0 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #64748b; padding: 0; box-shadow: -2px 0 8px rgba(0,0,0,0.07); opacity: 0.5; pointer-events: auto; transition: right 0.28s cubic-bezier(.4,0,.2,1), opacity 0.18s, background 0.15s, color 0.15s; }
+.sidebar-tab:hover { opacity: 1; background: #eff6ff; color: #2563eb; }
+.dash-layout.panel-open .sidebar-tab { right: 900px; opacity: 1; }
+.dash-layout.panel-open .sidebar-tab:hover { background: #eff6ff; color: #2563eb; }
 
 /* ── AI 메인 패널 (차트 옆 고정 컬럼) ── */
 .ai-main-panel { flex: 0 0 460px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
