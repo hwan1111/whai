@@ -345,3 +345,63 @@ html, body { height: 100%; }
 
 .spin { animation: spin 1s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   my-report.css
+   ============================================================ */
+.snapshot-card { background: white; border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+
+.snapshot-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+.snapshot-datetime { font-size: 13px; font-weight: 700; color: #1e293b; letter-spacing: 0.01em; }
+.snapshot-delete-btn { background: none; border: none; cursor: pointer; font-size: 13px; color: #cbd5e1; padding: 2px 6px; border-radius: 5px; line-height: 1; transition: color 0.15s, background 0.15s; }
+.snapshot-delete-btn:hover { color: #dc2626; background: #fef2f2; }
+
+.snapshot-body { display: flex; gap: 32px; align-items: stretch; }
+.snapshot-chart-center { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0 8px; }
+.snapshot-right { flex: 0 0 240px; display: flex; flex-direction: column; justify-content: center; gap: 20px; }
+
+.snapshot-legend { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.snapshot-legend-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; width: 100%; }
+.snapshot-legend-row:last-child { border-bottom: none; }
+.snapshot-legend-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+.snapshot-legend-name { font-size: 14px; font-weight: 600; color: #1e293b; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snapshot-legend-pct { font-size: 14px; font-weight: 700; color: #1e293b; flex-shrink: 0; width: 46px; text-align: right; }
+.snapshot-legend-val { font-size: 12px; color: #64748b; flex-shrink: 0; width: 52px; text-align: right; }
+.snapshot-legend-pnl { font-size: 12px; font-weight: 600; flex-shrink: 0; width: 52px; text-align: right; }
+
+.snapshot-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.snapshot-table th { padding: 5px 8px; font-size: 10px; font-weight: 700; color: #94a3b8; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+.snapshot-table td { padding: 6px 8px; border-bottom: 1px solid #f8fafc; vertical-align: middle; text-align: right; white-space: nowrap; }
+.snapshot-table tbody tr:last-child td { border-bottom: 1px solid #f1f5f9; }
+.snapshot-table tfoot td { padding: 7px 8px; font-size: 12px; background: #fafafa; }
+.snapshot-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; flex-shrink: 0; }
+
+.snapshot-bar-wrap { display: flex; align-items: center; gap: 5px; }
+.snapshot-bar-bg { flex: 1; height: 5px; background: #f1f5f9; border-radius: 3px; overflow: hidden; min-width: 40px; }
+.snapshot-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+.snapshot-summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+.snapshot-summary-item { background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
+.snapshot-summary-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+.snapshot-summary-val { font-size: 17px; font-weight: 800; color: #1e293b; }
+
+.snapshot-ai { background: linear-gradient(160deg, #f5f3ff, #eef2ff); border: 1px solid #c4b5fd; border-radius: 10px; padding: 16px 18px; flex: 0 0 400px; display: flex; flex-direction: column; }
+.snapshot-ai-header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+
+/* ── 자산 선택 카드 그리드 ── */
+.asset-pick-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.asset-pick-grid.asset-pick-fx { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.asset-pick-card { background: #f8fafc; border: 1.5px solid transparent; border-radius: 9px; padding: 8px 6px; cursor: pointer; transition: background 0.12s, border-color 0.12s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.asset-pick-card:hover { background: #eef2ff; border-color: #93c5fd; }
+.asset-pick-card.selected { background: #dbeafe; border-color: #2563eb; }
+.asset-pick-logo { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #e8ecf0; overflow: hidden; background: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.asset-pick-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.asset-pick-flag { width: 26px; height: 18px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
+.asset-pick-name { font-size: 10px; font-weight: 700; color: #1e293b; text-align: center; line-height: 1.2; }
+.asset-pick-label { font-size: 9px; color: #94a3b8; text-align: center; }
+
+/* ── 자산 추가 입력 행 ── */
+.add-holding-row { display: flex; align-items: center; gap: 14px; background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
+.add-holding-asset { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+.add-holding-field { display: flex; flex-direction: column; gap: 4px; }
+.add-holding-label { font-size: 10px; font-weight: 700; color: #64748b; white-space: nowrap; }
