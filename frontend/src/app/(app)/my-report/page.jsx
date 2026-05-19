@@ -77,7 +77,7 @@ async function pushSnapshots(list, token) {
 function calcTotals(holdings, prices) {
   const sorted = holdings.map(h => {
     const info = ASSET_INFO[h.id] || {};
-    const curPrice = prices[h.id] ?? h.avgPrice;
+    const curPrice = h.snapshotPrice ?? prices[h.id] ?? h.avgPrice;
     const curVal = h.qty * curPrice;
     const cost = h.qty * h.avgPrice;
     return { ...h, info, curPrice, curVal, cost };
@@ -190,7 +190,7 @@ function WeightHistoryChart({ snapshots, prices }) {
         return (
           <div key={snap.id}>
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, fontWeight: 500 }}>{label}</div>
-            <div style={{ height: 30, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ height: 20, overflow: 'hidden', position: 'relative' }}>
               <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex' }}>
                 {sorted.filter(h => h.curVal > 0).map(h => {
                   const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
@@ -256,7 +256,7 @@ function SnapshotCard({ snap, prices, onDelete }) {
 
         {/* 2열: 도넛 차트 */}
         <div className="snapshot-chart-center">
-          <DonutChart sorted={sorted} totalVal={totalVal} size={480} />
+          <DonutChart sorted={sorted} totalVal={totalVal} size={380} />
         </div>
 
         {/* 3열: 레전드 + 요약 */}
@@ -365,7 +365,7 @@ export default function MyReportPage() {
     if (holdings.length === 0) { alert('자산을 1개 이상 추가해주세요.'); return; }
     setGenerating(true);
     setTimeout(async () => {
-      const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h })) };
+      const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h, snapshotPrice: getPrice(h.id) })) };
       const next = [snap, ...snapshots].slice(0, MAX_SNAPSHOTS);
       setSnapshots(next);
       await pushSnapshots(next, getToken());
@@ -566,7 +566,7 @@ export default function MyReportPage() {
       </div>{/* end 메인 콘텐츠 */}
 
       {/* 오른쪽 고정 패널: 비중 추이 */}
-      <div style={{ width: 450, flexShrink: 0, position: 'sticky', top: 16, alignSelf: 'flex-start' }}>
+      <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 16, alignSelf: 'flex-start' }}>
         <div className="other-card" style={{ padding: '16px 16px 14px' }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 16 }}>
             자산 비중 추이
