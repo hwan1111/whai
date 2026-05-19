@@ -56,9 +56,11 @@ export function buildPeriodData(period, ids) {
   if (allDates.size === 0) return null;
 
   const sortedDates = [...allDates].sort();
+  const years = new Set(sortedDates.map(d => d.split('-')[0]));
+  const multiYear = years.size > 1;
   const labels = sortedDates.map(date => {
-    const [, m, day] = date.split('-');
-    return `${+m}/${+day}`;
+    const [y, m, day] = date.split('-');
+    return multiYear ? `${y}/${+m}/${+day}` : `${+m}/${+day}`;
   });
 
   const d = {};

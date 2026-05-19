@@ -25,6 +25,8 @@ export default function AuthPage() {
   const [regId, setRegId] = useState('');
   const [regPw, setRegPw] = useState('');
   const [regPwConfirm, setRegPwConfirm] = useState('');
+  const [regBirthYear, setRegBirthYear] = useState('');
+  const [regGender, setRegGender] = useState('');
   const [regInvest, setRegInvest] = useState('');
   const [regError, setRegError] = useState('');
   const [regLoading, setRegLoading] = useState(false);
@@ -121,7 +123,11 @@ export default function AuthPage() {
       const res = await fetch('/api/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, user_id: regId, password: regPw, invest_type: regInvest }),
+        body: JSON.stringify({
+          name, user_id: regId, password: regPw, invest_type: regInvest,
+          birth_year: regBirthYear ? parseInt(regBirthYear) : null,
+          gender: regGender || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -232,6 +238,35 @@ export default function AuthPage() {
                 autoComplete="new-password"
               />
               {regPwConfirmHint.text && <div className={`field-hint ${regPwConfirmHint.type}`}>{regPwConfirmHint.text}</div>}
+            </div>
+            <div className="form-group form-row">
+              <div style={{ flex: 1 }}>
+                <label className="form-label">출생연도</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  value={regBirthYear}
+                  onChange={e => setRegBirthYear(e.target.value)}
+                  placeholder="1990"
+                  min={1900}
+                  max={new Date().getFullYear()}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">성별</label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {[{ val: 'M', label: '남성' }, { val: 'F', label: '여성' }, { val: 'OTHER', label: '기타' }].map(o => (
+                    <div
+                      key={o.val}
+                      className={`invest-option${regGender === o.val ? ' selected' : ''}`}
+                      style={{ flex: 1, textAlign: 'center', padding: '7px 4px', fontSize: 12 }}
+                      onClick={() => setRegGender(g => g === o.val ? '' : o.val)}
+                    >
+                      {o.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">투자성향 <span className="required">*</span></label>
