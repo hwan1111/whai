@@ -4,10 +4,7 @@ import { usePathname } from 'next/navigation';
 
 const NAV_ITEMS = [
   { key: 'dashboard', icon: '🖥️', label: '대시보드',   href: '/dashboard' },
-  { key: 'stock',     icon: '📊', label: '종목 분석', href: '/stock' },
-  { key: 'analysis',  icon: '🧩', label: '복합 분석', href: '/analysis' },
-  { key: 'news',      icon: '🗞️', label: '뉴스',       href: '/news' },
-  { key: 'myreport',  icon: '📄', label: '내 리포트', href: '/my-report' },
+{ key: 'myreport',  icon: '📄', label: '내 리포트', href: '/my-report' },
 ];
 
 export default function Sidebar({ dataDate }) {

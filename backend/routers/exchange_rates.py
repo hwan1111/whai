@@ -39,6 +39,7 @@ def get_latest_exchange_rates(db: Session = Depends(get_db)) -> list[dict]:
             "pair": r.currency_pair,
             "rate": round(rate, 2),
             "prev_rate": round(prev, 2),
+            "change": round(rate - prev, 2),
             "change_pct": change_pct,
         })
 

@@ -36,6 +36,7 @@ def get_latest_prices(db: Session = Depends(get_db)) -> list[dict]:
             "name": r.name,
             "sector": r.sector,
             "close": r.close,
+            "change": round(r.close - prev, 2),
             "change_pct": change_pct,
             "date": str(r.date),
         })
