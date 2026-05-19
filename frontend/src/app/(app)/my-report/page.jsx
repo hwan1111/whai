@@ -64,12 +64,21 @@ async function fetchSnapshots(token) {
   } catch { return []; }
 }
 
-async function pushSnapshots(list, token) {
+async function postSnapshot(snap, token) {
   try {
     await fetch('/api/v1/report/snapshots', {
-      method: 'PUT',
+      method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ snapshots: list }),
+      body: JSON.stringify(snap),
+    });
+  } catch { /* silent */ }
+}
+
+async function deleteSnapshotApi(id, token) {
+  try {
+    await fetch(`/api/v1/report/snapshots/${id}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   } catch { /* silent */ }
 }
@@ -365,10 +374,11 @@ export default function MyReportPage() {
     if (holdings.length === 0) { alert('자산을 1개 이상 추가해주세요.'); return; }
     setGenerating(true);
     setTimeout(async () => {
+      const token = getToken();
       const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h, snapshotPrice: getPrice(h.id) })) };
-      const next = [snap, ...snapshots].slice(0, MAX_SNAPSHOTS);
+      await postSnapshot(snap, token);
+      const next = await fetchSnapshots(token);
       setSnapshots(next);
-      await pushSnapshots(next, getToken());
       setHoldings([]);
       setAddQty('1'); setAddPrice(prices[addAsset] ? String(prices[addAsset]) : '');
       setFormOpen(false);
@@ -379,9 +389,8 @@ export default function MyReportPage() {
   function deleteSnapshot(id) { setDeleteTarget(id); }
 
   async function confirmDelete() {
-    const next = snapshots.filter(s => s.id !== deleteTarget);
-    setSnapshots(next);
-    await pushSnapshots(next, getToken());
+    await deleteSnapshotApi(deleteTarget, getToken());
+    setSnapshots(prev => prev.filter(s => s.id !== deleteTarget));
     setDeleteTarget(null);
   }
 
