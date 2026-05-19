@@ -6,7 +6,6 @@ import StockDetailModal from '@/components/StockDetailModal';
 
 const SW = 860, SH = 300, ML = 52, MR = 72, MT = 22, MB = 38;
 const CW = SW - ML - MR, CH = SH - MT - MB;
-const FAV_KEY = 'whai_favorites';
 
 const STOCK_SECTORS = [
   { label: '반도체', ids: ['005930', '000660'] },
@@ -204,11 +203,26 @@ function renderChartSvg(activeAssets, pd) {
   return h;
 }
 
-function getFavs() {
-  try { return new Set(JSON.parse(localStorage.getItem(FAV_KEY)) || []); }
-  catch { return new Set(); }
+async function fetchFavs(token) {
+  try {
+    const res = await fetch('/api/v1/favorites', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return new Set();
+    const { assets } = await res.json();
+    return new Set(assets);
+  } catch { return new Set(); }
 }
-function saveFavs(s) { localStorage.setItem(FAV_KEY, JSON.stringify([...s])); }
+
+async function pushFavs(s, token) {
+  try {
+    await fetch('/api/v1/favorites', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assets: [...s] }),
+    });
+  } catch { /* silent */ }
+}
 
 function fmtChg(pct) {
   const sign = pct >= 0 ? '▲' : '▼';
@@ -232,7 +246,7 @@ export default function DashboardPage() {
   const PERIODS = ['1W', '1M', '3M', '6M', '1Y', '3Y', 'ALL'];
 
   useEffect(() => {
-    setFavs(getFavs());
+    fetchFavs(getToken()).then(setFavs);
     loadLatestPrices();
     loadLatestRates();
     loadPreviewNews();
@@ -375,8 +389,8 @@ export default function DashboardPage() {
     e.stopPropagation();
     const next = new Set(favs);
     if (next.has(id)) next.delete(id); else next.add(id);
-    saveFavs(next);
     setFavs(new Set(next));
+    pushFavs(next, getToken());
   }
 
   function priceStr(id) {

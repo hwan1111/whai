@@ -1,24 +1,25 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { getToken } from '@/lib/auth';
+import { ASSETS } from '@/lib/data';
 
 const ASSET_INFO = {
-  '005930': { name: '삼성전자',      color: '#dc2626', sector: '반도체', unit: '주' },
-  '000660': { name: 'SK하이닉스',   color: '#16a34a', sector: '반도체', unit: '주' },
-  '005380': { name: '현대차',        color: '#f59e0b', sector: '자동차', unit: '주' },
-  '000270': { name: '기아',          color: '#8b5cf6', sector: '자동차', unit: '주' },
-  '079550': { name: 'LIG디펜스',    color: '#06b6d4', sector: '방산',   unit: '주' },
-  '012450': { name: '한화에어로',   color: '#f97316', sector: '방산',   unit: '주' },
-  '105560': { name: 'KB금융',        color: '#6366f1', sector: '금융',   unit: '주' },
-  '055550': { name: '신한지주',      color: '#0d9488', sector: '금융',   unit: '주' },
-  '051910': { name: 'LG화학',        color: '#ec4899', sector: '화학',   unit: '주' },
-  '096770': { name: 'SK이노베이션', color: '#84cc16', sector: '화학',   unit: '주' },
-  'KRW/USD': { name: 'USD 달러',    color: '#78716c', sector: '외화', unit: '달러' },
-  'KRW/JPY': { name: 'JPY 엔',      color: '#a16207', sector: '외화', unit: '엔' },
-  'KRW/EUR': { name: 'EUR 유로',    color: '#9333ea', sector: '외화', unit: '유로' },
-  'KRW/CNY': { name: 'CNY 위안',    color: '#0891b2', sector: '외화', unit: '위안' },
-  'KRW/CHF': { name: 'CHF 프랑',    color: '#0f766e', sector: '외화', unit: '프랑' },
-  'KRW/GBP': { name: 'GBP 파운드', color: '#b91c1c', sector: '외화', unit: '파운드' },
+  '005930': { name: '삼성전자',      color: ASSETS['005930'].color,  sector: '반도체', unit: '주' },
+  '000660': { name: 'SK하이닉스',   color: ASSETS['000660'].color,  sector: '반도체', unit: '주' },
+  '005380': { name: '현대차',        color: ASSETS['005380'].color,  sector: '자동차', unit: '주' },
+  '000270': { name: '기아',          color: ASSETS['000270'].color,  sector: '자동차', unit: '주' },
+  '079550': { name: 'LIG디펜스',    color: ASSETS['079550'].color,  sector: '방산',   unit: '주' },
+  '012450': { name: '한화에어로',   color: ASSETS['012450'].color,  sector: '방산',   unit: '주' },
+  '105560': { name: 'KB금융',        color: ASSETS['105560'].color,  sector: '금융',   unit: '주' },
+  '055550': { name: '신한지주',      color: ASSETS['055550'].color,  sector: '금융',   unit: '주' },
+  '051910': { name: 'LG화학',        color: ASSETS['051910'].color,  sector: '화학',   unit: '주' },
+  '096770': { name: 'SK이노베이션', color: ASSETS['096770'].color,  sector: '화학',   unit: '주' },
+  'KRW/USD': { name: 'USD 달러',    color: ASSETS['KRW/USD'].color, sector: '외화', unit: '달러' },
+  'KRW/JPY': { name: 'JPY 엔',      color: ASSETS['KRW/JPY'].color, sector: '외화', unit: '엔' },
+  'KRW/EUR': { name: 'EUR 유로',    color: ASSETS['KRW/EUR'].color, sector: '외화', unit: '유로' },
+  'KRW/CNY': { name: 'CNY 위안',    color: ASSETS['KRW/CNY'].color, sector: '외화', unit: '위안' },
+  'KRW/CHF': { name: 'CHF 프랑',    color: ASSETS['KRW/CHF'].color, sector: '외화', unit: '프랑' },
+  'KRW/GBP': { name: 'GBP 파운드', color: ASSETS['KRW/GBP'].color, sector: '외화', unit: '파운드' },
 };
 
 const STOCK_IDS = ['005930','000660','005380','000270','079550','012450','105560','055550','051910','096770'];
@@ -39,7 +40,6 @@ const getLogo = id => LOGO_MAP[id] ? `/assets/logos/${LOGO_MAP[id]}` : null;
 const getFlag = id => FLAG_MAP[id] ? `/assets/flags/${FLAG_MAP[id]}.png` : null;
 
 const MAX_SNAPSHOTS = 10;
-const STORE_KEY = 'whai_snapshots_v1';
 
 const fmt = n => Math.round(n).toLocaleString('ko-KR');
 function fmtCompact(n) {
@@ -53,11 +53,26 @@ function fmtDatetime(iso) {
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}  ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function loadSnapshots() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
-  catch { return []; }
+async function fetchSnapshots(token) {
+  try {
+    const res = await fetch('/api/v1/report/snapshots', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.snapshots || [];
+  } catch { return []; }
 }
-function saveSnapshots(list) { localStorage.setItem(STORE_KEY, JSON.stringify(list)); }
+
+async function pushSnapshots(list, token) {
+  try {
+    await fetch('/api/v1/report/snapshots', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshots: list }),
+    });
+  } catch { /* silent */ }
+}
 
 function calcTotals(holdings, prices) {
   const sorted = holdings.map(h => {
@@ -148,7 +163,71 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   else
     lines.push(`<strong>💡 종합 의견</strong>: 현재 <span style="color:#dc2626">${avgReturn.toFixed(1)}%</span>의 손실 구간에 있습니다. 손실 원인을 분석하고 포트폴리오 재구성 여부를 검토해 보세요.`);
 
-  return lines.map(l => `<p style="margin:0 0 10px;line-height:1.75;font-size:12.5px;color:#312e81">${l}</p>`).join('');
+  return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:14px;color:#312e81">${l}</p>`).join('');
+}
+
+function WeightHistoryChart({ snapshots, prices }) {
+  if (snapshots.length === 0) return (
+    <div style={{ padding: '40px 16px', textAlign: 'center', color: '#cbd5e1', fontSize: 12 }}>
+      스냅샷을 기록하면<br />비중 추이가 표시됩니다.
+    </div>
+  );
+
+  const rows = [...snapshots].map(snap => {
+    const { sorted, totalVal } = calcTotals(snap.holdings, prices);
+    return { snap, sorted, totalVal };
+  });
+
+  const allIds = [...new Set(snapshots.flatMap(s => s.holdings.map(h => h.id)))];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {rows.map(({ snap, sorted, totalVal }) => {
+        const maxVal = Math.max(...rows.map(r => r.totalVal));
+        const barWidthPct = maxVal > 0 ? totalVal / maxVal * 100 : 0;
+        const d = new Date(snap.datetime);
+        const label = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        return (
+          <div key={snap.id}>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, fontWeight: 500 }}>{label}</div>
+            <div style={{ height: 30, overflow: 'hidden', position: 'relative' }}>
+              <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex' }}>
+                {sorted.filter(h => h.curVal > 0).map(h => {
+                  const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
+                  return (
+                    <div
+                      key={h.id}
+                      title={`${h.info.name || h.id}: ${fmtCompact(h.curVal)} (${w.toFixed(1)}%)`}
+                      style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}
+                    >
+                      {w >= 10 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.9)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+                          {w.toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b', textAlign: 'right', marginTop: 3, fontWeight: 600 }}>{fmtCompact(totalVal)}</div>
+          </div>
+        );
+      })}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+        {allIds.map(id => {
+          const info = ASSET_INFO[id] || {};
+          return (
+            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: info.color || '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
+              <span style={{ fontSize: 12, color: '#475569' }}>{info.name || id}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function SnapshotCard({ snap, prices, onDelete }) {
@@ -169,15 +248,15 @@ function SnapshotCard({ snap, prices, onDelete }) {
         {/* 1열: AI 분석 */}
         <div className="snapshot-ai">
           <div className="snapshot-ai-header">
-            <span className="ai-badge" style={{ fontSize: 9 }}>AI 분석</span>
-            <span style={{ fontSize: 11, color: '#6d28d9', fontWeight: 600 }}>포트폴리오 분석</span>
+            <span className="ai-badge" style={{ fontSize: 11 }}>AI 분석</span>
+            <span style={{ fontSize: 13, color: '#6d28d9', fontWeight: 600 }}>포트폴리오 분석</span>
           </div>
           <div dangerouslySetInnerHTML={{ __html: aiHtml }} />
         </div>
 
-        {/* 2열: 도넛 차트만 */}
+        {/* 2열: 도넛 차트 */}
         <div className="snapshot-chart-center">
-          <DonutChart sorted={sorted} totalVal={totalVal} size={400} />
+          <DonutChart sorted={sorted} totalVal={totalVal} size={480} />
         </div>
 
         {/* 3열: 레전드 + 요약 */}
@@ -234,7 +313,8 @@ export default function MyReportPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
-    setSnapshots(loadSnapshots());
+    const token = getToken();
+    fetchSnapshots(token).then(setSnapshots);
     loadPrices();
   }, []);
 
@@ -284,11 +364,11 @@ export default function MyReportPage() {
   function saveSnapshot() {
     if (holdings.length === 0) { alert('자산을 1개 이상 추가해주세요.'); return; }
     setGenerating(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h })) };
       const next = [snap, ...snapshots].slice(0, MAX_SNAPSHOTS);
       setSnapshots(next);
-      saveSnapshots(next);
+      await pushSnapshots(next, getToken());
       setHoldings([]);
       setAddQty('1'); setAddPrice(prices[addAsset] ? String(prices[addAsset]) : '');
       setFormOpen(false);
@@ -298,10 +378,10 @@ export default function MyReportPage() {
 
   function deleteSnapshot(id) { setDeleteTarget(id); }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     const next = snapshots.filter(s => s.id !== deleteTarget);
     setSnapshots(next);
-    saveSnapshots(next);
+    await pushSnapshots(next, getToken());
     setDeleteTarget(null);
   }
 
@@ -312,6 +392,9 @@ export default function MyReportPage() {
 
   return (
     <>
+    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+      {/* 메인 콘텐츠 */}
+      <div style={{ flex: 1, minWidth: 0 }}>
       <div className="sec-header">
         <div>
           <div className="sec-title">마이 리포트</div>
@@ -480,6 +563,18 @@ export default function MyReportPage() {
           )}
         </div>
       )}
+      </div>{/* end 메인 콘텐츠 */}
+
+      {/* 오른쪽 고정 패널: 비중 추이 */}
+      <div style={{ width: 450, flexShrink: 0, position: 'sticky', top: 16, alignSelf: 'flex-start' }}>
+        <div className="other-card" style={{ padding: '16px 16px 14px' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 16 }}>
+            자산 비중 추이
+          </div>
+          <WeightHistoryChart snapshots={snapshots} prices={prices} />
+        </div>
+      </div>
+    </div>{/* end 2열 wrapper */}
     </>
   );
 }
