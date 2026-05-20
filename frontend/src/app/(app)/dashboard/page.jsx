@@ -243,6 +243,7 @@ export default function DashboardPage() {
   const [newsDrawerOpen, setNewsDrawerOpen] = useState(false);
   const [previewNews, setPreviewNews] = useState([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [expandedNews, setExpandedNews] = useState(null);
   const PERIODS = ['1W', '1M', '3M', '6M', '1Y', '3Y', 'ALL'];
 
   useEffect(() => {
@@ -599,12 +600,21 @@ export default function DashboardPage() {
             ) : previewNews.length === 0 ? (
               <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>뉴스가 없습니다.</div>
             ) : previewNews.map((n, i) => (
-              <div key={i} className="news-preview-item">
+              <div key={i} className="news-preview-item" style={{ cursor: n.ai_summary ? 'pointer' : 'default' }} onClick={() => n.ai_summary && setExpandedNews(expandedNews === i ? null : i)}>
                 <div className="news-meta">
                   <span className="ticker-tag">{n.ticker}</span>
                   <span className="news-date">{n.date_str}</span>
+                  {n.ai_summary && <span style={{ marginLeft: 'auto', fontSize: 10, color: '#94a3b8' }}>{expandedNews === i ? '▲' : '▼'}</span>}
                 </div>
                 <div className="news-title" style={{ fontSize: 12 }}>{n.title}</div>
+                {expandedNews === i && n.ai_summary && (
+                  <div className="ai-box" style={{ marginTop: 8, padding: '10px 12px' }}>
+                    <div className="ai-header" style={{ marginBottom: 6 }}>
+                      <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 3줄 요약</span>
+                    </div>
+                    <div className="ai-text" style={{ fontSize: 11 }} dangerouslySetInnerHTML={{ __html: n.ai_summary }} />
+                  </div>
+                )}
               </div>
             ))}
           </div>

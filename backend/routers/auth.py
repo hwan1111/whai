@@ -97,7 +97,7 @@ def me(user_id: str = Depends(_get_user_id), db: Session = Depends(get_db)) -> d
         "user_id": user.user_id,
         "name": user.name,
         "birth_year": user.birth_year,
-        "gender": user.gender,
+        "gender": user.gender.value if user.gender else None,
         "invest_type": user.invest_type,
         "created_at": user.created_at.strftime("%Y-%m-%d") if user.created_at else None,
         "profile_image_url": user.profile_image_url,

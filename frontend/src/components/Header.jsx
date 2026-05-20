@@ -65,6 +65,7 @@ export default function Header({ updateTime }) {
     setProfileLoading(true);
     try {
       const res = await fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (!res.ok) throw new Error();
       const d = await res.json();
       setProfileData(d);
       setProfileName(d.name || '');
@@ -291,7 +292,7 @@ export default function Header({ updateTime }) {
                   <span className="modal-label">이름</span>
                   <input
                     className="modal-input"
-                    style={{ width: 140, textAlign: 'right' }}
+                    style={{ width: 140, textAlign: 'right', color: '#94a3b8' }}
                     value={profileName}
                     onChange={e => setProfileName(e.target.value)}
                     maxLength={20}
