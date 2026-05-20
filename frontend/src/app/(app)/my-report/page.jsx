@@ -313,6 +313,7 @@ export default function MyReportPage() {
   const [snapshots, setSnapshots] = useState([]);
   const [prices, setPrices] = useState({});
   const [pricesLoaded, setPricesLoaded] = useState(false);
+  const [snapshotsLoaded, setSnapshotsLoaded] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [holdings, setHoldings] = useState([]);
   const [addAsset, setAddAsset] = useState('005930');
@@ -323,7 +324,7 @@ export default function MyReportPage() {
 
   useEffect(() => {
     const token = getToken();
-    fetchSnapshots(token).then(setSnapshots);
+    fetchSnapshots(token).then(s => { setSnapshots(s); setSnapshotsLoaded(true); });
     loadPrices();
   }, []);
 
@@ -394,7 +395,7 @@ export default function MyReportPage() {
     setDeleteTarget(null);
   }
 
-  if (!pricesLoaded) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>불러오는 중...</div>;
+  if (!snapshotsLoaded) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>불러오는 중...</div>;
 
   const totalCount = snapshots.length;
   const formTotalVal = holdings.reduce((s, h) => s + h.qty * getPrice(h.id), 0);
@@ -486,7 +487,7 @@ export default function MyReportPage() {
             <div className="add-holding-field">
               <label className="add-holding-label">평균 매입가 <span style={{ fontWeight: 400, color: '#cbd5e1' }}>(종가 자동 입력 · 수정 가능)</span></label>
               <input className="form-input" type="number" min="0"
-                placeholder={prices[addAsset] ? String(prices[addAsset]) : '직접 입력'}
+                placeholder={!pricesLoaded ? '가격 불러오는 중...' : prices[addAsset] ? String(prices[addAsset]) : '직접 입력'}
                 value={addPrice} onChange={e => setAddPrice(e.target.value)} style={{ width: 220 }} />
             </div>
 
