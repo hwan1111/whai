@@ -580,7 +580,7 @@ export default function DashboardPage() {
         <div className="ai-main-panel">
           <div className="ai-main-card">
             <div className="ai-main-title">
-              <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span></span>
+              <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
               개인화된 시장 분석
             </div>
             <div className="ai-main-body">
