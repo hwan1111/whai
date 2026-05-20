@@ -358,16 +358,16 @@ html, body { height: 100%; min-width: 1280px; }
 
 .snapshot-body { display: flex; gap: 20px; align-items: stretch; }
 .snapshot-chart-center { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0 4px; }
-.snapshot-right { flex: 0 0 220px; display: flex; flex-direction: column; justify-content: center; gap: 20px; }
+.snapshot-right { flex: 0 0 220px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
 
-.snapshot-legend { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-.snapshot-legend-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; width: 100%; }
+.snapshot-legend { display: flex; flex-direction: column; gap: 0; width: 100%; max-height: 340px; overflow-y: auto; }
+.snapshot-legend-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid #f1f5f9; width: 100%; }
 .snapshot-legend-row:last-child { border-bottom: none; }
-.snapshot-legend-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
-.snapshot-legend-name { font-size: 15px; font-weight: 600; color: #1e293b; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.snapshot-legend-pct { font-size: 15px; font-weight: 700; color: #1e293b; flex-shrink: 0; width: 50px; text-align: right; }
-.snapshot-legend-val { font-size: 13px; color: #64748b; flex-shrink: 0; width: 58px; text-align: right; }
-.snapshot-legend-pnl { font-size: 13px; font-weight: 600; flex-shrink: 0; width: 56px; text-align: right; }
+.snapshot-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.snapshot-legend-name { font-size: 12px; font-weight: 600; color: #1e293b; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snapshot-legend-pct { font-size: 12px; font-weight: 700; color: #1e293b; flex-shrink: 0; width: 44px; text-align: right; }
+.snapshot-legend-val { font-size: 11px; color: #64748b; flex-shrink: 0; width: 52px; text-align: right; }
+.snapshot-legend-pnl { font-size: 11px; font-weight: 600; flex-shrink: 0; width: 52px; text-align: right; }
 
 .snapshot-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .snapshot-table th { padding: 5px 8px; font-size: 10px; font-weight: 700; color: #94a3b8; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
@@ -380,10 +380,10 @@ html, body { height: 100%; min-width: 1280px; }
 .snapshot-bar-bg { flex: 1; height: 5px; background: #f1f5f9; border-radius: 3px; overflow: hidden; min-width: 40px; }
 .snapshot-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
 
-.snapshot-summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
-.snapshot-summary-item { background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
-.snapshot-summary-label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
-.snapshot-summary-val { font-size: 19px; font-weight: 800; color: #1e293b; }
+.snapshot-summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 6px; }
+.snapshot-summary-item { background: #f8fafc; border-radius: 8px; padding: 8px 10px; }
+.snapshot-summary-label { font-size: 11px; color: #94a3b8; margin-bottom: 3px; }
+.snapshot-summary-val { font-size: 17px; font-weight: 800; color: #1e293b; }
 
 .snapshot-ai { background: linear-gradient(160deg, #f5f3ff, #eef2ff); border: 1px solid #c4b5fd; border-radius: 10px; padding: 16px 18px; flex: 1; min-width: 200px; display: flex; flex-direction: column; }
 .snapshot-ai-header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
