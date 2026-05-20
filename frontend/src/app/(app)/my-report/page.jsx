@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getToken } from '@/lib/auth';
+import { getToken, handleUnauthorized } from '@/lib/auth';
 import { ASSETS } from '@/lib/data';
 
 const ASSET_INFO = {
@@ -65,13 +65,16 @@ async function fetchSnapshots(token) {
 }
 
 async function postSnapshot(snap, token) {
-  try {
-    await fetch('/api/v1/report/snapshots', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(snap),
-    });
-  } catch { /* silent */ }
+  const res = await fetch('/api/v1/report/snapshots', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(snap),
+  });
+  if (res.status === 401) { handleUnauthorized(); return; }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`snapshot POST failed: ${res.status} ${body}`);
+  }
 }
 
 async function deleteSnapshotApi(id, token) {
@@ -353,7 +356,8 @@ export default function MyReportPage() {
     const manualPrice = parseFloat(addPrice);
     const fetchedPrice = getPrice(addAsset);
     if (!(manualPrice > 0) && !(fetchedPrice > 0)) {
-      alert('종가 데이터를 불러오지 못했습니다. 평균 매입가를 직접 입력해주세요.');
+      if (!pricesLoaded) alert('가격 데이터를 불러오는 중입니다. 잠시 후 다시 시도하거나 평균 매입가를 직접 입력해주세요.');
+      else alert('평균 매입가를 직접 입력해주세요.');
       return;
     }
     const avg = manualPrice > 0 ? manualPrice : fetchedPrice;
@@ -377,7 +381,14 @@ export default function MyReportPage() {
     setTimeout(async () => {
       const token = getToken();
       const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h, snapshotPrice: getPrice(h.id) })) };
-      await postSnapshot(snap, token);
+      try {
+        await postSnapshot(snap, token);
+      } catch (e) {
+        console.error(e);
+        alert(`스냅샷 저장 실패: ${e.message}`);
+        setGenerating(false);
+        return;
+      }
       const next = await fetchSnapshots(token);
       setSnapshots(next);
       setHoldings([]);

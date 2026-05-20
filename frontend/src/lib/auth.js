@@ -42,3 +42,8 @@ export function authHeaders() {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
+
+export function handleUnauthorized() {
+  logout();
+  window.location.href = '/login';
+}
