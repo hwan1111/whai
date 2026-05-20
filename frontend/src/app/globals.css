@@ -23,17 +23,7 @@ body {
 html, body { height: 100%; min-width: 1280px; }
 
 /* ── App layout ── */
-.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-.app-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
-
-/* ── Sidebar ── */
-.sidebar { width: 188px; flex-shrink: 0; background: var(--sidebar); display: flex; flex-direction: column; overflow-y: auto; }
-.sidebar nav { padding: 10px 8px; flex: 1; }
-.nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 500; color: #94a3b8; text-decoration: none; transition: background 0.13s, color 0.13s; margin-bottom: 2px; }
-.nav-item:hover { background: var(--sidebar-hover); color: #e2e8f0; }
-.nav-item.active { background: #1e3a5f; color: #60a5fa; font-weight: 600; }
-.nav-icon { font-size: 15px; flex-shrink: 0; }
-.sidebar-footer { padding: 10px 14px; font-size: 10px; color: #475569; border-top: 1px solid #1e293b; line-height: 1.7; }
+.app { display: flex; flex-direction: column; height: 100vh; overflow-x: auto; overflow-y: hidden; }
 
 /* ── Header ── */
 .header { background: white; border-bottom: 1px solid var(--border); padding: 0 24px; height: 54px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -395,7 +385,7 @@ html, body { height: 100%; min-width: 1280px; }
 .snapshot-summary-label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
 .snapshot-summary-val { font-size: 19px; font-weight: 800; color: #1e293b; }
 
-.snapshot-ai { background: linear-gradient(160deg, #f5f3ff, #eef2ff); border: 1px solid #c4b5fd; border-radius: 10px; padding: 16px 18px; flex: 0 0 360px; display: flex; flex-direction: column; }
+.snapshot-ai { background: linear-gradient(160deg, #f5f3ff, #eef2ff); border: 1px solid #c4b5fd; border-radius: 10px; padding: 16px 18px; flex: 1; min-width: 200px; display: flex; flex-direction: column; }
 .snapshot-ai-header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
 
 /* ── 자산 선택 카드 그리드 ── */
