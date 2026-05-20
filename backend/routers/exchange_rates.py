@@ -19,15 +19,16 @@ VALID_PAIRS = {"KRW/USD", "KRW/JPY", "KRW/EUR", "KRW/GBP", "KRW/CHF", "KRW/CNY"}
 @router.get("/latest")
 def get_latest_exchange_rates(db: Session = Depends(get_db)) -> list[dict]:
     rows = db.execute(text("""
-        SELECT er1.currency_pair, er1.rate,
-               (SELECT rate FROM exchange_rate er2
-                WHERE er2.currency_pair = er1.currency_pair AND er2.date < er1.date
-                ORDER BY er2.date DESC LIMIT 1) AS prev_rate
-        FROM exchange_rate er1
-        WHERE er1.base_currency_code = 'KRW'
-          AND er1.date = (
-              SELECT MAX(date) FROM exchange_rate
-              WHERE currency_pair = er1.currency_pair)
+        WITH ranked AS (
+            SELECT currency_pair, rate,
+                   LAG(rate) OVER (PARTITION BY currency_pair ORDER BY date) AS prev_rate,
+                   ROW_NUMBER() OVER (PARTITION BY currency_pair ORDER BY date DESC) AS rn
+            FROM exchange_rate
+            WHERE base_currency_code = 'KRW'
+        )
+        SELECT currency_pair, rate, prev_rate
+        FROM ranked
+        WHERE rn = 1
     """)).fetchall()
 
     result = []

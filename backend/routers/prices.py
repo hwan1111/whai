@@ -17,14 +17,17 @@ PERIOD_DAYS = {
 @router.get("/latest")
 def get_latest_prices(db: Session = Depends(get_db)) -> list[dict]:
     rows = db.execute(text("""
-        SELECT p1.ticker, p1.close, p1.date, c.name, c.sector,
-               (SELECT close FROM price p2
-                WHERE p2.ticker = p1.ticker AND p2.date < p1.date
-                ORDER BY p2.date DESC LIMIT 1) AS prev_close
-        FROM price p1
-        JOIN company c ON p1.ticker = c.ticker
-        WHERE p1.date = (SELECT MAX(date) FROM price p3 WHERE p3.ticker = p1.ticker)
-        ORDER BY c.sector, p1.ticker
+        WITH ranked AS (
+            SELECT ticker, close, date,
+                   LAG(close) OVER (PARTITION BY ticker ORDER BY date) AS prev_close,
+                   ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
+            FROM price
+        )
+        SELECT r.ticker, r.close, r.date, c.name, c.sector, r.prev_close
+        FROM ranked r
+        JOIN company c ON r.ticker = c.ticker
+        WHERE r.rn = 1
+        ORDER BY c.sector, r.ticker
     """)).fetchall()
 
     result = []
