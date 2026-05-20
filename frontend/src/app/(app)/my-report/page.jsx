@@ -114,7 +114,7 @@ function DonutChart({ sorted, totalVal, size = 180 }) {
   });
   const fs1 = Math.round(size * 0.067), fs2 = Math.round(size * 0.078);
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, flexShrink: 0 }}>
+    <svg viewBox={`${size * 0.06} 0 ${size * 0.88} ${size}`} style={{ width: size * 0.88, height: size, flexShrink: 0 }}>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
       <g dangerouslySetInnerHTML={{ __html: paths }} />
       <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fill="#94a3b8">총 평가액</text>
