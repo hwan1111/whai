@@ -13,7 +13,9 @@ __pycache__/
 
 config/certs/
 
-data
+# Data directory - only root level, src/data/ is tracked
+data/
+!src/data/
 
 docs/
 
@@ -24,3 +26,5 @@ mlruns
 uploads/
 =2.0
 basic_auth.ini
+
+*.bak

@@ -6,5 +6,6 @@ LLMOps 유틸리티 패키지
 
 from .gateway_client import GatewayClient
 from .mlflow_logger import MLflowLogger
+from .prompt_manager import PromptManager
 
-__all__ = ["MLflowLogger", "GatewayClient"]
+__all__ = ["MLflowLogger", "GatewayClient", "PromptManager"]
