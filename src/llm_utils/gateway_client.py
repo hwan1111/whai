@@ -18,10 +18,17 @@ from pathlib import Path
 from typing import Any, Optional
 
 import httpx
+import mlflow
 from dotenv import load_dotenv
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
+
+# MLflow OpenAI SDK 자동 추적 활성화
+try:
+    mlflow.openai.autolog()
+except Exception as e:
+    logger.debug(f"MLflow OpenAI autolog 활성화 실패: {str(e)}")
 
 # .env.local 파일 로드 (프로젝트 루트 기준)
 _project_root = Path(__file__).parent.parent.parent
