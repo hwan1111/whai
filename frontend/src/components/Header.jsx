@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getUser, getToken, getProfileImage, setProfileImage, logout, updateUserName } from '@/lib/auth';
 
@@ -9,9 +9,8 @@ const INVEST_MAP = {
 };
 const INVEST_VALS = ['SAFE', 'STAB', 'NEUT', 'GROW', 'AGGR'];
 
-export default function Header({ updateTime }) {
+export default function Header() {
   const router = useRouter();
-  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState(null);
   const [profileData, setProfileData] = useState(null);
@@ -244,10 +243,6 @@ export default function Header({ updateTime }) {
           </Link>
         </div>
         <div className="header-right">
-          {updateTime && <span style={{ fontSize: 11, color: '#94a3b8' }}>{updateTime}</span>}
-          <Link href="/my-report" className={`header-report-btn${pathname?.startsWith('/my-report') ? ' active' : ''}`}>
-            📄 마이 리포트
-          </Link>
           <div className="user-menu-wrap" ref={menuRef}>
             <div
               className="avatar"
