@@ -3,11 +3,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const NAV_ITEMS = [
-  { key: 'dashboard', icon: '🖥️', label: '대시보드',    href: '/dashboard' },
-  { key: 'stock',     icon: '📈', label: '종목 분석',   href: '/stock' },
-  { key: 'analysis',  icon: '📊', label: '포트폴리오',  href: '/analysis' },
-  { key: 'news',      icon: '📰', label: '뉴스',        href: '/news' },
-  { key: 'myreport',  icon: '📄', label: '내 리포트',   href: '/my-report' },
+  { key: 'dashboard', icon: '🖥️', label: '대시보드',   href: '/dashboard' },
+{ key: 'myreport',  icon: '📄', label: '내 리포트', href: '/my-report' },
 ];
 
 export default function Sidebar({ dataDate }) {
@@ -15,6 +12,10 @@ export default function Sidebar({ dataDate }) {
 
   return (
     <aside className="sidebar">
+      <div className="logo">
+        <div className="logo-text">WH<span>Ai</span></div>
+        <div className="logo-sub">다중 자산 지표 통합 분석 AI</div>
+      </div>
       <nav>
         {NAV_ITEMS.map(item => (
           <Link
@@ -29,7 +30,7 @@ export default function Sidebar({ dataDate }) {
       </nav>
       <div className="sidebar-footer">
         데이터 기준: <span>{dataDate || '—'}</span><br />
-        <span style={{ color: '#475569' }}>KRX · BOK ECOS</span>
+        <span style={{ color: '#334155' }}>KRX · BOK ECOS</span>
       </div>
     </aside>
   );
