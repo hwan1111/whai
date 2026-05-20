@@ -43,9 +43,12 @@ const MAX_SNAPSHOTS = 10;
 
 const fmt = n => Math.round(n).toLocaleString('ko-KR');
 function fmtCompact(n) {
+  return `${Math.round(n).toLocaleString('ko-KR')}원`;
+}
+function fmtShort(n) {
   if (n >= 1e8) return `${(n / 1e8).toFixed(1)}억원`;
   if (n >= 1e4) return `${Math.round(n / 1e4).toLocaleString()}만원`;
-  return `${fmt(n)}원`;
+  return `${Math.round(n).toLocaleString('ko-KR')}원`;
 }
 function fmtDatetime(iso) {
   const d = new Date(iso);
@@ -144,7 +147,9 @@ function DonutChart({ sorted, totalVal, size = 180 }) {
             style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
             onMouseEnter={e => {
               const rect = wrapRef.current.getBoundingClientRect();
-              setTooltip({ name: seg.h.info.name || seg.h.id, pct: seg.w.toFixed(1), val: fmtCompact(seg.h.curVal), color: seg.h.info.color || '#94a3b8', x: e.clientX - rect.left, y: e.clientY - rect.top });
+              const pnl = seg.h.curVal - seg.h.cost;
+              const retPct = seg.h.cost > 0 ? pnl / seg.h.cost * 100 : 0;
+              setTooltip({ name: seg.h.info.name || seg.h.id, pct: seg.w.toFixed(1), val: fmtCompact(seg.h.curVal), pnl, retPct: retPct.toFixed(2), color: seg.h.info.color || '#94a3b8', x: e.clientX - rect.left, y: e.clientY - rect.top });
             }}
             onMouseMove={e => {
               const rect = wrapRef.current.getBoundingClientRect();
@@ -153,7 +158,7 @@ function DonutChart({ sorted, totalVal, size = 180 }) {
           />
         ))}
         <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fill="#94a3b8" pointerEvents="none">총 평가액</text>
-        <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="800" fill="#1e293b" pointerEvents="none">{fmtCompact(totalVal)}</text>
+        <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="800" fill="#1e293b" pointerEvents="none">{fmtShort(totalVal)}</text>
       </svg>
       {tooltip && (
         <div style={{
@@ -163,8 +168,8 @@ function DonutChart({ sorted, totalVal, size = 180 }) {
           background: 'white',
           border: '1px solid #e2e8f0',
           borderRadius: 8,
-          padding: '5px 10px',
-          fontSize: 12,
+          padding: '7px 14px',
+          fontSize: 15,
           fontWeight: 600,
           color: '#1e293b',
           boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
@@ -172,8 +177,21 @@ function DonutChart({ sorted, totalVal, size = 180 }) {
           whiteSpace: 'nowrap',
           zIndex: 10,
         }}>
-          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: tooltip.color, marginRight: 6 }} />
-          {tooltip.name} · {tooltip.pct}% · {tooltip.val}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: tooltip.color, flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontSize: 17 }}>{tooltip.name}</span>
+          </div>
+          {[
+            { label: '비중',   val: `${tooltip.pct}%`,  color: '#1e293b' },
+            { label: '평가액', val: tooltip.val,         color: '#1e293b' },
+            { label: '손익',   val: `${tooltip.pnl >= 0 ? '+' : '-'}${fmtCompact(Math.abs(tooltip.pnl))}`, color: parseFloat(tooltip.retPct) >= 0 ? '#16a34a' : '#dc2626' },
+            { label: '수익률', val: `${parseFloat(tooltip.retPct) >= 0 ? '+' : ''}${tooltip.retPct}%`,     color: parseFloat(tooltip.retPct) >= 0 ? '#16a34a' : '#dc2626' },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 15, marginBottom: 4 }}>
+              <span style={{ color: '#94a3b8', fontWeight: 500 }}>{label}</span>
+              <span style={{ color, fontWeight: 600 }}>{val}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -300,6 +318,7 @@ function WeightHistoryChart({ snapshots, prices }) {
 }
 
 function SnapshotCard({ snap, prices, onDelete }) {
+  const [detailOpen, setDetailOpen] = useState(false);
   const { totalVal, totalCost, sorted } = calcTotals(snap.holdings, prices);
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
@@ -310,8 +329,57 @@ function SnapshotCard({ snap, prices, onDelete }) {
     <div className="snapshot-card">
       <div className="snapshot-card-header">
         <span className="snapshot-datetime">{fmtDatetime(snap.datetime)}</span>
-        <button className="snapshot-delete-btn" onClick={() => onDelete(snap.id)} title="삭제">✕</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 10px', fontSize: 11, color: '#64748b', cursor: 'pointer' }}
+            onClick={() => setDetailOpen(true)}
+          >
+            자세히 보기
+          </button>
+          <button className="snapshot-delete-btn" onClick={() => onDelete(snap.id)} title="삭제">✕</button>
+        </div>
       </div>
+
+      {detailOpen && (
+        <div className="modal-overlay" onClick={() => setDetailOpen(false)}>
+          <div className="modal-box" style={{ width: 520, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-title" style={{ fontSize: 14 }}>📋 {fmtDatetime(snap.datetime)} 종목 상세</div>
+            <div className="snapshot-legend" style={{ maxHeight: 'none' }}>
+              {sorted.map(h => {
+                const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
+                const pnl = h.curVal - h.cost;
+                const pnlPct = h.cost > 0 ? pnl / h.cost * 100 : 0;
+                const pc = pnl >= 0 ? '#16a34a' : '#dc2626';
+                return (
+                  <div key={h.id} className="snapshot-legend-row" style={{ padding: '7px 0' }}>
+                    <span className="snapshot-legend-dot" style={{ background: h.info.color || '#94a3b8' }} />
+                    <span className="snapshot-legend-name" style={{ fontSize: 13 }}>{h.info.name || h.id}</span>
+                    <span className="snapshot-legend-pct" style={{ width: 48 }}>{w.toFixed(1)}%</span>
+                    <span className="snapshot-legend-val" style={{ width: 60 }}>{fmtCompact(h.curVal)}</span>
+                    <span className="snapshot-legend-pnl" style={{ width: 60, color: pc }}>{pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="snapshot-summary" style={{ marginTop: 14, gridTemplateColumns: 'repeat(2, 1fr)' }}>
+              {[
+                { label: '총 매입 원가', val: fmtCompact(totalCost) },
+                { label: '총 평가액',   val: fmtCompact(totalVal) },
+                { label: '총 손익',     val: (totalPnl >= 0 ? '+' : '-') + fmtCompact(Math.abs(totalPnl)), color: pnlColor },
+                { label: '수익률',      val: (totalPnlPct >= 0 ? '+' : '') + totalPnlPct.toFixed(2) + '%', color: pnlColor },
+              ].map(({ label, val, color }) => (
+                <div key={label} className="snapshot-summary-item">
+                  <div className="snapshot-summary-label">{label}</div>
+                  <div className="snapshot-summary-val" style={{ color: color || 'inherit' }}>{val}</div>
+                </div>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setDetailOpen(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="snapshot-body">
         {/* 1열: AI 분석 */}
@@ -325,36 +393,16 @@ function SnapshotCard({ snap, prices, onDelete }) {
 
         {/* 2열: 도넛 차트 */}
         <div className="snapshot-chart-center">
-          <DonutChart sorted={sorted} totalVal={totalVal} size={430} />
+          <DonutChart sorted={sorted} totalVal={totalVal} size={460} />
         </div>
 
-        {/* 3열: 레전드 + 요약 */}
+        {/* 3열: 요약 */}
         <div className="snapshot-right">
-          <div className="snapshot-legend">
-            {sorted.map(h => {
-              const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
-              const pnl = h.curVal - h.cost;
-              const pnlPct = h.cost > 0 ? pnl / h.cost * 100 : 0;
-              const pc = pnl >= 0 ? '#16a34a' : '#dc2626';
-              return (
-                <div key={h.id} className="snapshot-legend-row">
-                  <span className="snapshot-legend-dot" style={{ background: h.info.color || '#94a3b8' }} />
-                  <span className="snapshot-legend-name">{h.info.name || h.id}</span>
-                  <span className="snapshot-legend-pct">{w.toFixed(1)}%</span>
-                  <span className="snapshot-legend-val">{fmtCompact(h.curVal)}</span>
-                  <span className="snapshot-legend-pnl" style={{ color: pc }}>
-                    {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
           <div className="snapshot-summary">
             {[
               { label: '총 매입 원가', val: fmtCompact(totalCost) },
               { label: '총 평가액',   val: fmtCompact(totalVal) },
-              { label: '총 손익',     val: (totalPnl >= 0 ? '+' : '') + fmtCompact(Math.abs(totalPnl)), color: pnlColor },
+              { label: '총 손익',     val: (totalPnl >= 0 ? '+' : '-') + fmtCompact(Math.abs(totalPnl)), color: pnlColor },
               { label: '수익률',      val: (totalPnlPct >= 0 ? '+' : '') + totalPnlPct.toFixed(2) + '%', color: pnlColor },
             ].map(({ label, val, color }) => (
               <div key={label} className="snapshot-summary-item">
@@ -645,7 +693,7 @@ export default function MyReportPage() {
 
       {/* 오른쪽 고정 패널: 비중 추이 */}
       <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 16, alignSelf: 'flex-start' }}>
-        <div className="other-card" style={{ padding: '16px 16px 14px' }}>
+        <div className="other-card" style={{ padding: '16px 16px 14px', maxHeight: 'calc(100vh - 90px)', overflowY: 'auto' }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 16 }}>
             자산 비중 추이
           </div>
