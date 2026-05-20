@@ -46,8 +46,9 @@ function fmtCompact(n) {
   return `${Math.round(n).toLocaleString('ko-KR')}원`;
 }
 function fmtShort(n) {
-  if (n >= 1e8) return `${(n / 1e8).toFixed(1)}억원`;
-  if (n >= 1e4) return `${Math.round(n / 1e4).toLocaleString()}만원`;
+  if (n >= 1e12) return `${(n / 1e12).toFixed(1)}조원`;
+  if (n >= 1e8)  return `${(n / 1e8).toFixed(1)}억원`;
+  if (n >= 1e4)  return `${Math.round(n / 1e4).toLocaleString()}만원`;
   return `${Math.round(n).toLocaleString('ko-KR')}원`;
 }
 function fmtDatetime(iso) {
@@ -102,7 +103,7 @@ function calcTotals(holdings, prices) {
   return { totalVal, totalCost, sorted };
 }
 
-function DonutChart({ sorted, totalVal, size = 180 }) {
+function DonutChart({ sorted, totalVal, size = 180, onSegmentClick }) {
   const [tooltip, setTooltip] = useState(null);
   const wrapRef = useRef(null);
 
@@ -155,6 +156,7 @@ function DonutChart({ sorted, totalVal, size = 180 }) {
               const rect = wrapRef.current.getBoundingClientRect();
               setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
             }}
+            onClick={() => { setTooltip(null); onSegmentClick && onSegmentClick(seg.h); }}
           />
         ))}
         <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fill="#94a3b8" pointerEvents="none">총 평가액</text>
@@ -317,8 +319,106 @@ function WeightHistoryChart({ snapshots, prices }) {
   );
 }
 
+function AssetDrawer({ holding, prices, onClose }) {
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const id = holding.id;
+  const info = ASSET_INFO[id] || {};
+  const isStock = !id.startsWith('KRW/');
+  const cur = prices[id] ?? holding.snapshotPrice ?? 0;
+  const curVal = holding.qty * cur;
+  const cost = holding.qty * holding.avgPrice;
+  const pnl = curVal - cost;
+  const retPct = cost > 0 ? pnl / cost * 100 : 0;
+  const pnlColor = pnl >= 0 ? '#16a34a' : '#dc2626';
+  const logo = getLogo(id);
+  const flag = getFlag(id);
+
+  useEffect(() => {
+    if (!isStock) return;
+    setStatsLoading(true);
+    fetch(`/api/v1/prices/${id}/stats`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setStats(d); setStatsLoading(false); })
+      .catch(() => setStatsLoading(false));
+  }, [id]);
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 299, background: 'rgba(15,23,42,0.25)' }} />
+      <div style={{
+        position: 'fixed', right: 0, top: 0, width: 300, height: '100vh',
+        background: 'white', boxShadow: '-8px 0 32px rgba(15,23,42,0.15)',
+        zIndex: 300, display: 'flex', flexDirection: 'column',
+        overflowY: 'auto', padding: '24px 20px',
+      }}>
+        {/* 헤더 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {logo && <div style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e8ecf0', overflow: 'hidden', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><img src={logo} alt={info.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>}
+            {flag && <img src={flag} alt={info.name} style={{ width: 34, height: 24, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />}
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: '#1e293b' }}>{info.name || id}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{info.sector} · {id}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#94a3b8', padding: '0 4px', lineHeight: 1, flexShrink: 0 }}>×</button>
+        </div>
+
+        {/* 현재가 */}
+        <div style={{ background: '#f8fafc', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>현재가</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#1e293b' }}>{fmtCompact(cur)}</div>
+        </div>
+
+        {/* 보유 정보 */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>보유 정보</div>
+          {[
+            { label: '수량',       val: `${fmt(holding.qty)}${info.unit || ''}` },
+            { label: '평균 매입가', val: fmtCompact(holding.avgPrice) },
+            { label: '평가액',     val: fmtCompact(curVal) },
+            { label: '손익',       val: `${pnl >= 0 ? '+' : '-'}${fmtCompact(Math.abs(pnl))}`, color: pnlColor },
+            { label: '수익률',     val: `${retPct >= 0 ? '+' : ''}${retPct.toFixed(2)}%`, color: pnlColor },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+              <span style={{ color: '#64748b' }}>{label}</span>
+              <span style={{ fontWeight: 600, color: color || '#1e293b' }}>{val}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 종목 정보 (주식만) */}
+        {isStock && (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>종목 정보</div>
+            {statsLoading ? (
+              <div style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', padding: '20px 0' }}>불러오는 중...</div>
+            ) : stats ? (
+              [
+                { label: '52주 최고', val: stats.high52 ? fmtCompact(stats.high52) : '-' },
+                { label: '52주 최저', val: stats.low52  ? fmtCompact(stats.low52)  : '-' },
+                { label: 'PER',      val: stats.per != null ? `${stats.per}` : '적자' },
+                { label: 'PBR',      val: stats.pbr != null ? `${stats.pbr}` : '-' },
+                { label: '시가총액', val: stats.market_cap ? fmtShort(stats.market_cap) : '-' },
+                { label: '거래량',   val: stats.volume  ? `${fmt(stats.volume)}주`  : '-' },
+              ].map(({ label, val }) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                  <span style={{ color: '#64748b' }}>{label}</span>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>{val}</span>
+                </div>
+              ))
+            ) : null}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 function SnapshotCard({ snap, prices, onDelete }) {
   const [detailOpen, setDetailOpen] = useState(false);
+  const [drawerHolding, setDrawerHolding] = useState(null);
   const { totalVal, totalCost, sorted } = calcTotals(snap.holdings, prices);
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
@@ -326,6 +426,10 @@ function SnapshotCard({ snap, prices, onDelete }) {
   const aiHtml = buildAiHtml(sorted, totalVal, totalCost);
 
   return (
+    <>
+    {drawerHolding && (
+      <AssetDrawer holding={drawerHolding} prices={prices} onClose={() => setDrawerHolding(null)} />
+    )}
     <div className="snapshot-card">
       <div className="snapshot-card-header">
         <span className="snapshot-datetime">{fmtDatetime(snap.datetime)}</span>
@@ -393,7 +497,7 @@ function SnapshotCard({ snap, prices, onDelete }) {
 
         {/* 2열: 도넛 차트 */}
         <div className="snapshot-chart-center">
-          <DonutChart sorted={sorted} totalVal={totalVal} size={460} />
+          <DonutChart sorted={sorted} totalVal={totalVal} size={460} onSegmentClick={setDrawerHolding} />
         </div>
 
         {/* 3열: 요약 */}
@@ -414,6 +518,7 @@ function SnapshotCard({ snap, prices, onDelete }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

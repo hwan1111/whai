@@ -315,17 +315,10 @@ export default function StockPage() {
                 <div className="metric-box">
                   <div className="metric-label">PER</div>
                   <div className="metric-value">
-                    {s?.per ? (
-                      s.per.toFixed(2)
-                    ) : (
-                      <>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>산출불가</span>
-                        <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, marginTop: 2 }}>현재 순손실 중인 기업으로<br />PER을 계산할 수 없어요</div>
-                      </>
-                    )}
+                    {s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#64748b' }}>적자</span>}
                   </div>
                 </div>
-                <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr ? s.pbr.toFixed(2) : '—'}</div></div>
+                <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '-'}</div></div>
               </div>
             </div>
           </div>

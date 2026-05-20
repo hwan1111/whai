@@ -98,7 +98,7 @@ def get_price_stats(
         "high52": int(row.high52) if row and row.high52 else None,
         "low52": int(row.low52) if row and row.low52 else None,
         "volume": int(latest.volume) if latest and latest.volume else None,
-        "per": round(float(fund.per), 2) if fund and fund.per else None,
-        "pbr": round(float(fund.pbr), 2) if fund and fund.pbr else None,
+        "per": round(float(fund.per), 2) if fund and fund.per is not None else None,
+        "pbr": round(float(fund.pbr), 2) if fund and fund.pbr is not None else None,
         "market_cap": int(fund.market_cap) if fund and fund.market_cap else None,
     }

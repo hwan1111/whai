@@ -256,10 +256,10 @@ export default function StockDetailModal({ stockId, onClose }) {
                     <div className="metric-box">
                       <div className="metric-label">PER</div>
                       <div className="metric-value">
-                        {s?.per ? s.per.toFixed(2) : <span style={{ fontSize: 10, color: '#64748b' }}>산출불가</span>}
+                        {s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#64748b' }}>적자</span>}
                       </div>
                     </div>
-                    <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr ? s.pbr.toFixed(2) : '—'}</div></div>
+                    <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '-'}</div></div>
                   </div>
                 </div>
               </div>
