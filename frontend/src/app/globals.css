@@ -356,7 +356,7 @@ html, body { height: 100%; min-width: 1280px; }
 .snapshot-delete-btn { background: none; border: none; cursor: pointer; font-size: 15px; color: #cbd5e1; padding: 2px 6px; border-radius: 5px; line-height: 1; transition: color 0.15s, background 0.15s; }
 .snapshot-delete-btn:hover { color: #dc2626; background: #fef2f2; }
 
-.snapshot-body { display: flex; gap: 20px; align-items: stretch; justify-content: center; }
+.snapshot-body { display: flex; gap: 20px; align-items: stretch; }
 .snapshot-chart-center { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0 4px; }
 .snapshot-right { flex: 0 0 220px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
 
@@ -385,7 +385,7 @@ html, body { height: 100%; min-width: 1280px; }
 .snapshot-summary-label { font-size: 11px; color: #94a3b8; margin-bottom: 3px; }
 .snapshot-summary-val { font-size: 17px; font-weight: 800; color: #1e293b; }
 
-.snapshot-ai { background: linear-gradient(160deg, #f5f3ff, #eef2ff); border: 1px solid #c4b5fd; border-radius: 10px; padding: 16px 18px; flex: 0 0 300px; display: flex; flex-direction: column; }
+.snapshot-ai { background: linear-gradient(160deg, #f5f3ff, #eef2ff); border: 1px solid #c4b5fd; border-radius: 10px; padding: 16px 18px; flex: 1; min-width: 200px; display: flex; flex-direction: column; }
 .snapshot-ai-header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
 
 /* ── 자산 선택 카드 그리드 ── */
