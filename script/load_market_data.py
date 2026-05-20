@@ -48,6 +48,12 @@ def _latest_exchange_date(engine) -> date:
     return row[0] if row[0] else date(2020, 1, 1)
 
 
+def _latest_fundamental_date(engine) -> date:
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT MAX(date) FROM fundamental")).fetchone()
+    return row[0] if row[0] else date(2020, 1, 1)
+
+
 def load_kospi(engine) -> int:
     """pykrx로 KOSPI 지수(000000) 증분 적재."""
     try:
@@ -219,10 +225,16 @@ def load_fundamentals(engine) -> int:
         print("[펀더멘털] 종목 없음")
         return 0
 
+    today = date.today()
+    last = _latest_fundamental_date(engine)
+    if last >= today:
+        print("[펀더멘털] 최신 상태")
+        return 0
+
     # 가장 최근 영업일 기준 (오늘 데이터 없으면 어제)
-    today_str = date.today().strftime("%Y%m%d")
-    yesterday_str = (date.today() - timedelta(days=1)).strftime("%Y%m%d")
-    today_iso = date.today().strftime("%Y-%m-%d")
+    today_str = today.strftime("%Y%m%d")
+    yesterday_str = (today - timedelta(days=1)).strftime("%Y%m%d")
+    today_iso = today.strftime("%Y-%m-%d")
 
     rows = []
     for ticker in tickers:
