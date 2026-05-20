@@ -260,7 +260,7 @@ function SnapshotCard({ snap, prices, onDelete }) {
         {/* 1열: AI 분석 */}
         <div className="snapshot-ai">
           <div className="snapshot-ai-header">
-            <span className="ai-badge" style={{ fontSize: 11 }}>AI 분석</span>
+            <span className="ai-badge" style={{ fontSize: 11 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
             <span style={{ fontSize: 13, color: '#6d28d9', fontWeight: 600 }}>포트폴리오 분석</span>
           </div>
           <div dangerouslySetInnerHTML={{ __html: aiHtml }} />
