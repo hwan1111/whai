@@ -33,7 +33,7 @@ def _verify(password: str, hashed: str) -> bool:
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-env-local")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60
-REFRESH_EXPIRE_DAYS = 7
+REFRESH_EXPIRE_DAYS = 3
 
 
 def _make_token(user_id: str) -> str:
