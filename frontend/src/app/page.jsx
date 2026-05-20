@@ -73,7 +73,7 @@ export default function AuthPage() {
       if (!res.ok) {
         setLoginError(data.detail || '로그인에 실패했습니다.');
       } else {
-        login(data.name, data.user_id, data.access_token);
+        login(data.name, data.user_id, data.access_token, data.refresh_token);
         if (data.profile_image_url) setProfileImage(data.profile_image_url);
         prefetchDashboard(data.access_token);
         router.replace('/dashboard');
