@@ -310,18 +310,6 @@ function WeightHistoryChart({ snapshots, prices }) {
         );
       })}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-        {allIds.map(id => {
-          const info = ASSET_INFO[id] || {};
-          return (
-            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: info.color || '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
-              <span style={{ fontSize: 12, color: '#475569' }}>{info.name || id}</span>
-            </div>
-          );
-        })}
-      </div>
-
       {tooltip && (
         <div style={{
           position: 'absolute',
