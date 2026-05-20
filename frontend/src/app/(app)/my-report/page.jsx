@@ -251,6 +251,9 @@ function buildAiHtml(sorted, totalVal, totalCost) {
 }
 
 function WeightHistoryChart({ snapshots, prices }) {
+  const [tooltip, setTooltip] = useState(null);
+  const containerRef = useRef(null);
+
   if (snapshots.length === 0) return (
     <div style={{ padding: '40px 16px', textAlign: 'center', color: '#cbd5e1', fontSize: 12 }}>
       스냅샷을 기록하면<br />비중 추이가 표시됩니다.
@@ -265,7 +268,7 @@ function WeightHistoryChart({ snapshots, prices }) {
   const allIds = [...new Set(snapshots.flatMap(s => s.holdings.map(h => h.id)))];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
       {rows.map(({ snap, sorted, totalVal }) => {
         const maxVal = Math.max(...rows.map(r => r.totalVal));
         const barWidthPct = maxVal > 0 ? totalVal / maxVal * 100 : 0;
@@ -281,8 +284,16 @@ function WeightHistoryChart({ snapshots, prices }) {
                   return (
                     <div
                       key={h.id}
-                      title={`${h.info.name || h.id}: ${fmtCompact(h.curVal)} (${w.toFixed(1)}%)`}
-                      style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}
+                      style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'default' }}
+                      onMouseEnter={e => {
+                        const rect = containerRef.current.getBoundingClientRect();
+                        setTooltip({ name: h.info.name || h.id, x: e.clientX - rect.left, y: e.clientY - rect.top });
+                      }}
+                      onMouseMove={e => {
+                        const rect = containerRef.current.getBoundingClientRect();
+                        setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
+                      }}
+                      onMouseLeave={() => setTooltip(null)}
                     >
                       {w >= 10 && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.9)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
@@ -310,6 +321,26 @@ function WeightHistoryChart({ snapshots, prices }) {
           );
         })}
       </div>
+
+      {tooltip && (
+        <div style={{
+          position: 'absolute',
+          left: tooltip.x + 10,
+          top: tooltip.y - 32,
+          background: '#1e293b',
+          color: 'white',
+          borderRadius: 6,
+          padding: '5px 10px',
+          fontSize: 12,
+          fontWeight: 600,
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          zIndex: 10,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+        }}>
+          {tooltip.name}
+        </div>
+      )}
     </div>
   );
 }
