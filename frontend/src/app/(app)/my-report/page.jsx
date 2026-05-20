@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getToken, handleUnauthorized } from '@/lib/auth';
 import { ASSETS } from '@/lib/data';
 
@@ -100,26 +100,83 @@ function calcTotals(holdings, prices) {
 }
 
 function DonutChart({ sorted, totalVal, size = 180 }) {
+  const [tooltip, setTooltip] = useState(null);
+  const wrapRef = useRef(null);
+
   const cx = size / 2, cy = size / 2;
   const r = size * 0.36, sw = size * 0.155;
-  const C = 2 * Math.PI * r;
-  const gap = 2;
-  let paths = '', cum = 0;
-  sorted.forEach(h => {
-    if (h.curVal <= 0) return;
-    const len = (h.curVal / totalVal) * C;
-    const segLen = Math.max(len - gap, 0.1);
-    paths += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${h.info.color || '#94a3b8'}" stroke-width="${sw}" stroke-dasharray="${segLen.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-cum).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
-    cum += len;
-  });
+  const gapAngle = 1.5 / r;
+
+  let cumAngle = 0;
+  const segments = sorted
+    .filter(h => h.curVal > 0)
+    .map(h => {
+      const angle = (h.curVal / totalVal) * 2 * Math.PI;
+      const half = angle > gapAngle ? gapAngle / 2 : 0;
+      const seg = { h, startAngle: cumAngle + half, endAngle: cumAngle + angle - half, w: h.curVal / totalVal * 100 };
+      cumAngle += angle;
+      return seg;
+    });
+
+  function arcPath(startAngle, endAngle) {
+    const outerR = r + sw / 2, innerR = r - sw / 2;
+    const s = startAngle - Math.PI / 2, e = endAngle - Math.PI / 2;
+    const large = endAngle - startAngle > Math.PI ? 1 : 0;
+    const [ox1, oy1] = [cx + outerR * Math.cos(s), cy + outerR * Math.sin(s)];
+    const [ox2, oy2] = [cx + outerR * Math.cos(e), cy + outerR * Math.sin(e)];
+    const [ix1, iy1] = [cx + innerR * Math.cos(e), cy + innerR * Math.sin(e)];
+    const [ix2, iy2] = [cx + innerR * Math.cos(s), cy + innerR * Math.sin(s)];
+    return `M${ox1} ${oy1} A${outerR} ${outerR} 0 ${large} 1 ${ox2} ${oy2} L${ix1} ${iy1} A${innerR} ${innerR} 0 ${large} 0 ${ix2} ${iy2}Z`;
+  }
+
   const fs1 = Math.round(size * 0.067), fs2 = Math.round(size * 0.078);
+
   return (
-    <svg viewBox={`${size * 0.06} 0 ${size * 0.88} ${size}`} style={{ width: size * 0.88, height: size, flexShrink: 0 }}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
-      <g dangerouslySetInnerHTML={{ __html: paths }} />
-      <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fill="#94a3b8">총 평가액</text>
-      <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="800" fill="#1e293b">{fmtCompact(totalVal)}</text>
-    </svg>
+    <div ref={wrapRef} style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, display: 'block' }}
+        onMouseLeave={() => setTooltip(null)}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
+        {segments.map((seg, i) => (
+          <path
+            key={i}
+            d={arcPath(seg.startAngle, seg.endAngle)}
+            fill={seg.h.info.color || '#94a3b8'}
+            style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+            onMouseEnter={e => {
+              const rect = wrapRef.current.getBoundingClientRect();
+              setTooltip({ name: seg.h.info.name || seg.h.id, pct: seg.w.toFixed(1), val: fmtCompact(seg.h.curVal), color: seg.h.info.color || '#94a3b8', x: e.clientX - rect.left, y: e.clientY - rect.top });
+            }}
+            onMouseMove={e => {
+              const rect = wrapRef.current.getBoundingClientRect();
+              setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
+            }}
+          />
+        ))}
+        <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fill="#94a3b8" pointerEvents="none">총 평가액</text>
+        <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="800" fill="#1e293b" pointerEvents="none">{fmtCompact(totalVal)}</text>
+      </svg>
+      {tooltip && (
+        <div style={{
+          position: 'absolute',
+          left: tooltip.x + 14,
+          top: tooltip.y - 14,
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          padding: '5px 10px',
+          fontSize: 12,
+          fontWeight: 600,
+          color: '#1e293b',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          zIndex: 10,
+        }}>
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: tooltip.color, marginRight: 6 }} />
+          {tooltip.name} · {tooltip.pct}% · {tooltip.val}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -268,7 +325,7 @@ function SnapshotCard({ snap, prices, onDelete }) {
 
         {/* 2열: 도넛 차트 */}
         <div className="snapshot-chart-center">
-          <DonutChart sorted={sorted} totalVal={totalVal} size={380} />
+          <DonutChart sorted={sorted} totalVal={totalVal} size={430} />
         </div>
 
         {/* 3열: 레전드 + 요약 */}
