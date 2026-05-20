@@ -152,9 +152,8 @@ export default function AuthPage() {
       if (!res.ok) {
         setRegError(data.detail || '회원가입에 실패했습니다.');
       } else {
-        login(data.name, data.user_id, data.access_token);
-        if (data.profile_image_url) setProfileImage(data.profile_image_url);
-        router.replace('/dashboard');
+        setLoginId(regId);
+        setTab('login');
       }
     } catch {
       setRegError('서버에 연결할 수 없습니다.');
