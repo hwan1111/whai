@@ -110,7 +110,7 @@ function NewsDrawer({ open, onClose }) {
               {n.ai_summary && (
                 <div className="ai-box" style={{ marginTop: 8, padding: '10px 12px' }}>
                   <div className="ai-header" style={{ marginBottom: 6 }}>
-                    <span className="ai-badge" style={{ fontSize: 9 }}>AI 3줄 요약</span>
+                    <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 3줄 요약</span>
                   </div>
                   <div className="ai-text" style={{ fontSize: 11 }}>{n.ai_summary}</div>
                 </div>
@@ -732,7 +732,7 @@ export default function DashboardPage() {
 
           <div className="other-card" style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="other-card-title">
-              종목 AI 분석
+              종목 WH<span style={{ color: '#7c3aed', fontWeight: 800 }}>Ai</span> 분석
               <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>{period}</span>
             </div>
             <div style={{ background: 'linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%)', border: '1px solid #c4b5fd', borderRadius: 10, padding: '14px 16px', flex: 1, fontSize: 13, lineHeight: 1.8, color: '#312e81' }}>
