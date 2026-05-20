@@ -93,7 +93,7 @@ export default function NewsPage() {
               {n.ai_summary && (
                 <div className="ai-box" style={{ marginTop: 8, padding: '10px 12px' }}>
                   <div className="ai-header" style={{ marginBottom: 6 }}>
-                    <span className="ai-badge" style={{ fontSize: 9 }}>AI 3줄 요약</span>
+                    <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 3줄 요약</span>
                   </div>
                   <div className="ai-text" style={{ fontSize: 11 }}>{n.ai_summary}</div>
                 </div>
