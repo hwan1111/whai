@@ -3,8 +3,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from backend.db import engine, Base
+from backend.limiter import limiter
 from backend.routers import auth, news, prices, exchange_rates, report, favorites
 import backend.models.user         # noqa: F401 — Base에 모델 등록
 import backend.models.news         # noqa: F401
@@ -20,6 +23,8 @@ except Exception as e:
     print(f"[WARNING] DB 테이블 자동 생성 실패: {e}")
 
 app = FastAPI(title="WHAi API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

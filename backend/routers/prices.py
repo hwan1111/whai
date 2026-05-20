@@ -1,12 +1,19 @@
+import re
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from backend.db import get_db
 
 router = APIRouter(prefix="/prices", tags=["prices"])
+
+_TICKER_RE = re.compile(r'^[0-9]{6}$')
+
+def _validate_ticker(ticker: str) -> None:
+    if not _TICKER_RE.match(ticker):
+        raise HTTPException(status_code=400, detail="유효하지 않은 ticker 형식입니다.")
 
 PERIOD_DAYS = {
     "1W": 7, "1M": 30, "3M": 90, "6M": 180,
@@ -52,6 +59,7 @@ def get_price_history(
     period: str = Query(default="3M"),
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    _validate_ticker(ticker)
     days = PERIOD_DAYS.get(period, 90)
     cutoff = date.today() - timedelta(days=days)
     rows = db.execute(text("""
@@ -79,6 +87,7 @@ def get_price_stats(
     ticker: str,
     db: Session = Depends(get_db),
 ) -> dict:
+    _validate_ticker(ticker)
     cutoff = date.today() - timedelta(days=365)
     row = db.execute(text("""
         SELECT MAX(close) AS high52, MIN(close) AS low52

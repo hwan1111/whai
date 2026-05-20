@@ -6,6 +6,7 @@ from pathlib import Path
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
+from backend.limiter import limiter
 import bcrypt
 from jose import jwt
 from sqlalchemy.orm import Session
@@ -74,7 +75,8 @@ def check_id(user_id: str, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(body: RegisterRequest, db: Session = Depends(get_db)) -> dict:
+@limiter.limit("3/minute")
+def register(request: Request, body: RegisterRequest, db: Session = Depends(get_db)) -> dict:
     if db.get(User, body.user_id):
         raise HTTPException(status_code=409, detail="이미 사용 중인 아이디입니다.")
 
@@ -249,7 +251,8 @@ def refresh(body: RefreshRequest) -> dict:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+@limiter.limit("5/minute")
+def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.get(User, body.user_id)
     if not user or not _verify(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
