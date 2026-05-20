@@ -1,0 +1,55 @@
+name: news_summarization
+version: "1.0.0"
+description: |
+  금융 뉴스를 3줄 요약으로 변환하는 프롬프트
+
+domain: finance
+use_case: news_summary
+
+metadata:
+  created_date: "2026-05-19"
+  author: "team"
+  tags:
+    - news
+    - summarization
+    - finance
+    - nlp
+
+template: |
+  다음 금융 뉴스 기사를 정확하고 간결한 3줄 요약으로 변환해주세요.
+
+  요약 규칙:
+  - 정확히 3줄로 작성
+  - 각 줄은 핵심 내용 1개씩 포함
+  - 어투: 객관적이고 전문적
+  - 수치/퍼센티지는 정확히 유지
+  - 회사명/인명 등 고유명사는 정확히 표기
+
+  기사:
+  {article}
+
+  요약:
+
+parameters:
+  article:
+    type: string
+    description: "요약할 금융 뉴스 기사"
+    required: true
+
+model_config:
+  temperature: 0.5
+  max_tokens: 200
+  top_p: 0.9
+
+examples:
+  - input:
+      article: |
+        Apple Inc. announced record quarterly earnings of $25.3 billion, beating analyst
+        expectations by 15%. The company's iPhone sales surged due to strong demand in Asia,
+        while Services revenue continued its steady growth trajectory. CEO Tim Cook attributed
+        the success to innovation and customer loyalty programs. The stock rose 8% in
+        after-hours trading.
+    output: |
+      Apple이 분기 매출 253억 달러로 분석가 예상을 15% 초과 달성했다.
+      아이폰 판매가 아시아 수요 증가로 급증했으며, 서비스 부문은 지속적인 성장을 이어갔다.
+      CEO Tim Cook은 혁신과 고객 충성도 프로그램이 성공의 원동력이라고 밝혔다.
