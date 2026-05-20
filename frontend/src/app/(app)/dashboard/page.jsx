@@ -447,8 +447,17 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="tk-card-bottom">
-          <span className="tk-card-price">{d ? Number(d.price).toLocaleString('ko-KR') + '원' : '—'}</span>
-          <ChgEl id={id} />
+          {d ? (
+            <>
+              <span className="tk-card-price">{Number(d.price).toLocaleString('ko-KR')}원</span>
+              <ChgEl id={id} />
+            </>
+          ) : (
+            <>
+              <span className="skeleton" style={{ width: 76, height: 15 }} />
+              <span className="skeleton" style={{ width: 54, height: 13 }} />
+            </>
+          )}
         </div>
       </div>
     );
@@ -470,8 +479,17 @@ export default function DashboardPage() {
           >{starred ? '★' : '☆'}</button>
         </div>
         <div className="fx-card-bottom">
-          <span className="fx-card-rate">{priceStr(id)}</span>
-          <ChgEl id={id} />
+          {prices[id] ? (
+            <>
+              <span className="fx-card-rate">{priceStr(id)}</span>
+              <ChgEl id={id} />
+            </>
+          ) : (
+            <>
+              <span className="skeleton" style={{ width: 64, height: 15 }} />
+              <span className="skeleton" style={{ width: 48, height: 13 }} />
+            </>
+          )}
         </div>
       </div>
     );
@@ -610,7 +628,16 @@ export default function DashboardPage() {
               <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
             </div>
             {previewLoading ? (
-              <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>불러오는 중...</div>
+              [0, 1, 2].map(i => (
+                <div key={i} className="news-preview-item">
+                  <div className="news-meta" style={{ gap: 6 }}>
+                    <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
+                    <span className="skeleton" style={{ width: 56, height: 12 }} />
+                  </div>
+                  <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
+                  <span className="skeleton" style={{ width: '65%', height: 13, marginTop: 4 }} />
+                </div>
+              ))
             ) : previewNews.length === 0 ? (
               <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>뉴스가 없습니다.</div>
             ) : previewNews.map((n, i) => (
