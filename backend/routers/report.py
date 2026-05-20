@@ -56,7 +56,7 @@ def add_snapshot(
         )
     content = json.dumps({"datetime": body.datetime, "holdings": body.holdings}, ensure_ascii=False)
     db.execute(
-        text("INSERT INTO user_report (id, user_id, content, created_at) VALUES (:id, :uid, :content, NOW())"),
+        text("INSERT INTO user_report (id, user_id, title, content, created_at) VALUES (:id, :uid, '', :content, NOW())"),
         {"id": body.id, "uid": user_id, "content": content},
     )
     db.commit()
