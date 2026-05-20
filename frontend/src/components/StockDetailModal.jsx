@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getToken } from '@/lib/auth';
+import { fetchWithAuth } from '@/lib/auth';
 
 const STOCK_CONFIG = {
   '005930': { name: '삼성전자', sector: '반도체', meta: '코스피 · 반도체 · KRX · KRW', logo: 'samsung.svg', color: '#034EA2',
@@ -93,8 +93,6 @@ export default function StockDetailModal({ stockId, onClose }) {
   const [chartLabels, setChartLabels] = useState([]);
   const [news, setNews] = useState([]);
 
-  const hdrs = () => { const t = getToken(); return t ? { Authorization: `Bearer ${t}` } : {}; };
-
   useEffect(() => {
     setPeriod('3M');
     loadStock(stockId, '3M');
@@ -119,7 +117,7 @@ export default function StockDetailModal({ stockId, onClose }) {
   async function loadPrice(ticker) {
     let price = null, changePct = null, stats = null;
     try {
-      const res = await fetch('/api/v1/prices/latest', { headers: hdrs() });
+      const res = await fetchWithAuth('/api/v1/prices/latest');
       if (res.ok) {
         const all = await res.json();
         const row = all.find(r => r.ticker === ticker);
@@ -127,7 +125,7 @@ export default function StockDetailModal({ stockId, onClose }) {
       }
     } catch { /* silent */ }
     try {
-      const res = await fetch(`/api/v1/prices/${ticker}/stats`, { headers: hdrs() });
+      const res = await fetchWithAuth(`/api/v1/prices/${ticker}/stats`);
       if (res.ok) stats = await res.json();
     } catch { /* silent */ }
     return { price, changePct, stats };
@@ -135,7 +133,7 @@ export default function StockDetailModal({ stockId, onClose }) {
 
   async function loadChart(ticker, p) {
     try {
-      const res = await fetch(`/api/v1/prices/${ticker}/history?period=${p}`, { headers: hdrs() });
+      const res = await fetchWithAuth(`/api/v1/prices/${ticker}/history?period=${p}`);
       if (!res.ok) return null;
       const data = await res.json();
       if (!data.length) return null;
@@ -151,7 +149,7 @@ export default function StockDetailModal({ stockId, onClose }) {
 
   async function loadNews(ticker) {
     try {
-      const res = await fetch(`/api/v1/news?ticker=${ticker}&days=90`, { headers: hdrs() });
+      const res = await fetchWithAuth(`/api/v1/news?ticker=${ticker}&days=90`);
       return res.ok ? await res.json() : [];
     } catch { return []; }
   }

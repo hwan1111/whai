@@ -45,5 +45,20 @@ export function authHeaders() {
 
 export function handleUnauthorized() {
   logout();
-  window.location.href = '/login';
+  window.location.href = '/login?expired=1';
+}
+
+export async function fetchWithAuth(url, options = {}) {
+  const token = getToken();
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (res.status === 401) {
+    handleUnauthorized();
+  }
+  return res;
 }

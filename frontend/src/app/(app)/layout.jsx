@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUser, getToken } from '@/lib/auth';
+import { getUser, fetchWithAuth } from '@/lib/auth';
 import Header from '@/components/Header';
 
 export default function AppLayout({ children }) {
@@ -21,9 +21,7 @@ export default function AppLayout({ children }) {
     if (!checked) return;
     async function loadDate() {
       try {
-        const token = getToken();
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch('/api/v1/prices/latest', { headers });
+        const res = await fetchWithAuth('/api/v1/prices/latest');
         if (!res.ok) return;
         const data = await res.json();
         if (!data.length) return;

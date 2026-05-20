@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { getToken, handleUnauthorized } from '@/lib/auth';
+import { handleUnauthorized, fetchWithAuth } from '@/lib/auth';
 import { ASSETS } from '@/lib/data';
 
 const ASSET_INFO = {
@@ -57,21 +57,19 @@ function fmtDatetime(iso) {
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}  ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-async function fetchSnapshots(token) {
+async function fetchSnapshots() {
   try {
-    const res = await fetch('/api/v1/report/snapshots', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const res = await fetchWithAuth('/api/v1/report/snapshots');
     if (!res.ok) return [];
     const data = await res.json();
     return data.snapshots || [];
   } catch { return []; }
 }
 
-async function postSnapshot(snap, token) {
-  const res = await fetch('/api/v1/report/snapshots', {
+async function postSnapshot(snap) {
+  const res = await fetchWithAuth('/api/v1/report/snapshots', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(snap),
   });
   if (res.status === 401) { handleUnauthorized(); return; }
@@ -81,12 +79,9 @@ async function postSnapshot(snap, token) {
   }
 }
 
-async function deleteSnapshotApi(id, token) {
+async function deleteSnapshotApi(id) {
   try {
-    await fetch(`/api/v1/report/snapshots/${id}`, {
-      method: 'DELETE',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    await fetchWithAuth(`/api/v1/report/snapshots/${id}`, { method: 'DELETE' });
   } catch { /* silent */ }
 }
 
@@ -536,18 +531,15 @@ export default function MyReportPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
-    const token = getToken();
-    fetchSnapshots(token).then(s => { setSnapshots(s); setSnapshotsLoaded(true); });
+    fetchSnapshots().then(s => { setSnapshots(s); setSnapshotsLoaded(true); });
     loadPrices();
   }, []);
 
   async function loadPrices() {
     try {
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const [pr, fr] = await Promise.all([
-        fetch('/api/v1/prices/latest', { headers }),
-        fetch('/api/v1/exchange-rates/latest', { headers }),
+        fetchWithAuth('/api/v1/prices/latest'),
+        fetchWithAuth('/api/v1/exchange-rates/latest'),
       ]);
       const next = {};
       if (pr.ok) { const d = await pr.json(); d.forEach(({ ticker, close }) => { next[ticker] = close; }); }
@@ -589,17 +581,16 @@ export default function MyReportPage() {
     if (holdings.length === 0) { alert('자산을 1개 이상 추가해주세요.'); return; }
     setGenerating(true);
     setTimeout(async () => {
-      const token = getToken();
       const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h, snapshotPrice: getPrice(h.id) })) };
       try {
-        await postSnapshot(snap, token);
+        await postSnapshot(snap);
       } catch (e) {
         console.error(e);
         alert(`스냅샷 저장 실패: ${e.message}`);
         setGenerating(false);
         return;
       }
-      const next = await fetchSnapshots(token);
+      const next = await fetchSnapshots();
       setSnapshots(next);
       setHoldings([]);
       setAddQty('1'); setAddPrice(prices[addAsset] ? String(prices[addAsset]) : '');
@@ -611,7 +602,7 @@ export default function MyReportPage() {
   function deleteSnapshot(id) { setDeleteTarget(id); }
 
   async function confirmDelete() {
-    await deleteSnapshotApi(deleteTarget, getToken());
+    await deleteSnapshotApi(deleteTarget);
     setSnapshots(prev => prev.filter(s => s.id !== deleteTarget));
     setDeleteTarget(null);
   }

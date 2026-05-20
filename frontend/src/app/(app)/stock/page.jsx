@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { getToken } from '@/lib/auth';
+import { fetchWithAuth } from '@/lib/auth';
 
 const STOCK_CONFIG = {
   '005930': { name: '삼성전자', sector: '반도체', meta: '코스피 · 반도체 · KRX · KRW', logo: 'samsung.svg', color: '#034EA2',
@@ -103,11 +103,6 @@ export default function StockPage() {
   const [chartLabels, setChartLabels] = useState([]);
   const [news, setNews] = useState([]);
 
-  const apiHeaders = () => {
-    const token = getToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
   async function selectStock(id) {
     if (!id || !STOCK_CONFIG[id]) { setState('empty'); return; }
     setCurrentStock(id);
@@ -132,7 +127,7 @@ export default function StockPage() {
   async function loadPrice(ticker) {
     let price = null, changePct = null, stats = null;
     try {
-      const res = await fetch('/api/v1/prices/latest', { headers: apiHeaders() });
+      const res = await fetchWithAuth('/api/v1/prices/latest');
       if (res.ok) {
         const all = await res.json();
         const row = all.find(r => r.ticker === ticker);
@@ -140,7 +135,7 @@ export default function StockPage() {
       }
     } catch { /* silent */ }
     try {
-      const res = await fetch(`/api/v1/prices/${ticker}/stats`, { headers: apiHeaders() });
+      const res = await fetchWithAuth(`/api/v1/prices/${ticker}/stats`);
       if (res.ok) stats = await res.json();
     } catch { /* silent */ }
     return { price, changePct, stats };
@@ -148,7 +143,7 @@ export default function StockPage() {
 
   async function loadChart(ticker, p) {
     try {
-      const res = await fetch(`/api/v1/prices/${ticker}/history?period=${p}`, { headers: apiHeaders() });
+      const res = await fetchWithAuth(`/api/v1/prices/${ticker}/history?period=${p}`);
       if (!res.ok) return null;
       const data = await res.json();
       if (!data.length) return null;
@@ -164,7 +159,7 @@ export default function StockPage() {
 
   async function loadNews(ticker) {
     try {
-      const res = await fetch(`/api/v1/news?ticker=${ticker}&days=90`, { headers: apiHeaders() });
+      const res = await fetchWithAuth(`/api/v1/news?ticker=${ticker}&days=90`);
       return res.ok ? await res.json() : [];
     } catch { return []; }
   }

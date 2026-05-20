@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { login, getUser, setProfileImage } from '@/lib/auth';
 
 const INVEST_OPTS = [
@@ -13,7 +13,9 @@ const INVEST_OPTS = [
 
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState('login');
+  const sessionExpired = searchParams.get('expired') === '1';
 
   const [loginId, setLoginId] = useState('');
   const [loginPw, setLoginPw] = useState('');
@@ -168,6 +170,11 @@ export default function AuthPage() {
           <div className="auth-logo-sub">다중 자산 지표 통합 분석 AI</div>
         </div>
 
+        {sessionExpired && (
+          <div style={{ background: '#fef3cd', border: '1px solid #fbbf24', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#92400e', fontWeight: 500 }}>
+            세션이 만료되었습니다. 다시 로그인해 주세요.
+          </div>
+        )}
         <div className="auth-tabs">
           <div className={`auth-tab${tab === 'login' ? ' active' : ''}`} onClick={() => { setTab('login'); setLoginError(''); }}>로그인</div>
           <div className={`auth-tab${tab === 'register' ? ' active' : ''}`} onClick={() => { setTab('register'); setRegError(''); }}>회원가입</div>

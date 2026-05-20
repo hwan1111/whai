@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getToken } from '@/lib/auth';
+import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, EXCHANGE_PAIRS, fetchAssetData, buildPeriodData } from '@/lib/data';
 import StockDetailModal from '@/components/StockDetailModal';
 
@@ -64,9 +64,7 @@ function NewsDrawer({ open, onClose }) {
     try {
       const params = new URLSearchParams({ days });
       if (ticker) params.set('ticker', ticker);
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`/api/v1/news?${params}`, { headers });
+      const res = await fetchWithAuth(`/api/v1/news?${params}`);
       if (!res.ok) throw new Error();
       setNews(await res.json());
     } catch { setNews([]); }
@@ -203,22 +201,20 @@ function renderChartSvg(activeAssets, pd) {
   return h;
 }
 
-async function fetchFavs(token) {
+async function fetchFavs() {
   try {
-    const res = await fetch('/api/v1/favorites', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const res = await fetchWithAuth('/api/v1/favorites');
     if (!res.ok) return new Set();
     const { assets } = await res.json();
     return new Set(assets);
   } catch { return new Set(); }
 }
 
-async function pushFavs(s, token, onFail) {
+async function pushFavs(s, onFail) {
   try {
-    const res = await fetch('/api/v1/favorites', {
+    const res = await fetchWithAuth('/api/v1/favorites', {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ assets: [...s] }),
     });
     if (!res.ok) onFail?.();
@@ -270,7 +266,7 @@ export default function DashboardPage() {
         });
       } catch { /* silent */ }
     }
-    fetchFavs(getToken()).then(setFavs);
+    fetchFavs().then(setFavs);
     loadLatestPrices();
     loadLatestRates();
     loadPreviewNews();
@@ -282,9 +278,7 @@ export default function DashboardPage() {
 
   async function loadLatestPrices() {
     try {
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch('/api/v1/prices/latest', { headers });
+      const res = await fetchWithAuth('/api/v1/prices/latest');
       if (!res.ok) return;
       const data = await res.json();
       setPrices(prev => {
@@ -300,9 +294,7 @@ export default function DashboardPage() {
   async function loadPreviewNews() {
     setPreviewLoading(true);
     try {
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch('/api/v1/news?days=30', { headers });
+      const res = await fetchWithAuth('/api/v1/news?days=30');
       if (!res.ok) throw new Error();
       const data = await res.json();
       setPreviewNews(data.slice(0, 3));
@@ -312,9 +304,7 @@ export default function DashboardPage() {
 
   async function loadLatestRates() {
     try {
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch('/api/v1/exchange-rates/latest', { headers });
+      const res = await fetchWithAuth('/api/v1/exchange-rates/latest');
       if (!res.ok) return;
       const data = await res.json();
       setPrices(prev => {
@@ -415,7 +405,7 @@ export default function DashboardPage() {
     const next = new Set(favs);
     if (next.has(id)) next.delete(id); else next.add(id);
     setFavs(next);
-    pushFavs(next, getToken(), () => setFavs(prev));
+    pushFavs(next, () => setFavs(prev));
   }
 
   function priceStr(id) {
