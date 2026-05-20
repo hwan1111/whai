@@ -214,14 +214,15 @@ async function fetchFavs(token) {
   } catch { return new Set(); }
 }
 
-async function pushFavs(s, token) {
+async function pushFavs(s, token, onFail) {
   try {
-    await fetch('/api/v1/favorites', {
+    const res = await fetch('/api/v1/favorites', {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ assets: [...s] }),
     });
-  } catch { /* silent */ }
+    if (!res.ok) onFail?.();
+  } catch { onFail?.(); }
 }
 
 function fmtChg(pct) {
@@ -247,6 +248,28 @@ export default function DashboardPage() {
   const PERIODS = ['1W', '1M', '3M', '6M', '1Y', '3Y', 'ALL'];
 
   useEffect(() => {
+    const raw = sessionStorage.getItem('whai_prefetch');
+    if (raw) {
+      try {
+        const cache = JSON.parse(raw);
+        sessionStorage.removeItem('whai_prefetch');
+        if (cache.favs) setFavs(new Set(cache.favs.assets || []));
+        if (cache.prices) setPrices(prev => {
+          const next = { ...prev };
+          cache.prices.forEach(({ ticker, close, change_pct, change }) => {
+            next[ticker] = { price: close, change_pct, change };
+          });
+          return next;
+        });
+        if (cache.rates) setPrices(prev => {
+          const next = { ...prev };
+          cache.rates.forEach(({ pair, rate, change_pct, change }) => {
+            next[pair] = { price: rate, change_pct, change, isRate: true };
+          });
+          return next;
+        });
+      } catch { /* silent */ }
+    }
     fetchFavs(getToken()).then(setFavs);
     loadLatestPrices();
     loadLatestRates();
@@ -388,10 +411,11 @@ export default function DashboardPage() {
 
   function toggleFav(id, e) {
     e.stopPropagation();
+    const prev = new Set(favs);
     const next = new Set(favs);
     if (next.has(id)) next.delete(id); else next.add(id);
-    setFavs(new Set(next));
-    pushFavs(next, getToken());
+    setFavs(next);
+    pushFavs(next, getToken(), () => setFavs(prev));
   }
 
   function priceStr(id) {

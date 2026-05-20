@@ -40,6 +40,22 @@ export default function AuthPage() {
     if (getUser()) router.replace('/dashboard');
   }, [router]);
 
+  async function prefetchDashboard(token) {
+    try {
+      const h = { Authorization: `Bearer ${token}` };
+      const [favsRes, pricesRes, ratesRes] = await Promise.allSettled([
+        fetch('/api/v1/favorites', { headers: h }),
+        fetch('/api/v1/prices/latest', { headers: h }),
+        fetch('/api/v1/exchange-rates/latest', { headers: h }),
+      ]);
+      const cache = {};
+      if (favsRes.status === 'fulfilled' && favsRes.value.ok) cache.favs = await favsRes.value.json();
+      if (pricesRes.status === 'fulfilled' && pricesRes.value.ok) cache.prices = await pricesRes.value.json();
+      if (ratesRes.status === 'fulfilled' && ratesRes.value.ok) cache.rates = await ratesRes.value.json();
+      if (Object.keys(cache).length) sessionStorage.setItem('whai_prefetch', JSON.stringify(cache));
+    } catch { /* silent */ }
+  }
+
   async function handleLogin(e) {
     e.preventDefault();
     setLoginError('');
@@ -57,6 +73,7 @@ export default function AuthPage() {
       } else {
         login(data.name, data.user_id, data.access_token);
         if (data.profile_image_url) setProfileImage(data.profile_image_url);
+        prefetchDashboard(data.access_token);
         router.replace('/dashboard');
       }
     } catch {
