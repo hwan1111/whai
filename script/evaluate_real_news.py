@@ -34,10 +34,11 @@ if _env_file.exists():
     load_dotenv(_env_file, override=True)
 
 
+@mlflow.trace
 def generate_news_summary(
     article: str,
     client: "GatewayClient",
-    prompt_uri: str = "prompts:/news_summarization/latest",
+    prompt_uri: str = "prompts:/news_summarize/1",
 ) -> str:
     """
     뉴스 요약 생성 (MLflow UI에서 관리하는 프롬프트 사용)
@@ -51,7 +52,7 @@ def generate_news_summary(
         client: GatewayClient 인스턴스
         prompt_uri: MLflow UI에서 관리하는 프롬프트 URI
                    기본값: "prompts:/news_summarization/latest"
-                   예: "prompts:/news_summarization/3"
+                   예: "prompts:/news_summarization/4"
 
     Returns:
         생성된 요약
@@ -172,8 +173,18 @@ def create_evaluation_data(
     """
     eval_data = []
 
-    for i, (news, summary) in enumerate(zip(news_list, summaries)):
-        news_id = f"{news['ticker']}_{news['pub_date']}_{i}"
+    # 날짜별 인덱스 추적
+    date_index_map = {}  # {pub_date: current_index}
+
+    for news, summary in zip(news_list, summaries):
+        pub_date = news['pub_date']
+        # 같은 날짜의 기사들에 대해서만 인덱스 증가
+        if pub_date not in date_index_map:
+            date_index_map[pub_date] = 0
+        else:
+            date_index_map[pub_date] += 1
+
+        news_id = f"{news['ticker']}_{pub_date}_{date_index_map[pub_date]}"
         reference = reference_summaries.get(news_id, "")
 
         if not reference:
@@ -291,7 +302,7 @@ def run_evaluation_pipeline(
                     summary = generate_news_summary(
                         article=fulltext,
                         client=client,
-                        prompt_uri="prompts:/news_summarization/latest",
+                        prompt_uri="prompts:/news_summarize/4",
                     )
 
                     summaries.append(summary)
