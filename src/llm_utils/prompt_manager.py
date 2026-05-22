@@ -2,8 +2,12 @@
 프롬프트 관리 시스템
 
 YAML 기반 프롬프트 템플릿을 로드하고, 파라미터를 주입하며, MLflow에 자동으로 기록합니다.
+프롬프트를 MLflow 레지스트리에 등록하여 /prompts에서 관리하고,
+run 실행 시 자동으로 Linked prompts에 추적됩니다.
 """
 
+import hashlib
+import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -32,6 +36,7 @@ class PromptManager:
 
         self.prompts_dir = prompts_dir
         self._prompts_cache: Dict[str, Dict[str, Any]] = {}
+        self._mlflow_registry: Dict[str, Dict[str, Any]] = {}  # 등록된 프롬프트 메타데이터
 
         if not self.prompts_dir.exists():
             logger.warning(
@@ -211,3 +216,193 @@ class PromptManager:
 
         logger.info(f"사용 가능한 프롬프트: {', '.join(prompts)}")
         return sorted(prompts)
+
+    def _compute_file_hash(self, prompt_name: str) -> str:
+        """
+        프롬프트 YAML 파일의 SHA-256 해시 계산
+        (파일 변경 감지용)
+
+        Args:
+            prompt_name: 프롬프트 이름
+
+        Returns:
+            파일의 SHA-256 해시 (처음 16자)
+        """
+        prompt_file = self.prompts_dir / f"{prompt_name}.yaml"
+
+        if not prompt_file.exists():
+            return ""
+
+        try:
+            with open(prompt_file, "rb") as f:
+                file_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+            return file_hash
+        except Exception as e:
+            logger.warning(f"⚠️ 파일 해시 계산 실패 ({prompt_name}): {str(e)}")
+            return ""
+
+    def _should_update_in_mlflow(self, prompt_name: str) -> bool:
+        """
+        MLflow에 등록된 프롬프트를 업데이트해야 하는지 판단
+        (버전 또는 파일 해시가 다르면 True)
+
+        Args:
+            prompt_name: 프롬프트 이름
+
+        Returns:
+            업데이트 필요 여부
+        """
+        try:
+            prompt_config = self.load_prompt(prompt_name)
+            current_version = prompt_config.get("version", "0.0.0")
+            current_hash = self._compute_file_hash(prompt_name)
+
+            # 레지스트리에 저장된 메타데이터 확인
+            if prompt_name not in self._mlflow_registry:
+                return True
+
+            registry_info = self._mlflow_registry[prompt_name]
+            previous_version = registry_info.get("version")
+            previous_hash = registry_info.get("file_hash")
+
+            # 버전 또는 해시가 다르면 업데이트 필요
+            if current_version != previous_version or current_hash != previous_hash:
+                logger.debug(
+                    f"프롬프트 업데이트 감지 ({prompt_name}): "
+                    f"v{previous_version}→v{current_version}"
+                )
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.warning(
+                f"⚠️ 업데이트 여부 판단 실패 ({prompt_name}): {str(e)}"
+            )
+            return True
+
+    def register_prompt_to_mlflow(self, prompt_name: str) -> str:
+        """
+        YAML 프롬프트를 MLflow 레지스트리에 등록
+        파일이 변경되었을 때만 업데이트 수행
+
+        Args:
+            prompt_name: 프롬프트 이름
+
+        Returns:
+            등록된 프롬프트의 URI (prompts:/<name>@<version>)
+
+        Raises:
+            FileNotFoundError: 프롬프트 파일을 찾을 수 없을 때
+        """
+        try:
+            # 업데이트 필요 여부 확인
+            if not self._should_update_in_mlflow(prompt_name):
+                registered_info = self._mlflow_registry.get(prompt_name, {})
+                uri = registered_info.get("mlflow_uri", f"prompts:/{prompt_name}@latest")
+                logger.debug(f"✓ 프롬프트 이미 등록됨 (변경 없음): {uri}")
+                return uri
+
+            # 프롬프트 로드
+            prompt_config = self.load_prompt(prompt_name)
+            version = prompt_config.get("version", "1.0.0")
+            template = prompt_config.get("template", "")
+            description = prompt_config.get("description", "")
+            metadata = prompt_config.get("metadata", {})
+
+            # MLflow에 프롬프트 등록
+            # 공식 문서: https://mlflow.org/docs/latest/genai/prompt-registry/use-prompts-in-apps/
+            try:
+                mlflow.genai.register_prompt(
+                    name=prompt_name,
+                    template=template,  # 공식 파라미터명
+                    commit_message=f"Register {prompt_name} v{version}",
+                )
+                logger.debug(
+                    f"✓ MLflow genai.register_prompt() 성공: {prompt_name}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"❌ MLflow 프롬프트 등록 실패: {str(e)}. "
+                    f"MLflow 버전 확인 필요 (3.12+ 권장)"
+                )
+                raise
+
+            # 메타데이터와 함께 레지스트리 업데이트
+            file_hash = self._compute_file_hash(prompt_name)
+            self._mlflow_registry[prompt_name] = {
+                "version": version,
+                "file_hash": file_hash,
+                "mlflow_uri": f"prompts:/{prompt_name}@{version}",
+                "metadata": metadata,
+                "registered_at": str(Path(self.prompts_dir / f"{prompt_name}.yaml").stat().st_mtime),
+            }
+
+            logger.info(
+                f"✓ MLflow에 프롬프트 등록 완료: {prompt_name} (v{version})"
+            )
+
+            return f"prompts:/{prompt_name}@{version}"
+
+        except FileNotFoundError as e:
+            logger.error(f"❌ 프롬프트 파일을 찾을 수 없습니다: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"❌ MLflow 등록 실패 ({prompt_name}): {str(e)}")
+            raise
+
+    def load_prompt_from_mlflow(self, prompt_name: str, version: str = "latest") -> str:
+        """
+        MLflow 레지스트리에서 프롬프트 로드
+        mlflow.start_run() 또는 @mlflow.trace 내에서 호출하면
+        자동으로 Linked prompts에 추적됨
+
+        공식 문서:
+        https://mlflow.org/docs/latest/genai/prompt-registry/use-prompts-in-apps/
+
+        Args:
+            prompt_name: 프롬프트 이름 (예: "news_summarization")
+            version: 프롬프트 버전
+                    - "latest" (기본값): 최신 버전
+                    - "1", "2", ... : 특정 버전 번호
+                    - "production", "staging" 등: 별칭
+
+        Returns:
+            로드된 프롬프트 템플릿 문자열
+
+        Example:
+            ```python
+            with mlflow.start_run():
+                pm = PromptManager()
+                # 이 호출이 자동으로 run에 링크됨 ✨
+                prompt = pm.load_prompt_from_mlflow("news_summarization")
+
+                # 프롬프트 포맷팅
+                rendered = prompt.format(article="...")
+
+                # LLM 호출 등...
+            ```
+
+        Note:
+            MLflow 3.12+ 권장
+        """
+        try:
+            # 공식 문서의 URI 형식: prompts:/<prompt_name>@<version>
+            prompt_uri = f"prompts:/{prompt_name}@{version}"
+
+            # mlflow.start_run() 또는 @mlflow.trace 내에서 호출 시
+            # 자동으로 run/trace에 프롬프트가 링크됨
+            loaded_prompt = mlflow.genai.load_prompt(name_or_uri=prompt_uri)
+
+            logger.debug(f"✓ MLflow에서 프롬프트 로드: {prompt_uri}")
+
+            return loaded_prompt
+
+        except Exception as e:
+            logger.warning(
+                f"⚠️ MLflow에서 프롬프트 로드 실패: {str(e)}. "
+                f"로컬 YAML에서 로드합니다."
+            )
+            # 폴백: 로컬 YAML에서 로드
+            prompt_config = self.load_prompt(prompt_name)
+            return prompt_config.get("template", "")

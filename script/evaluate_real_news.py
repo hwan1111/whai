@@ -38,6 +38,52 @@ if _env_file.exists():
     load_dotenv(_env_file, override=True)
 
 
+@mlflow.trace(name="generate_news_summary")
+def generate_news_summary(
+    article: str,
+    pm: "PromptManager",
+    client: "GatewayClient",
+) -> str:
+    """
+    뉴스 요약 생성 (MLflow trace 내에서 프롬프트 자동 추적)
+
+    @mlflow.trace 데코레이터로 인해:
+    - 이 함수 호출이 trace로 기록됨
+    - 내부에서 mlflow.genai.load_prompt() 호출 시
+      자동으로 Linked prompts에 기록됨
+
+    Args:
+        article: 뉴스 기사 텍스트
+        pm: PromptManager 인스턴스
+        client: GatewayClient 인스턴스
+
+    Returns:
+        생성된 요약
+    """
+    try:
+        # MLflow 레지스트리에서 프롬프트 로드
+        # mlflow.trace 내에서 호출되므로 자동으로 Linked prompts에 기록됨
+        prompt_template = pm.load_prompt_from_mlflow("news_summarization")
+
+        # 프롬프트 렌더링
+        rendered_prompt = prompt_template.format(article=article)
+
+        # LLM 호출
+        model_config = pm.get_model_config("news_summarization")
+        summary = client.call(
+            text=rendered_prompt,
+            temperature=model_config.get("temperature", 0.5),
+            max_tokens=model_config.get("max_tokens", 200),
+        )
+
+        logger.debug(f"요약 생성 완료: {summary[:80]}...")
+        return summary
+
+    except Exception as e:
+        logger.error(f"요약 생성 실패: {str(e)}")
+        raise
+
+
 def load_reference_summaries(
     reference_file: Optional[Path] = None,
 ) -> Dict[str, str]:
@@ -46,6 +92,7 @@ def load_reference_summaries(
 
     Args:
         reference_file: 참조 요약 파일 (JSON)
+                       형식: {"news_id": "summary"} 또는 [{"id": "...", "summary": "..."}]
 
     Returns:
         {news_id: reference_summary} 딕셔너리
@@ -53,7 +100,45 @@ def load_reference_summaries(
     if reference_file and reference_file.exists():
         try:
             with open(reference_file, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+
+            # 로드한 데이터 타입 확인
+            if isinstance(data, dict):
+                # 이미 딕셔너리 형식
+                return data
+
+            elif isinstance(data, list):
+                # 리스트 형식이면 딕셔너리로 변환
+                # [{"id": "...", "summary": "..."}] 형식 가정
+                result = {}
+                for item in data:
+                    if isinstance(item, dict):
+                        # ID 필드 찾기 (여러 가지 필드명 지원)
+                        item_id = (
+                            item.get("id") or
+                            item.get("article_id") or
+                            item.get("news_id") or
+                            item.get("idx")
+                        )
+                        # 요약 필드 찾기 (여러 가지 필드명 지원)
+                        summary = (
+                            item.get("summary") or
+                            item.get("reference_summary")
+                        )
+
+                        if item_id and summary:
+                            result[item_id] = summary
+                            logger.debug(f"  참조 요약 로드: {item_id}")
+
+                if result:
+                    logger.info(f"✓ 참조 요약 {len(result)}개 로드 완료 (리스트 → 딕셔너리 변환)")
+                    return result
+
+            logger.warning(f"⚠️ 참조 요약 형식을 인식할 수 없습니다: {type(data)}")
+            return {}
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"⚠️ 참조 요약 파일 JSON 파싱 실패: {str(e)}")
         except Exception as e:
             logger.warning(f"⚠️ 참조 요약 파일 로드 실패: {str(e)}")
 
@@ -157,6 +242,17 @@ def run_evaluation_pipeline(
 
     logger.info(f"✓ MLflow URI: {mlflow_uri}")
 
+    # PromptManager 초기화 및 프롬프트 등록
+    logger.info("\n[0.5/5] 프롬프트 등록 중...")
+    try:
+        pm = PromptManager()
+        prompt_uri = pm.register_prompt_to_mlflow("news_summarization")
+        logger.info(f"✓ 프롬프트 MLflow 등록 완료: {prompt_uri}")
+    except Exception as e:
+        logger.error(f"❌ 프롬프트 등록 실패: {str(e)}")
+        logger.warning("⚠️ 프롬프트 없이 계속 진행합니다")
+        prompt_uri = None
+
     # MLflow experiment 설정
     mlflow.set_experiment(mlflow_experiment)
     run_name = f"{ticker}_{start_date}~{end_date}"
@@ -181,9 +277,8 @@ def run_evaluation_pipeline(
 
             logger.info(f"✓ {len(news_list)}개 뉴스 로드 완료")
 
-            # 2. 요약 생성 (MLflow가 OpenAI 호출 추적)
+            # 2. 요약 생성 (@mlflow.trace 내에서 프롬프트 자동 추적)
             logger.info(f"\n[2/5] 요약 생성 중...")
-            pm = PromptManager()
             client = GatewayClient(validate_connection=False)
 
             summaries = []
@@ -192,20 +287,16 @@ def run_evaluation_pipeline(
                     title, fulltext = loader.get_article_text(news)
                     logger.info(f"  [{i}/{len(news_list)}] {title[:50]}... 요약 중")
 
-                    rendered_prompt = pm.render_prompt(
-                        "news_summarization",
+                    # @mlflow.trace 함수 호출
+                    # 내부에서 mlflow.genai.load_prompt()가 호출되므로
+                    # 자동으로 trace → Linked prompts에 기록됨
+                    summary = generate_news_summary(
                         article=fulltext,
-                    )
-                    model_config = pm.get_model_config("news_summarization")
-
-                    summary = client.call(
-                        text=rendered_prompt,
-                        temperature=model_config.get("temperature", 0.5),
-                        max_tokens=model_config.get("max_tokens", 200),
+                        pm=pm,
+                        client=client,
                     )
 
                     summaries.append(summary)
-                    logger.debug(f"    요약: {summary[:80]}...")
 
                 except Exception as e:
                     logger.error(f"  ❌ {title} 요약 실패: {str(e)}")
@@ -328,6 +419,9 @@ def main():
     """메인 함수"""
     import argparse
 
+    # .env에서 기본값 읽기
+    default_experiment = os.getenv("MLFLOW_EXPERIMENT", "news_summarize_llm")
+
     parser = argparse.ArgumentParser(
         description="실제 뉴스 데이터 평가 파이프라인"
     )
@@ -340,7 +434,7 @@ def main():
     parser.add_argument(
         "--start-date",
         type=str,
-        default="2026-05-01",
+        default="2026-05-07",
         help="시작 날짜 (YYYY-MM-DD)",
     )
     parser.add_argument(
@@ -357,8 +451,8 @@ def main():
     parser.add_argument(
         "--experiment",
         type=str,
-        default="news_summarize_llm",
-        help="MLflow 실험 이름",
+        default=default_experiment,
+        help=f"MLflow 실험 이름 (기본값: {default_experiment})",
     )
     parser.add_argument(
         "--use-bert",
