@@ -20,11 +20,7 @@ import mlflow
 from dotenv import load_dotenv
 
 from src.data.news_loader import NewsDataLoader
-from src.llm_utils import (
-    PromptManager,
-    GatewayClient,
-    NewsEvaluator,
-)
+from src.llm_utils import GatewayClient, NewsEvaluator
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,32 +34,33 @@ if _env_file.exists():
     load_dotenv(_env_file, override=True)
 
 
-@mlflow.trace(name="generate_news_summary")
 def generate_news_summary(
     article: str,
-    pm: "PromptManager",
     client: "GatewayClient",
+    prompt_uri: str = "prompts:/news_summarization/latest",
 ) -> str:
     """
-    뉴스 요약 생성 (MLflow trace 내에서 프롬프트 자동 추적)
+    뉴스 요약 생성 (MLflow UI에서 관리하는 프롬프트 사용)
 
-    @mlflow.trace 데코레이터로 인해:
-    - 이 함수 호출이 trace로 기록됨
-    - 내부에서 mlflow.genai.load_prompt() 호출 시
-      자동으로 Linked prompts에 기록됨
+    mlflow.start_run() 내에서 호출될 때:
+    - mlflow.genai.load_prompt() 호출이 자동으로 Linked prompts에 기록됨
+    - mlflow.openai.autolog()가 LLM 호출을 자동으로 기록함
 
     Args:
         article: 뉴스 기사 텍스트
-        pm: PromptManager 인스턴스
         client: GatewayClient 인스턴스
+        prompt_uri: MLflow UI에서 관리하는 프롬프트 URI
+                   기본값: "prompts:/news_summarization/latest"
+                   예: "prompts:/news_summarization/3"
 
     Returns:
         생성된 요약
     """
     try:
-        # MLflow 레지스트리에서 프롬프트 로드
-        # mlflow.trace 내에서 호출되므로 자동으로 Linked prompts에 기록됨
-        prompt_version = pm.load_prompt_from_mlflow("news_summarization")
+        # MLflow UI에서 관리하는 프롬프트 로드
+        # mlflow.start_run() 내에서 호출되므로
+        # 자동으로 Linked prompts에 기록됨
+        prompt_version = mlflow.genai.load_prompt(prompt_uri)
 
         # PromptVersion 객체에서 template 텍스트 추출
         if hasattr(prompt_version, "template"):
@@ -71,25 +68,19 @@ def generate_news_summary(
         else:
             prompt_template = str(prompt_version)
 
-        logger.debug(f"프롬프트 템플릿 로드: {len(prompt_template)}자")
-        logger.debug(f"Article 길이: {len(article)}자")
+        logger.debug(f"프롬프트 로드: {len(prompt_template)}자 ({prompt_uri})")
+        logger.debug(f"기사 길이: {len(article)}자")
 
         # 프롬프트 렌더링
-        try:
-            rendered_prompt = prompt_template.format(article=article)
-            logger.debug(f"렌더링된 프롬프트 길이: {len(rendered_prompt)}자")
-        except (KeyError, ValueError) as e:
-            logger.error(f"프롬프트 렌더링 실패: {str(e)}")
-            # 폴백: 로컬 YAML에서 렌더링
-            rendered_prompt = pm.render_prompt("news_summarization", article=article)
-            logger.info(f"로컬 YAML로 렌더링 성공: {len(rendered_prompt)}자")
+        rendered_prompt = prompt_template.format(article=article)
+        logger.debug(f"렌더링된 프롬프트: {len(rendered_prompt)}자")
 
         # LLM 호출
-        model_config = pm.get_model_config("news_summarization")
+        # mlflow.openai.autolog()가 자동으로 이 호출을 기록함
         summary = client.call(
             text=rendered_prompt,
-            temperature=model_config.get("temperature", 0.5),
-            max_tokens=model_config.get("max_tokens", 200),
+            temperature=0.5,
+            max_tokens=200,
         )
 
         logger.debug(f"요약 생성 완료: {summary[:80]}...")
@@ -260,17 +251,6 @@ def run_evaluation_pipeline(
 
     logger.info(f"✓ MLflow URI: {mlflow_uri}")
 
-    # PromptManager 초기화 및 프롬프트 등록
-    logger.info("\n[0.5/5] 프롬프트 등록 중...")
-    try:
-        pm = PromptManager()
-        prompt_uri = pm.register_prompt_to_mlflow("news_summarization")
-        logger.info(f"✓ 프롬프트 MLflow 등록 완료: {prompt_uri}")
-    except Exception as e:
-        logger.error(f"❌ 프롬프트 등록 실패: {str(e)}")
-        logger.warning("⚠️ 프롬프트 없이 계속 진행합니다")
-        prompt_uri = None
-
     # MLflow experiment 설정
     mlflow.set_experiment(mlflow_experiment)
     run_name = f"{ticker}_{start_date}~{end_date}"
@@ -295,7 +275,7 @@ def run_evaluation_pipeline(
 
             logger.info(f"✓ {len(news_list)}개 뉴스 로드 완료")
 
-            # 2. 요약 생성 (@mlflow.trace 내에서 프롬프트 자동 추적)
+            # 2. 요약 생성 (MLflow UI에서 관리하는 프롬프트 사용)
             logger.info(f"\n[2/5] 요약 생성 중...")
             client = GatewayClient(validate_connection=False)
 
@@ -305,13 +285,13 @@ def run_evaluation_pipeline(
                     title, fulltext = loader.get_article_text(news)
                     logger.info(f"  [{i}/{len(news_list)}] {title[:50]}... 요약 중")
 
-                    # @mlflow.trace 함수 호출
-                    # 내부에서 mlflow.genai.load_prompt()가 호출되므로
-                    # 자동으로 trace → Linked prompts에 기록됨
+                    # MLflow UI에서 관리하는 프롬프트 사용
+                    # mlflow.start_run() 내에서 호출되므로
+                    # 자동으로 Linked prompts에 기록됨
                     summary = generate_news_summary(
                         article=fulltext,
-                        pm=pm,
                         client=client,
+                        prompt_uri="prompts:/news_summarization/latest",
                     )
 
                     summaries.append(summary)

@@ -181,8 +181,8 @@ class GatewayClient:
         mlflow.start_run() 내에서 호출하면 MLflow가 자동으로
         OpenAI 호출을 traced합니다.
 
-        프롬프트 추적:
-          - PromptManager.load_prompt_from_mlflow()를 mlflow.start_run() 내에서
+        참고:
+          - mlflow.genai.load_prompt()를 mlflow.start_run() 내에서
             호출하면 자동으로 Linked prompts에 기록됨
           - 이 메서드는 순수 LLM 호출만 담당
 
