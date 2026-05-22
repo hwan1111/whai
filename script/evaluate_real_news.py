@@ -63,10 +63,26 @@ def generate_news_summary(
     try:
         # MLflow 레지스트리에서 프롬프트 로드
         # mlflow.trace 내에서 호출되므로 자동으로 Linked prompts에 기록됨
-        prompt_template = pm.load_prompt_from_mlflow("news_summarization")
+        prompt_version = pm.load_prompt_from_mlflow("news_summarization")
+
+        # PromptVersion 객체에서 template 텍스트 추출
+        if hasattr(prompt_version, "template"):
+            prompt_template = prompt_version.template
+        else:
+            prompt_template = str(prompt_version)
+
+        logger.debug(f"프롬프트 템플릿 로드: {len(prompt_template)}자")
+        logger.debug(f"Article 길이: {len(article)}자")
 
         # 프롬프트 렌더링
-        rendered_prompt = prompt_template.format(article=article)
+        try:
+            rendered_prompt = prompt_template.format(article=article)
+            logger.debug(f"렌더링된 프롬프트 길이: {len(rendered_prompt)}자")
+        except (KeyError, ValueError) as e:
+            logger.error(f"프롬프트 렌더링 실패: {str(e)}")
+            # 폴백: 로컬 YAML에서 렌더링
+            rendered_prompt = pm.render_prompt("news_summarization", article=article)
+            logger.info(f"로컬 YAML로 렌더링 성공: {len(rendered_prompt)}자")
 
         # LLM 호출
         model_config = pm.get_model_config("news_summarization")
@@ -81,6 +97,8 @@ def generate_news_summary(
 
     except Exception as e:
         logger.error(f"요약 생성 실패: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise
 
 
