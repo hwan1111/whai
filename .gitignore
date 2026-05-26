@@ -8,12 +8,14 @@ CLAUDE.md
 __pycache__/
 *.py[cod]
 *$py.class
-
+.python-version
 .venv
 
 config/certs/
 
+# Data directory - only root level, src/data/ is tracked
 data/
+!src/data/
 
 docs/
 
@@ -32,3 +34,9 @@ dart_noise_reduction.md
 docs_cache/
 mockup.html
 mockup_preview.html
+
+*.sql
+.DS_Store
+uploads/
+basic_auth.ini
+*.bak
