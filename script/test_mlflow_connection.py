@@ -64,47 +64,12 @@ def main():
         logger.error(f"❌ 실험 조회 실패: {str(e)}")
         return False
 
-    # 4. 테스트 실행 생성
-    logger.info("\n[4/4] 테스트 실행 생성 중...")
-    try:
-        run_id = mlflow_logger.start_run(
-            experiment_name="llm/connection_test",
-            run_name="test_connection",
-            tags={"purpose": "connection_test", "status": "testing"},
-        )
-        logger.info(f"✓ 테스트 실행 생성 완료 (Run ID: {run_id})")
-
-        # 테스트 메트릭 로깅
-        mlflow_logger.log_params(
-            {
-                "test_type": "connection",
-                "model": "test",
-            }
-        )
-        mlflow_logger.log_metrics(
-            {
-                "connection_status": 1.0,  # 1 = 연결 성공
-                "latency_ms": 100.0,
-            }
-        )
-        logger.info("✓ 테스트 메트릭 로깅 완료")
-
-        # 실행 종료
-        mlflow_logger.end_run(status="FINISHED")
-        logger.info("✓ 테스트 실행 종료")
-
-    except Exception as e:
-        logger.error(f"❌ 테스트 실행 생성 실패: {str(e)}")
-        return False
-
     # 최종 결과
     logger.info("\n" + "=" * 60)
     logger.info("✅ MLflow 원격 서버 연결 성공!")
     logger.info("=" * 60)
     logger.info(f"\n웹 UI에서 실험을 확인하세요:")
     logger.info(f"   URL: {MLflowConfig.get_tracking_uri()}")
-    logger.info(f"   실험명: llm/connection_test")
-    logger.info(f"   Run ID: {run_id}")
 
     return True
 
