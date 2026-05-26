@@ -245,7 +245,9 @@ def load_fundamentals(engine) -> int:
                 print(f"[펀더멘털 {ticker}] 데이터 없음")
                 continue
             frow = fd.iloc[-1]
-            per = float(frow.get("PER", 0)) if frow.get("PER", 0) not in (None, "") else None
+            per_raw = frow.get("PER", 0)
+            per_val = float(per_raw) if per_raw not in (None, "") else 0
+            per = per_val if per_val > 0 else None
             pbr = float(frow.get("PBR", 0)) if frow.get("PBR", 0) not in (None, "") else None
             market_cap = int(mc.iloc[-1]["시가총액"]) if not mc.empty else None
             rows.append({
