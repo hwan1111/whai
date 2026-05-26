@@ -22,6 +22,7 @@ mlruns
 # 로컬 분석/테스트 파일
 test.py
 test2.py
+test3.py
 tt.py
 test_date.parquet
 test_date2.parquet
