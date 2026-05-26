@@ -628,16 +628,18 @@ export default function DashboardPage() {
               <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
             </div>
             {previewLoading ? (
-              [0, 1, 2].map(i => (
-                <div key={i} className="news-preview-item">
-                  <div className="news-meta" style={{ gap: 6 }}>
-                    <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
-                    <span className="skeleton" style={{ width: 56, height: 12 }} />
+              <>
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="news-preview-item">
+                    <div className="news-meta" style={{ gap: 6 }}>
+                      <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
+                      <span className="skeleton" style={{ width: 56, height: 12 }} />
+                    </div>
+                    <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
+                    <span className="skeleton" style={{ width: '65%', height: 13, marginTop: 4 }} />
                   </div>
-                  <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
-                  <span className="skeleton" style={{ width: '65%', height: 13, marginTop: 4 }} />
-                </div>
-              ))
+                ))}
+              </>
             ) : previewNews.length === 0 ? (
               <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>뉴스가 없습니다.</div>
             ) : previewNews.map((n, i) => (
