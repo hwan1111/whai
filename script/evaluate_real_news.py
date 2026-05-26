@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-실제 뉴스 데이터 평가 파이프라인
+실제 뉴스 데이터 평가 파이프라인 (S3 기반)
 
-로컬 뉴스 데이터를 로드 → 요약 생성 → 평가 → MLflow 기록
+S3 뉴스 데이터를 로드 → 요약 생성 → 평가 → MLflow 기록
 """
 
 import sys
@@ -19,7 +19,7 @@ from typing import List, Dict, Optional
 import mlflow
 from dotenv import load_dotenv
 
-from src.data.news_loader import NewsDataLoader
+from src.data.s3_news_loader import S3NewsDataLoader
 from src.llm_utils import GatewayClient, NewsEvaluator
 
 logging.basicConfig(
@@ -95,64 +95,36 @@ def generate_news_summary(
 
 
 def load_reference_summaries(
-    reference_file: Optional[Path] = None,
+    loader: S3NewsDataLoader,
+    ticker: str,
+    start_date: str,
+    end_date: str,
 ) -> Dict[str, str]:
     """
-    참조 요약(정답) 로드
+    S3에서 참조 요약(정답) 로드
+
+    경로 구조: s3://fisa-news-archive/reference/{ticker}/{year}/{month}/{date}.json
 
     Args:
-        reference_file: 참조 요약 파일 (JSON)
-                       형식: {"news_id": "summary"} 또는 [{"id": "...", "summary": "..."}]
+        loader: S3NewsDataLoader 인스턴스
+        ticker: 종목코드
+        start_date: 시작 날짜 (YYYY-MM-DD)
+        end_date: 종료 날짜 (YYYY-MM-DD)
 
     Returns:
         {news_id: reference_summary} 딕셔너리
     """
-    if reference_file and reference_file.exists():
-        try:
-            with open(reference_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            # 로드한 데이터 타입 확인
-            if isinstance(data, dict):
-                # 이미 딕셔너리 형식
-                return data
-
-            elif isinstance(data, list):
-                # 리스트 형식이면 딕셔너리로 변환
-                # [{"id": "...", "summary": "..."}] 형식 가정
-                result = {}
-                for item in data:
-                    if isinstance(item, dict):
-                        # ID 필드 찾기 (여러 가지 필드명 지원)
-                        item_id = (
-                            item.get("id") or
-                            item.get("article_id") or
-                            item.get("news_id") or
-                            item.get("idx")
-                        )
-                        # 요약 필드 찾기 (여러 가지 필드명 지원)
-                        summary = (
-                            item.get("summary") or
-                            item.get("reference_summary")
-                        )
-
-                        if item_id and summary:
-                            result[item_id] = summary
-                            logger.debug(f"  참조 요약 로드: {item_id}")
-
-                if result:
-                    logger.info(f"✓ 참조 요약 {len(result)}개 로드 완료 (리스트 → 딕셔너리 변환)")
-                    return result
-
-            logger.warning(f"⚠️ 참조 요약 형식을 인식할 수 없습니다: {type(data)}")
-            return {}
-
-        except json.JSONDecodeError as e:
-            logger.warning(f"⚠️ 참조 요약 파일 JSON 파싱 실패: {str(e)}")
-        except Exception as e:
-            logger.warning(f"⚠️ 참조 요약 파일 로드 실패: {str(e)}")
-
-    return {}
+    try:
+        reference_summaries = loader.load_references(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date,
+            reference_prefix="reference",
+        )
+        return reference_summaries
+    except Exception as e:
+        logger.warning(f"⚠️ S3 레퍼런스 로드 실패: {str(e)}")
+        return {}
 
 
 def create_evaluation_data(
@@ -220,18 +192,16 @@ def run_evaluation_pipeline(
     ticker: str,
     start_date: str,
     end_date: str,
-    reference_file: Optional[Path] = None,
     mlflow_experiment: str = "news_summarize_llm",
     use_bert_score: bool = False,
 ) -> bool:
     """
-    뉴스 데이터 평가 파이프라인 실행
+    뉴스 데이터 평가 파이프라인 실행 (S3 기반)
 
     Args:
-        ticker: 티커 (예: 005930)
+        ticker: 티커 (예: 000660)
         start_date: 시작 날짜 (YYYY-MM-DD)
         end_date: 종료 날짜 (YYYY-MM-DD)
-        reference_file: 참조 요약 파일
         mlflow_experiment: MLflow 실험 이름
         use_bert_score: BERTScore 사용 여부
 
@@ -271,9 +241,11 @@ def run_evaluation_pipeline(
         with mlflow.start_run(run_name=run_name) as run:
             logger.info(f"✓ MLflow Run 시작: {run.info.run_id}")
 
-            # 1. 뉴스 데이터 로드
-            logger.info(f"\n[1/5] 뉴스 데이터 로드 중... ({ticker}, {start_date}~{end_date})")
-            loader = NewsDataLoader()
+            # 1. 뉴스 데이터 로드 (S3에서)
+            logger.info(f"\n[1/5] S3에서 뉴스 데이터 로드 중... ({ticker}, {start_date}~{end_date})")
+            logger.info("💾 S3 로더 사용 (fisa-news-archive/raw/)")
+
+            loader = S3NewsDataLoader()
             news_list = loader.load_news(
                 ticker=ticker,
                 start_date=start_date,
@@ -315,7 +287,13 @@ def run_evaluation_pipeline(
 
             # 3. 평가 데이터 준비
             logger.info(f"\n[3/5] 평가 데이터 준비 중...")
-            reference_summaries = load_reference_summaries(reference_file)
+            logger.info(f"  📚 S3에서 레퍼런스 로드 중...")
+            reference_summaries = load_reference_summaries(
+                loader=loader,
+                ticker=ticker,
+                start_date=start_date,
+                end_date=end_date,
+            )
             eval_data = create_evaluation_data(
                 news_list,
                 summaries,
@@ -432,30 +410,25 @@ def main():
     default_experiment = os.getenv("MLFLOW_EXPERIMENT", "news_summarize_llm")
 
     parser = argparse.ArgumentParser(
-        description="실제 뉴스 데이터 평가 파이프라인"
+        description="실제 뉴스 데이터 평가 파이프라인 (S3 기반)"
     )
     parser.add_argument(
         "--ticker",
         type=str,
-        default="005930",
-        help="티커 (기본값: 005930)",
+        default="000660",
+        help="티커 (기본값: 000660)",
     )
     parser.add_argument(
         "--start-date",
         type=str,
-        default="2026-05-07",
+        default="2020-05-01",
         help="시작 날짜 (YYYY-MM-DD)",
     )
     parser.add_argument(
         "--end-date",
         type=str,
-        default="2026-05-07",
+        default="2020-05-01",
         help="종료 날짜 (YYYY-MM-DD)",
-    )
-    parser.add_argument(
-        "--reference",
-        type=Path,
-        help="참조 요약 파일 (JSON)",
     )
     parser.add_argument(
         "--experiment",
@@ -475,7 +448,6 @@ def main():
         ticker=args.ticker,
         start_date=args.start_date,
         end_date=args.end_date,
-        reference_file=args.reference,
         mlflow_experiment=args.experiment,
         use_bert_score=args.use_bert,
     )
