@@ -35,9 +35,9 @@ def clean_financial_news(text: str) -> str:
     # 3. 불필요한 특수문자 제거 (★ 마침표, 쉼표, %, +,- 기호는 반드시 제외)
     text = re.sub(r"[^\w\s.,%+\-가-힣]", " ", text)
 
-    # 4. 연속된 공백 및 줄바꿈 압축 (토큰 절감 핵심)
+    # 4. 줄바꿈 기호를 띄어쓰기로 대체 및 공백 압축 (토큰 절감 핵심)
+    text = re.sub(r"[\r\n]+", " ", text)     # 모든 줄바꿈을 공백으로 대체
     text = re.sub(r" +", " ", text)          # 연속된 띄어쓰기를 단일 공백으로
-    text = re.sub(r"\n+", "\n", text)        # 연속된 줄바꿈을 단일 줄바꿈으로
 
     return text.strip()
 
