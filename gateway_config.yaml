@@ -1,0 +1,11 @@
+endpoints:
+  - name: summarize-llm  # MLflow 내부에서 호출할 앤드포인트 이름 (원하는 대로 변경 가능)
+    endpoint_type: llm/v1/chat
+    model:
+      provider: openai
+      name: openai/gpt-oss-120b:free  # OpenRouter의 실제 모델 ID를 여기에 명시
+      config:
+        # OpenRouter API 엔드포인트를 지정하여 OpenAI 서버가 아닌 OpenRouter로 라우팅
+        openai_api_base: "https://openrouter.ai/api/v1"
+        # .env에 적어둘 API 키 환경 변수 매핑
+        openai_api_key: $OPENROUTER_API_KEY

@@ -6,12 +6,23 @@ import re
 _RESERVED_IDS = {"demo", "id123", "admin", "root", "system"}
 
 
+_INVEST_TYPES = {"SAFE", "STAB", "NEUT", "GROW", "AGGR"}
+
+
 class RegisterRequest(BaseModel):
     user_id: str
     name: str
     password: str
     birth_year: Optional[int] = None
     gender: Optional[str] = None
+    invest_type: Optional[str] = None
+
+    @field_validator("invest_type")
+    @classmethod
+    def validate_invest_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _INVEST_TYPES:
+            raise ValueError("invest_type은 SAFE, STAB, NEUT, GROW, AGGR 중 하나여야 합니다.")
+        return v
 
     @field_validator("user_id")
     @classmethod
@@ -59,3 +70,28 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     name: str
     user_id: str
+    profile_image_url: Optional[str] = None
+
+
+class UpdateProfileRequest(BaseModel):
+    name: Optional[str] = None
+    invest_type: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not (1 <= len(v.strip()) <= 20):
+            raise ValueError("이름은 1~20자여야 합니다.")
+        return v.strip() if v else v
+
+    @field_validator("invest_type")
+    @classmethod
+    def validate_invest_type(cls, v: Optional[str]) -> Optional[str]:
+        _INVEST_TYPES = {"SAFE", "STAB", "NEUT", "GROW", "AGGR"}
+        if v is not None and v not in _INVEST_TYPES:
+            raise ValueError("올바르지 않은 투자성향입니다.")
+        return v
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
