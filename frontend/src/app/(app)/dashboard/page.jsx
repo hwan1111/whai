@@ -707,11 +707,10 @@ export default function DashboardPage() {
                   </div>
                   <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
                   {n.vol_insight && (
-                    <div className="ai-box" style={{ padding: '10px 12px' }}>
-                      <div className="ai-text" style={{ fontSize: 11, color: '#4338ca' }}>{n.vol_insight}</div>
+                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
                     </div>
                   )}
-                  <div style={{ fontSize: 10, color: '#a78bfa', marginTop: 8, textAlign: 'center' }}>← 탭하여 목록으로</div>
                 </div>
               ); })()
             ) : previewNews.map((n, i) => (
