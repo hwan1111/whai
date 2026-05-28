@@ -546,7 +546,7 @@ export default function DashboardPage() {
         {/* LEFT: Chart */}
         <div className="chart-panel">
           <div className="chart-controls">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>기간</div>
               <div className="period-sel">
                 {PERIODS.map(p => (
@@ -816,18 +816,21 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', gap: 14, marginTop: 14 }}>
           <div className="other-card" style={{ flex: 1, minWidth: 0 }}>
             <div className="other-card-title">
-              상관계수 매트릭스
-              <div className="period-sel">
-                {PERIODS.map(p => (
-                  <button
-                    key={p}
-                    className={`per-btn${period === p ? ' active' : ''}`}
-                    onClick={() => setPeriod(p)}
-                  >
-                    {p === '1W' ? '1주' : p === '1M' ? '1개월' : p === '3M' ? '3개월' : p === '6M' ? '6개월' : p === '1Y' ? '1년' : p === '3Y' ? '3년' : '전체'}
-                  </button>
-                ))}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                상관계수 매트릭스
+                <div className="period-sel">
+                  {PERIODS.map(p => (
+                    <button
+                      key={p}
+                      className={`per-btn${period === p ? ' active' : ''}`}
+                      onClick={() => setPeriod(p)}
+                    >
+                      {p === '1W' ? '1주' : p === '1M' ? '1개월' : p === '3M' ? '3개월' : p === '6M' ? '6개월' : p === '1Y' ? '1년' : p === '3Y' ? '3년' : '전체'}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>Pearson</span>
             </div>
             {(() => {
               const n = complexIds.length;
