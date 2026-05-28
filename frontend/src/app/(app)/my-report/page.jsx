@@ -253,7 +253,7 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:14px;color:#312e81">${l}</p>`).join('');
 }
 
-function WeightHistoryChart({ snapshots, prices }) {
+function WeightHistoryChart({ snapshots, prices, onSnapClick }) {
   const [tooltip, setTooltip] = useState(null);
   const [sortMode, setSortMode] = useState('value');
   const containerRef = useRef(null);
@@ -291,7 +291,7 @@ function WeightHistoryChart({ snapshots, prices }) {
           ? [...sorted].sort((a, b) => (a.info.name || a.id).localeCompare(b.info.name || b.id, 'ko'))
           : sorted;
         return (
-          <div key={snap.id}>
+          <div key={snap.id} onClick={() => onSnapClick?.(snap.id)} style={{ cursor: 'pointer' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{label}</span>
               <span style={{ fontSize: 11, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
@@ -445,10 +445,18 @@ function AssetDrawer({ holding, prices, onClose }) {
   );
 }
 
-function SnapshotCard({ snap, prices, onDelete }) {
+function SnapshotCard({ snap, prices, onDelete, autoOpen }) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [drawerHolding, setDrawerHolding] = useState(null);
+  const cardRef = useRef(null);
   const { totalVal, totalCost, sorted } = calcTotals(snap.holdings, prices);
+
+  useEffect(() => {
+    if (autoOpen) {
+      setDetailOpen(true);
+      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [autoOpen]);
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
   const pnlColor = totalPnl >= 0 ? '#16a34a' : '#dc2626';
@@ -459,7 +467,7 @@ function SnapshotCard({ snap, prices, onDelete }) {
     {drawerHolding && (
       <AssetDrawer holding={drawerHolding} prices={prices} onClose={() => setDrawerHolding(null)} />
     )}
-    <div className="snapshot-card">
+    <div className="snapshot-card" ref={cardRef}>
       <div className="snapshot-card-header">
         <span className="snapshot-datetime">{fmtDatetime(snap.datetime)}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -475,26 +483,45 @@ function SnapshotCard({ snap, prices, onDelete }) {
 
       {detailOpen && (
         <div className="modal-overlay" onClick={() => setDetailOpen(false)}>
-          <div className="modal-box" style={{ width: 520, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-title" style={{ fontSize: 14 }}>📋 {fmtDatetime(snap.datetime)} 종목 상세</div>
-            <div className="snapshot-legend" style={{ maxHeight: 'none' }}>
-              {sorted.map(h => {
-                const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
-                const pnl = h.curVal - h.cost;
-                const pnlPct = h.cost > 0 ? pnl / h.cost * 100 : 0;
-                const pc = pnl >= 0 ? '#16a34a' : '#dc2626';
-                return (
-                  <div key={h.id} className="snapshot-legend-row" style={{ padding: '7px 0' }}>
-                    <span className="snapshot-legend-dot" style={{ background: h.info.color || '#94a3b8' }} />
-                    <span className="snapshot-legend-name" style={{ fontSize: 13 }}>{h.info.name || h.id}</span>
-                    <span className="snapshot-legend-pct" style={{ width: 48 }}>{w.toFixed(1)}%</span>
-                    <span className="snapshot-legend-val" style={{ width: 60 }}>{fmtCompact(h.curVal)}</span>
-                    <span className="snapshot-legend-pnl" style={{ width: 60, color: pc }}>{pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%</span>
-                  </div>
-                );
-              })}
+          <div className="modal-box" style={{ width: 780, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div className="modal-title" style={{ fontSize: 14, marginBottom: 0 }}>📋 {fmtDatetime(snap.datetime)} 종목 상세</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>현재가·평가액·손익은 스냅샷 저장 시점의 시장 가격을 기준으로 산출됩니다.</div>
             </div>
-            <div className="snapshot-summary" style={{ marginTop: 14, gridTemplateColumns: 'repeat(2, 1fr)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 4 }}>
+              <thead>
+                <tr>
+                  {['종목', '수량', '평균 매입가', '현재가', '매입 원가', '평가액', '손익', '수익률'].map((label, i) => (
+                    <th key={label} style={{ padding: '5px 7px', fontSize: 10, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', textAlign: i === 0 ? 'left' : 'right', whiteSpace: 'nowrap' }}>{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(h => {
+                  const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
+                  const pnl = h.curVal - h.cost;
+                  const pnlPct = h.cost > 0 ? pnl / h.cost * 100 : 0;
+                  const pc = pnl >= 0 ? '#16a34a' : '#dc2626';
+                  return (
+                    <tr key={h.id}>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 5, background: h.info.color || '#94a3b8', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{h.info.name || h.id}</span>
+                        <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 5 }}>{w.toFixed(1)}%</span>
+                      </td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmt(h.qty)}{h.info.unit || ''}</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmt(h.avgPrice)}원</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmt(h.curPrice)}원</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmtCompact(h.cost)}</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#1e293b', fontWeight: 600 }}>{fmtCompact(h.curVal)}</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: pc, fontWeight: 600 }}>{pnl >= 0 ? '+' : ''}{fmtCompact(Math.abs(pnl))}</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: pc, fontWeight: 700 }}>{pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
               {[
                 { label: '총 매입 원가', val: fmtCompact(totalCost) },
                 { label: '총 평가액',   val: fmtCompact(totalVal) },
@@ -503,7 +530,7 @@ function SnapshotCard({ snap, prices, onDelete }) {
               ].map(({ label, val, color }) => (
                 <div key={label} className="snapshot-summary-item">
                   <div className="snapshot-summary-label">{label}</div>
-                  <div className="snapshot-summary-val" style={{ color: color || 'inherit' }}>{val}</div>
+                  <div className="snapshot-summary-val" style={{ color: color || 'inherit', fontSize: 16 }}>{val}</div>
                 </div>
               ))}
             </div>
@@ -563,6 +590,10 @@ export default function MyReportPage() {
   const [addPrice, setAddPrice] = useState('');
   const [generating, setGenerating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [openDetailSnapId, setOpenDetailSnapId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editQty, setEditQty] = useState('');
+  const [editPrice, setEditPrice] = useState('');
 
   useEffect(() => {
     fetchSnapshots().then(s => { setSnapshots(s); setSnapshotsLoaded(true); });
@@ -656,7 +687,7 @@ export default function MyReportPage() {
           <div className="sec-title">마이 포트폴리오</div>
           <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관 {totalCount > 0 ? `· 현재 ${totalCount}개` : ''}</div>
         </div>
-        <button className="btn btn-primary" onClick={() => { setFormOpen(o => !o); if (!formOpen) setHoldings(snapshots[0]?.holdings || []); }}>
+        <button className="btn btn-primary" onClick={() => { setFormOpen(o => !o); if (!formOpen) setHoldings((snapshots[0]?.holdings || []).map(({ id, qty, avgPrice }) => ({ id, qty, avgPrice }))); }}>
           {formOpen ? '✕ 취소' : '＋ 새 스냅샷 기록'}
         </button>
       </div>
@@ -731,7 +762,7 @@ export default function MyReportPage() {
 
             {/* 평균 매입가 */}
             <div className="add-holding-field">
-              <label className="add-holding-label">평균 매입가 <span style={{ fontWeight: 400, color: '#cbd5e1' }}>(종가 자동 입력 · 수정 가능)</span></label>
+              <label className="add-holding-label">평균 매입가 <span style={{ fontWeight: 400, color: '#cbd5e1' }}>(현재가 자동 입력 · 수정 가능)</span></label>
               <input className="form-input" type="number" min="0"
                 placeholder={!pricesLoaded ? '가격 불러오는 중...' : prices[addAsset] ? String(prices[addAsset]) : '직접 입력'}
                 value={addPrice} onChange={e => setAddPrice(e.target.value)} style={{ width: 220 }} />
@@ -744,7 +775,7 @@ export default function MyReportPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 12 }}>
               <thead>
                 <tr>
-                  {['종목', '수량', '평균 매입가', '종가', '평가액', '예상 비중', ''].map((h, i) => (
+                  {['종목', '수량', '평균 매입가', '현재가', '평가액', '예상 비중', ''].map((h, i) => (
                     <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>{h}</th>
                   ))}
                 </tr>
@@ -755,19 +786,42 @@ export default function MyReportPage() {
                   const cur = getPrice(h.id);
                   const curVal = h.qty * cur;
                   const w = formTotalVal > 0 ? curVal / formTotalVal * 100 : 0;
+                  const isEditing = editingId === h.id;
                   return (
                     <tr key={h.id}>
                       <td style={{ padding: '7px 8px', borderBottom: '1px solid #f8fafc', textAlign: 'left' }}>
                         <span style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 5, background: info.color || '#94a3b8' }} />
                         {info.name || h.id}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(h.qty)}{info.unit || ''}</td>
-                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(h.avgPrice)}원</td>
+                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>
+                        {isEditing
+                          ? <input type="number" min="1" value={editQty} onChange={e => setEditQty(e.target.value)} className="form-input" style={{ width: 70, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
+                          : <>{fmt(h.qty)}{info.unit || ''}</>}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>
+                        {isEditing
+                          ? <input type="number" min="0" value={editPrice} onChange={e => setEditPrice(e.target.value)} className="form-input" style={{ width: 100, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
+                          : <>{fmt(h.avgPrice)}원</>}
+                      </td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(cur)}원</td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(curVal)}원</td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{w.toFixed(1)}%</td>
-                      <td style={{ padding: '7px 8px', borderBottom: '1px solid #f8fafc', textAlign: 'center' }}>
-                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 15 }} onClick={() => removeHolding(h.id)}>×</button>
+                      <td style={{ padding: '7px 8px', borderBottom: '1px solid #f8fafc', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {isEditing ? (
+                          <>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontSize: 14, marginRight: 4 }} onClick={() => {
+                              const q = parseFloat(editQty), p = parseFloat(editPrice);
+                              if (q > 0 && p > 0) setHoldings(prev => prev.map(item => item.id === h.id ? { ...item, qty: q, avgPrice: p } : item));
+                              setEditingId(null);
+                            }}>✓</button>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 14 }} onClick={() => setEditingId(null)}>✕</button>
+                          </>
+                        ) : (
+                          <>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 12, marginRight: 4 }} onClick={() => { setEditingId(h.id); setEditQty(String(h.qty)); setEditPrice(String(h.avgPrice)); }}>✎</button>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 15 }} onClick={() => removeHolding(h.id)}>×</button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );
@@ -813,7 +867,7 @@ export default function MyReportPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {snapshots.map(snap => (
-            <SnapshotCard key={snap.id} snap={snap} prices={prices} onDelete={deleteSnapshot} />
+            <SnapshotCard key={snap.id} snap={snap} prices={prices} onDelete={deleteSnapshot} autoOpen={openDetailSnapId === snap.id} />
           ))}
           {snapshots.length >= MAX_SNAPSHOTS && (
             <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '4px 0 8px' }}>
@@ -830,7 +884,7 @@ export default function MyReportPage() {
           <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 16 }}>
             자산 비중 추이
           </div>
-          <WeightHistoryChart snapshots={snapshots} prices={prices} />
+          <WeightHistoryChart snapshots={snapshots} prices={prices} onSnapClick={id => setOpenDetailSnapId(id)} />
         </div>
       </div>
     </div>{/* end 2열 wrapper */}
