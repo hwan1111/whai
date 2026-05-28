@@ -675,7 +675,7 @@ export default function DashboardPage() {
           </div>
           <div className="news-preview-card">
             <div className="news-preview-header">
-              <span className="news-preview-title">뉴스</span>
+              <span className="news-preview-title">WHAi 뉴스 분석</span>
               <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
             </div>
             {previewLoading ? (
