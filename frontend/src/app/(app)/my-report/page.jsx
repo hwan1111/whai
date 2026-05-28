@@ -636,7 +636,7 @@ export default function MyReportPage() {
 
   return (
     <>
-    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', minWidth: 900 }}>
+    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
       {/* 메인 콘텐츠 */}
       <div style={{ flex: 1, minWidth: 0, overflowX: 'auto' }}>
       <div className="sec-header">
