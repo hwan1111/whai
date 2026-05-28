@@ -638,7 +638,7 @@ export default function MyReportPage() {
       <div style={{ flex: 1, minWidth: 0, overflowX: 'auto' }}>
       <div className="sec-header">
         <div>
-          <div className="sec-title">마이 리포트</div>
+          <div className="sec-title">마이 포트폴리오</div>
           <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관 {totalCount > 0 ? `· 현재 ${totalCount}개` : ''}</div>
         </div>
         <button className="btn btn-primary" onClick={() => { setFormOpen(o => !o); setHoldings([]); }}>

@@ -3,8 +3,8 @@ from sqlalchemy.sql import func
 from backend.db import Base
 
 
-class UserReport(Base):
-    __tablename__ = "user_report"
+class UserPortfolio(Base):
+    __tablename__ = "user_portfolio"
 
     id = Column(String(50), primary_key=True)
     user_id = Column(String(50), nullable=False, index=True)
