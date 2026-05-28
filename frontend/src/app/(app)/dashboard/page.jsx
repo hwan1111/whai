@@ -531,6 +531,7 @@ export default function DashboardPage() {
     const allNeg = complexIds.every(id => complexData[id].totalReturn < 0);
     if (allPos) lines.push('전 종목이 플러스 수익률을 기록 중입니다.');
     else if (allNeg) lines.push('전 종목이 마이너스 수익률을 기록 중입니다.');
+    lines.push('((환율은 원래 상관관계가 높다? 이런 거 적는 것도 고려해보자~ (메모)))');
     return lines;
   })();
 
@@ -822,18 +823,19 @@ export default function DashboardPage() {
               const n = complexIds.length;
               const cellH = n <= 6 ? 42 : n <= 8 ? 34 : 28;
               const cellStyle = cellH !== 42 ? { height: cellH, lineHeight: `${cellH}px` } : {};
+              const lbl = id => { const l = shortLabel(id); return n >= 9 ? l.slice(0, 4) : l; };
               return (
                 <table className="matrix-table">
                   <thead>
                     <tr>
                       <th className="mh" style={cellStyle} />
-                      {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{shortLabel(id)}</th>)}
+                      {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {complexIds.map(row => (
                       <tr key={row}>
-                        <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{shortLabel(row)}</th>
+                        <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
                         {complexIds.map(col => {
                           if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
                           const v = calcPearson(complexData[row], complexData[col]);
