@@ -535,12 +535,12 @@ export default function DashboardPage() {
   })();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} />
       {detailStockId && (
         <StockDetailModal stockId={detailStockId} onClose={() => setDetailStockId(null)} />
       )}
-      <div className={`dash-layout${rightOpen ? ' panel-open' : ''}`} style={{ height: 'calc(100vh - 90px)' }}>
+      <div className={`dash-layout${rightOpen ? ' panel-open' : ''}`} style={{ flex: 1, minHeight: 0 }}>
 
         {/* LEFT: Chart */}
         <div className="chart-panel">
