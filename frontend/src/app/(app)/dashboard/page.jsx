@@ -309,7 +309,7 @@ export default function DashboardPage() {
       const res = await fetchWithAuth('/api/v1/news?days=30');
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setPreviewNews(data.slice(0, 3));
+      setPreviewNews(data.slice(0, 5));
     } catch { setPreviewNews([]); }
     setPreviewLoading(false);
   }
@@ -670,7 +670,7 @@ export default function DashboardPage() {
             <div className="ai-main-body">
               방산주 강세 지속. 달러 약세로 수출주 단기 환율 리스크.<br /><br />
               반도체는 HBM 수요 기반 상승 모멘텀 유지 중.<br /><br />
-              <span style={{ color: '#6d28d9', fontWeight: 600 }}>회원님의 관심 종목</span> 중 KB금융은 금리 인하 수혜 기대감으로 단기 매수세 유입 가능성이 높습니다.
+              <span style={{ color: '#6d28d9', fontWeight: 600 }}>회원님의 관심 종목</span> 중 KB금융은 금리 인하 수혜 기대감으로 단기 매수세 유입 가능성이 높습니다. ((대시보드 AI는 개인화된 것이되, 좀 더 일반적인 걸로 하기! (메모)))
             </div>
           </div>
           <div className="news-preview-card">
