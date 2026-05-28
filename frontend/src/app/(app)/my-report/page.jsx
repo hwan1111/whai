@@ -247,6 +247,7 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   else
     lines.push(`<strong>💡 종합 의견</strong>: 현재 <span style="color:#dc2626">${avgReturn.toFixed(1)}%</span>의 손실 구간에 있습니다. 손실 원인을 분석하고 포트폴리오 재구성 여부를 검토해 보세요.`);
 
+  // 5. 메모: 포트폴리오 AI는 대시보드 AI보다는 좀 더 포트폴리오 쪽에 치중하도록! 나이대, 성별, 투자성향은 여기에 반영하는게 맞을까?
   return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:14px;color:#312e81">${l}</p>`).join('');
 }
 
