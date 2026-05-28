@@ -242,9 +242,15 @@ export default function Header({ updateTime }) {
         </div>
         <div className="header-right">
           {updateTime && <span style={{ fontSize: 11, color: '#94a3b8' }}>{updateTime}</span>}
-          <Link href="/my-report" className={`header-report-btn${pathname?.startsWith('/my-report') ? ' active' : ''}`}>
-            📄 마이 리포트
-          </Link>
+          {pathname?.startsWith('/my-report') ? (
+            <Link href="/dashboard" className="header-report-btn">
+              🏠 대시보드
+            </Link>
+          ) : (
+            <Link href="/my-report" className="header-report-btn">
+              📄 마이 리포트
+            </Link>
+          )}
           <div className="user-menu-wrap" ref={menuRef}>
             <div
               className="avatar"
