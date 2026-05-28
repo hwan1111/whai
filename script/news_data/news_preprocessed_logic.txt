@@ -1,0 +1,45 @@
+s3 fisa-news-archive의 raw에 적재된 뉴스들을 아래의 로직에 맞게 전처리 해 새롭게 preprocessed로 추가할 예정
+
+<규칙>
+줄바꿈 기호 or '.'으로 문장을 분할
+
+0. 이메일 날리기
+1. 줄바꿈 기호 날려서 띄어쓰기로 대체
+2. 특수기호 날라기 (온점, 퍼센트 기호는 살려둘 것)
+3. "저작권자", "저작권" 이 들어간 문장 날리기
+4. 조사 날리기
+5. "기사", "기자" 가 들어간 문장 날리기
+
+위의 6개 규칙을 조합을 선정해 얼마나 full test가 줄어드는지 표로 나타내서 어떤 조합에서 얼마나 감소되는지를 그래프로 남겨두면 좋을 것 같음.
+
+이게 근데 조합이 지금 1개~6개 까지 1:6, 2:15, 3: 6펙토리얼 나누기 3펙토리얼 뭐 이런식이니까 이렇게 조합 짜서 확인하면 좋을듯? 
+
+
+import re
+
+def clean_financial_news(text: str) -> str:
+    if not text:
+        return ""
+
+    # 1. 기사 하단 저작권 및 배너 문구 제거 (가장 먼저 잘라내기)
+    text = re.sub(r"(<저작권자|▶|ⓒ).*$", "", text, flags=re.MULTILINE | re.DOTALL)
+    text = re.sub(r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)", "", text) # 이메일 제거
+
+    # 2. 언론사별 상단 메타데이터 및 말머리 제거
+    text = re.sub(r"\[머니투데이.*?\]", "", text) # 머니투데이 대괄호 마크
+    text = re.sub(r"\(.*?\=연합뉴스\)", "", text) # (서울=연합뉴스) 형태
+    text = re.sub(r"사진\s*=\s*\S+", "", text) # 사진=머니S 등 제거
+    text = re.sub(r"사진제공\s*=\s*\S+", "", text)
+
+    # 3. 불필요한 특수문자 제거 (★ 마침표, 쉼표, %, +,- 기호는 반드시 제외)
+    # 금융 수치에 쓰이는 기호와 문장 마침표를 제외한 나머지 특수문자 청소
+    text = re.sub(r"[^\w\s.,%+\-가-힣]", " ", text)
+
+    # 4. 연속된 공백 및 줄바꿈 압축 (토큰 절감 핵심)
+    text = re.sub(r" +", " ", text)          # 연속된 띄어쓰기를 단일 공백으로
+    text = re.sub(r"\n+", "\n", text)        # 연속된 줄바꿈을 단일 줄바꿈으로
+
+    return text.strip()
+
+# 데이터 적재 전 fulltext 필드에 적용 예시
+# cleaned_fulltext = clean_financial_news(json_data["fulltext"])

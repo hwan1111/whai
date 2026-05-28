@@ -1,5 +1,6 @@
 .env
 .env.local
+.env.example
 .vscode
 CLAUDE.md
 .claude
@@ -8,17 +9,15 @@ CLAUDE.md
 __pycache__/
 *.py[cod]
 *$py.class
-.python-version
+.venv/
 .venv
-
-config/certs/
-
-# Data directory - only root level, src/data/ is tracked
+.python-version
 data/
 !src/data/
-
+*.zip
+*.log
 docs/
-
+config/certs/
 mlruns
 
 # 로컬 분석/테스트 파일

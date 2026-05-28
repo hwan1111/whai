@@ -289,8 +289,8 @@ def main():
     parser.add_argument(
         "--ticker",
         type=str,
-        default="005930",
-        help="티커 (기본값: 005930)",
+        default="000660",
+        help="티커 (기본값: 000660)",
     )
     parser.add_argument(
         "--experiment",
