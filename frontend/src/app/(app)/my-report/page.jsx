@@ -280,6 +280,7 @@ function buildAiHtml(sorted, totalVal, totalCost) {
 function WeightHistoryChart({ snapshots, prices, onSnapClick }) {
   const [tooltip, setTooltip] = useState(null);
   const [sortMode, setSortMode] = useState('value');
+  const [hoveredId, setHoveredId] = useState(null);
   const containerRef = useRef(null);
 
   if (snapshots.length === 0) return (
@@ -327,15 +328,15 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick }) {
                   return (
                     <div
                       key={h.id}
-                      className="weight-bar-seg"
-                      style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'default' }}
+                      style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'default', transition: 'opacity 0.2s, filter 0.2s', opacity: hoveredId !== null && hoveredId !== h.id ? 0.35 : 1, filter: hoveredId === h.id ? 'brightness(1.12)' : 'none' }}
                       onMouseEnter={e => {
+                        setHoveredId(h.id);
                         setTooltip({ name: h.info.name || h.id, val: fmtCompact(h.curVal), pct: w.toFixed(1), color: h.info.color || '#94a3b8', x: e.clientX, y: e.clientY });
                       }}
                       onMouseMove={e => {
                         setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
                       }}
-                      onMouseLeave={() => setTooltip(null)}
+                      onMouseLeave={() => { setHoveredId(null); setTooltip(null); }}
                     >
                       {w >= 10 && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.9)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
