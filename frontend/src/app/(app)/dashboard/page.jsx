@@ -540,7 +540,7 @@ export default function DashboardPage() {
       {detailStockId && (
         <StockDetailModal stockId={detailStockId} onClose={() => setDetailStockId(null)} />
       )}
-      <div className={`dash-layout${rightOpen ? ' panel-open' : ''}`} style={{ minHeight: 'calc(100vh - 120px)' }}>
+      <div className={`dash-layout${rightOpen ? ' panel-open' : ''}`} style={{ height: 'calc(100vh - 90px)' }}>
 
         {/* LEFT: Chart */}
         <div className="chart-panel">
