@@ -707,7 +707,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
                   {n.vol_insight && (
-                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
                       <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
                     </div>
                   )}
