@@ -818,27 +818,34 @@ export default function DashboardPage() {
               상관계수 매트릭스
               <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>Pearson · {period}</span>
             </div>
-            <table className="matrix-table">
-              <thead>
-                <tr>
-                  <th className="mh" />
-                  {complexIds.map(id => <th key={id} className="mh">{shortLabel(id)}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {complexIds.map(row => (
-                  <tr key={row}>
-                    <th className="mh" style={{ textAlign: 'right', paddingRight: 5 }}>{shortLabel(row)}</th>
-                    {complexIds.map(col => {
-                      if (row === col) return <td key={col} className="mc" style={{ background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
-                      const v = calcPearson(complexData[row], complexData[col]);
-                      const { background, color } = corrStyle(v);
-                      return <td key={col} className="mc" style={{ background, color }}>{v.toFixed(2)}</td>;
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {(() => {
+              const n = complexIds.length;
+              const cellH = n <= 4 ? 42 : n === 5 ? 34 : 28;
+              const cellStyle = cellH !== 42 ? { height: cellH, lineHeight: `${cellH}px` } : {};
+              return (
+                <table className="matrix-table">
+                  <thead>
+                    <tr>
+                      <th className="mh" style={cellStyle} />
+                      {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{shortLabel(id)}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {complexIds.map(row => (
+                      <tr key={row}>
+                        <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{shortLabel(row)}</th>
+                        {complexIds.map(col => {
+                          if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
+                          const v = calcPearson(complexData[row], complexData[col]);
+                          const { background, color } = corrStyle(v);
+                          return <td key={col} className="mc" style={{ ...cellStyle, background, color }}>{v.toFixed(2)}</td>;
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 10, color: '#64748b' }}>
               <span>-1.0</span>
               <div style={{ width: 120, height: 8, borderRadius: 4, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />

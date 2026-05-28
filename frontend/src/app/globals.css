@@ -166,8 +166,8 @@ html, body { height: 100%; min-width: 1280px; }
 .factor-desc { font-size: 10px; color: #94a3b8; margin-bottom: 9px; margin-left: 117px; margin-top: -3px; }
 
 .matrix-table { border-collapse: separate; border-spacing: 3px; }
-.mh { width: 70px; height: 30px; font-size: 10px; font-weight: 600; color: var(--text-secondary); text-align: center; }
-.mc { width: 58px; height: 30px; border-radius: 6px; text-align: center; line-height: 30px; font-size: 12px; font-weight: 700; }
+.mh { width: 70px; height: 42px; font-size: 10px; font-weight: 600; color: var(--text-secondary); text-align: center; }
+.mc { width: 58px; height: 42px; border-radius: 6px; text-align: center; line-height: 42px; font-size: 12px; font-weight: 700; }
 
 .ret-box { border-radius: 8px; padding: 9px; text-align: center; }
 .ret-label { font-size: 10px; color: var(--text-secondary); }
