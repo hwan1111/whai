@@ -812,8 +812,8 @@ export default function DashboardPage() {
       </div>
 
       {showComplex && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
-          <div className="other-card">
+        <div style={{ display: 'flex', gap: 14, marginTop: 14 }}>
+          <div className="other-card" style={{ flex: 1, minWidth: 0 }}>
             <div className="other-card-title">
               상관계수 매트릭스
               <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>Pearson · {period}</span>
@@ -846,7 +846,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="other-card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="other-card" style={{ flex: '0 0 460px', display: 'flex', flexDirection: 'column' }}>
             <div className="other-card-title">
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <span className="ai-badge" style={{ textTransform: 'none', letterSpacing: 0 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
