@@ -254,7 +254,7 @@ html, body { height: 100%; min-width: 1280px; }
 .ai-main-body { flex: 1; font-size: 13px; line-height: 1.8; color: #312e81; }
 
 /* ── 관심종목 뉴스 미리보기 카드 ── */
-.news-preview-card { background: linear-gradient(135deg, #ede9fe, #eef2ff); border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px 16px; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.news-preview-card { background: linear-gradient(135deg, #ede9fe, #eef2ff); border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px 16px; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
 .news-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .news-preview-title { font-size: 11px; font-weight: 700; color: #4c1d95; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 7px; }
 .news-preview-more { background: none; border: none; font-size: 11px; font-weight: 600; color: #6d28d9; cursor: pointer; padding: 0; }
