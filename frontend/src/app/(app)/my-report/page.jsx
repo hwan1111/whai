@@ -98,9 +98,20 @@ function calcTotals(holdings, prices) {
   return { totalVal, totalCost, sorted };
 }
 
+function darkenColor(hex, amount = 40) {
+  if (!hex || !hex.startsWith('#')) return hex;
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, (num >> 16) - amount);
+  const g = Math.max(0, ((num >> 8) & 0xff) - amount);
+  const b = Math.max(0, (num & 0xff) - amount);
+  return `rgb(${r},${g},${b})`;
+}
+
 function DonutChart({ sorted, totalVal, size = 180, onSegmentClick }) {
   const [tooltip, setTooltip] = useState(null);
+  const [hoveredIdx, setHoveredIdx] = useState(null);
   const wrapRef = useRef(null);
+  const chartId = useRef(`dc-${Math.random().toString(36).slice(2)}`).current;
 
   const cx = size / 2, cy = size / 2;
   const r = size * 0.36, sw = size * 0.155;
@@ -134,14 +145,26 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick }) {
     <div ref={wrapRef} style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, display: 'block' }}
         onMouseLeave={() => setTooltip(null)}>
+        <defs>
+          {segments.map((seg, i) => {
+            const base = seg.h.info.color || '#94a3b8';
+            return (
+              <linearGradient key={i} id={`${chartId}-${i}`} x1="0" y1="0" x2="0" y2={size} gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor={base} />
+                <stop offset="100%" stopColor={darkenColor(base, 35)} />
+              </linearGradient>
+            );
+          })}
+        </defs>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
         {segments.map((seg, i) => (
           <path
             key={i}
             d={arcPath(seg.startAngle, seg.endAngle)}
-            fill={seg.h.info.color || '#94a3b8'}
-            style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+            fill={`url(#${chartId}-${i})`}
+            style={{ cursor: 'pointer', transition: 'opacity 0.2s, filter 0.2s', opacity: hoveredIdx !== null && hoveredIdx !== i ? 0.55 : 1, filter: hoveredIdx === i ? 'brightness(1.12)' : 'none' }}
             onMouseEnter={e => {
+              setHoveredIdx(i);
               const rect = wrapRef.current.getBoundingClientRect();
               const pnl = seg.h.curVal - seg.h.cost;
               const retPct = seg.h.cost > 0 ? pnl / seg.h.cost * 100 : 0;
@@ -151,6 +174,7 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick }) {
               const rect = wrapRef.current.getBoundingClientRect();
               setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
             }}
+            onMouseLeave={() => { setHoveredIdx(null); }}
             onClick={() => { setTooltip(null); onSegmentClick && onSegmentClick(seg.h); }}
           />
         ))}
@@ -272,7 +296,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick }) {
   const allIds = [...new Set(snapshots.flatMap(s => s.holdings.map(h => h.id)))];
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
       <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
         {[{ key: 'value', label: '금액순' }, { key: 'name', label: '가나다순' }].map(({ key, label }) => (
           <button key={key} onClick={() => setSortMode(key)} style={{
@@ -303,6 +327,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick }) {
                   return (
                     <div
                       key={h.id}
+                      className="weight-bar-seg"
                       style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'default' }}
                       onMouseEnter={e => {
                         setTooltip({ name: h.info.name || h.id, val: fmtCompact(h.curVal), pct: w.toFixed(1), color: h.info.color || '#94a3b8', x: e.clientX, y: e.clientY });
@@ -879,9 +904,9 @@ export default function MyReportPage() {
       </div>{/* end 메인 콘텐츠 */}
 
       {/* 오른쪽 고정 패널: 비중 추이 */}
-      <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 16, alignSelf: 'flex-start' }}>
-        <div className="other-card" style={{ padding: '16px 16px 14px', maxHeight: 'calc(100vh - 90px)', overflowY: 'auto' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 16 }}>
+      <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 4, alignSelf: 'flex-start' }}>
+        <div className="other-card" style={{ padding: '10px 12px 10px', maxHeight: 'calc(100vh - 60px)', overflowY: 'auto' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8 }}>
             자산 비중 추이
           </div>
           <WeightHistoryChart snapshots={snapshots} prices={prices} onSnapClick={id => setOpenDetailSnapId(id)} />
