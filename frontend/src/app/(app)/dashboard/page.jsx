@@ -271,7 +271,7 @@ export default function DashboardPage() {
     fetchFavs().then(favSet => {
       setFavs(favSet);
       const favArr = [...favSet].filter(id => ASSETS[id]);
-      if (favArr.length > 0) setActiveAssets(favArr);
+      setActiveAssets(['000000', ...favArr]);
     });
     loadLatestPrices();
     loadLatestRates();
