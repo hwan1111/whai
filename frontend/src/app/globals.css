@@ -248,8 +248,8 @@ html, body { height: 100%; min-width: 1280px; }
 .dash-layout.panel-open .sidebar-tab:hover { background: #eff6ff; color: #2563eb; }
 
 /* ── AI 메인 패널 (차트 옆 고정 컬럼) ── */
-.ai-main-panel { flex: 0 0 460px; display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; height: calc(100vh - 110px); align-self: flex-start; }
-.ai-main-card { background: linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%); border: 1px solid #c4b5fd; border-radius: 12px; padding: 16px 18px; flex: 0 0 auto; display: flex; flex-direction: column; }
+.ai-main-panel { flex: 0 0 460px; display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
+.ai-main-card { background: linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%); border: 1px solid #c4b5fd; border-radius: 12px; padding: 16px 18px; flex: 1; display: flex; flex-direction: column; }
 .ai-main-title { font-size: 11px; font-weight: 700; color: #4c1d95; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
 .ai-main-body { flex: 1; font-size: 13px; line-height: 1.8; color: #312e81; }
 
