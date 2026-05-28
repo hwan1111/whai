@@ -820,7 +820,7 @@ export default function DashboardPage() {
             </div>
             {(() => {
               const n = complexIds.length;
-              const cellH = n <= 4 ? 42 : n === 5 ? 34 : 28;
+              const cellH = n <= 6 ? 42 : n <= 8 ? 34 : 28;
               const cellStyle = cellH !== 42 ? { height: cellH, lineHeight: `${cellH}px` } : {};
               return (
                 <table className="matrix-table">
