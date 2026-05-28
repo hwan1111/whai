@@ -696,19 +696,32 @@ export default function DashboardPage() {
               </>
             ) : previewNews.length === 0 ? (
               <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>뉴스가 없습니다.</div>
+            ) : expandedNews !== null ? (
+              /* 펼쳐진 상태: 선택된 항목만 표시 */
+              (() => { const n = previewNews[expandedNews]; return (
+                <div className="news-preview-item" style={{ cursor: 'pointer', flex: 1 }} onClick={() => setExpandedNews(null)}>
+                  <div className="news-meta">
+                    <span className="ticker-tag">{n.name}</span>
+                    <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                    <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                  </div>
+                  <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
+                  {n.vol_insight && (
+                    <div className="ai-box" style={{ padding: '10px 12px' }}>
+                      <div className="ai-text" style={{ fontSize: 11, color: '#4338ca' }}>{n.vol_insight}</div>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: '#a78bfa', marginTop: 8, textAlign: 'center' }}>← 탭하여 목록으로</div>
+                </div>
+              ); })()
             ) : previewNews.map((n, i) => (
-              <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setExpandedNews(expandedNews === i ? null : i)}>
+              <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setExpandedNews(i)}>
                 <div className="news-meta">
                   <span className="ticker-tag">{n.name}</span>
                   <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
                   <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
                 </div>
                 <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
-                {expandedNews === i && n.vol_insight && (
-                  <div className="ai-box" style={{ marginTop: 8, padding: '10px 12px' }}>
-                    <div className="ai-text" style={{ fontSize: 11, color: '#4338ca' }}>{n.vol_insight}</div>
-                  </div>
-                )}
               </div>
             ))}
           </div>
