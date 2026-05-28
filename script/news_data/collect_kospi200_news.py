@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 # ─────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────
-BASE_DIR  = Path(__file__).resolve().parent.parent
+BASE_DIR  = Path(__file__).resolve().parent.parent.parent
 DATA_DIR  = BASE_DIR / "data" / "news"
 LOG_PATH  = BASE_DIR / "data" / "kospi200_news_collect.log"
 
