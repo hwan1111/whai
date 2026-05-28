@@ -817,7 +817,17 @@ export default function DashboardPage() {
           <div className="other-card" style={{ flex: 1, minWidth: 0 }}>
             <div className="other-card-title">
               상관계수 매트릭스
-              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>Pearson · {period}</span>
+              <div className="period-sel">
+                {PERIODS.map(p => (
+                  <button
+                    key={p}
+                    className={`per-btn${period === p ? ' active' : ''}`}
+                    onClick={() => setPeriod(p)}
+                  >
+                    {p === '1W' ? '1주' : p === '1M' ? '1개월' : p === '3M' ? '3개월' : p === '6M' ? '6개월' : p === '1Y' ? '1년' : p === '3Y' ? '3년' : '전체'}
+                  </button>
+                ))}
+              </div>
             </div>
             {(() => {
               const n = complexIds.length;
