@@ -84,18 +84,22 @@ export default function AuthPage() {
     setLoginLoading(false);
   }
 
-  const ID_RE = /^[a-zA-Z0-9_]{4,20}$/;
+  const ID_RE = /^[a-zA-Z0-9]{5,20}$/;
 
   async function checkIdAvailability(id) {
     if (!id) { setRegIdHint({ text: '', type: '' }); return; }
     if (!ID_RE.test(id)) {
-      setRegIdHint({ text: '영문, 숫자, 밑줄(_) 4~20자로 입력해 주세요.', type: 'err' });
+      setRegIdHint({ text: '영문, 숫자만 5~20자로 입력해 주세요.', type: 'err' });
       return;
     }
     setRegIdHint({ text: '확인 중...', type: 'checking' });
     try {
       const res = await fetch(`/api/v1/auth/check-id?user_id=${encodeURIComponent(id)}`);
       const data = await res.json();
+      if (!res.ok) {
+        setRegIdHint({ text: '', type: '' });
+        return;
+      }
       if (data.available) {
         setRegIdHint({ text: '사용 가능한 아이디입니다.', type: 'ok' });
       } else {
@@ -227,7 +231,7 @@ export default function AuthPage() {
                 value={regId}
                 onChange={e => { setRegId(e.target.value); setRegIdHint({ text: '', type: '' }); }}
                 onBlur={e => checkIdAvailability(e.target.value)}
-                placeholder="영문/숫자/밑줄 4~20자"
+                placeholder="영문/숫자 5~20자"
                 maxLength={20}
                 autoComplete="username"
               />
@@ -278,7 +282,7 @@ export default function AuthPage() {
               <div style={{ flex: 1 }}>
                 <label className="form-label">성별</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                  {[{ val: 'M', label: '남성' }, { val: 'F', label: '여성' }, { val: 'OTHER', label: '기타' }].map(o => (
+                  {[{ val: 'M', label: '남성' }, { val: 'F', label: '여성' }].map(o => (
                     <div
                       key={o.val}
                       className={`invest-option${regGender === o.val ? ' selected' : ''}`}

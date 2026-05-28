@@ -43,7 +43,7 @@ class RegisterRequest(BaseModel):
     @field_validator("gender")
     @classmethod
     def validate_gender(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in ("M", "F", "OTHER"):
+        if v is not None and v not in ("M", "F"):
             raise ValueError("gender는 M, F, OTHER 중 하나여야 합니다.")
         return v
 

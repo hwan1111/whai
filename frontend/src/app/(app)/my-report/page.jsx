@@ -154,8 +154,8 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick }) {
             onClick={() => { setTooltip(null); onSegmentClick && onSegmentClick(seg.h); }}
           />
         ))}
-        <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fill="#94a3b8" pointerEvents="none">총 평가액</text>
-        <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="800" fill="#1e293b" pointerEvents="none">{fmtShort(totalVal)}</text>
+        <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fontWeight="600" fill="#64748b" pointerEvents="none">총 평가액</text>
+        <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="900" fill="#1e293b" pointerEvents="none">{fmtShort(totalVal)}</text>
       </svg>
       {tooltip && (
         <div style={{
@@ -255,6 +255,7 @@ function buildAiHtml(sorted, totalVal, totalCost) {
 
 function WeightHistoryChart({ snapshots, prices }) {
   const [tooltip, setTooltip] = useState(null);
+  const [sortMode, setSortMode] = useState('value');
   const containerRef = useRef(null);
 
   if (snapshots.length === 0) return (
@@ -271,18 +272,33 @@ function WeightHistoryChart({ snapshots, prices }) {
   const allIds = [...new Set(snapshots.flatMap(s => s.holdings.map(h => h.id)))];
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        {[{ key: 'value', label: '금액순' }, { key: 'name', label: '가나다순' }].map(({ key, label }) => (
+          <button key={key} onClick={() => setSortMode(key)} style={{
+            padding: '3px 9px', fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+            background: sortMode === key ? '#2563eb' : '#f1f5f9',
+            color: sortMode === key ? 'white' : '#64748b',
+          }}>{label}</button>
+        ))}
+      </div>
       {rows.map(({ snap, sorted, totalVal }) => {
         const maxVal = Math.max(...rows.map(r => r.totalVal));
         const barWidthPct = maxVal > 0 ? totalVal / maxVal * 100 : 0;
         const d = new Date(snap.datetime);
         const label = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const displaySorted = sortMode === 'name'
+          ? [...sorted].sort((a, b) => (a.info.name || a.id).localeCompare(b.info.name || b.id, 'ko'))
+          : sorted;
         return (
           <div key={snap.id}>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, fontWeight: 500 }}>{label}</div>
-            <div style={{ height: 20, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{label}</span>
+              <span style={{ fontSize: 11, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
+            </div>
+            <div style={{ height: 25, overflow: 'hidden', position: 'relative' }}>
               <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex' }}>
-                {sorted.filter(h => h.curVal > 0).map(h => {
+                {displaySorted.filter(h => h.curVal > 0).map(h => {
                   const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
                   return (
                     <div
@@ -290,7 +306,7 @@ function WeightHistoryChart({ snapshots, prices }) {
                       style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'default' }}
                       onMouseEnter={e => {
                         const rect = containerRef.current.getBoundingClientRect();
-                        setTooltip({ name: h.info.name || h.id, x: e.clientX - rect.left, y: e.clientY - rect.top });
+                        setTooltip({ name: h.info.name || h.id, val: fmtCompact(h.curVal), pct: w.toFixed(1), color: h.info.color || '#94a3b8', x: e.clientX - rect.left, y: e.clientY - rect.top });
                       }}
                       onMouseMove={e => {
                         const rect = containerRef.current.getBoundingClientRect();
@@ -308,7 +324,6 @@ function WeightHistoryChart({ snapshots, prices }) {
                 })}
               </div>
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', textAlign: 'right', marginTop: 3, fontWeight: 600 }}>{fmtCompact(totalVal)}</div>
           </div>
         );
       })}
@@ -317,19 +332,18 @@ function WeightHistoryChart({ snapshots, prices }) {
         <div style={{
           position: 'absolute',
           left: tooltip.x + 10,
-          top: tooltip.y - 32,
-          background: '#1e293b',
-          color: 'white',
-          borderRadius: 6,
-          padding: '5px 10px',
-          fontSize: 12,
-          fontWeight: 600,
+          top: tooltip.y - 48,
+          background: 'white',
+          borderRadius: 8,
+          padding: '7px 11px',
           pointerEvents: 'none',
           whiteSpace: 'nowrap',
           zIndex: 10,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.13)',
+          border: `1.5px solid ${tooltip.color}`,
         }}>
-          {tooltip.name}
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>{tooltip.name}</div>
+          <div style={{ fontSize: 11, color: '#64748b' }}>{tooltip.val} <span style={{ color: tooltip.color, fontWeight: 600 }}>({tooltip.pct}%)</span></div>
         </div>
       )}
     </div>
@@ -644,7 +658,7 @@ export default function MyReportPage() {
           <div className="sec-title">마이 포트폴리오</div>
           <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관 {totalCount > 0 ? `· 현재 ${totalCount}개` : ''}</div>
         </div>
-        <button className="btn btn-primary" onClick={() => { setFormOpen(o => !o); setHoldings([]); }}>
+        <button className="btn btn-primary" onClick={() => { setFormOpen(o => !o); if (!formOpen) setHoldings(snapshots[0]?.holdings || []); }}>
           {formOpen ? '✕ 취소' : '＋ 새 스냅샷 기록'}
         </button>
       </div>
@@ -764,11 +778,14 @@ export default function MyReportPage() {
             </table>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => { setFormOpen(false); setHoldings([]); }}>취소</button>
-            <button className="btn btn-primary" onClick={saveSnapshot} disabled={generating || holdings.length === 0} style={{ minWidth: 140 }}>
-              {generating ? '⟳ 분석 중...' : '▶ 스냅샷 저장'}
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <button className="btn btn-ghost" style={{ color: '#ef4444', borderColor: '#fca5a5' }} onClick={() => setHoldings([])}>전체 초기화</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => { setFormOpen(false); setHoldings([]); }}>취소</button>
+              <button className="btn btn-primary" onClick={saveSnapshot} disabled={generating || holdings.length === 0} style={{ minWidth: 140 }}>
+                {generating ? '⟳ 분석 중...' : '▶ 스냅샷 저장'}
+              </button>
+            </div>
           </div>
         </div>
       )}
