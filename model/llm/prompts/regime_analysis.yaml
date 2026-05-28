@@ -1,0 +1,127 @@
+name: regime_analysis
+version: "1.0.0"
+description: |
+  한국 주식 주가 국면 원인 분석 프롬프트.
+  가격 국면(기간·방향·거래량)과 뉴스를 입력받아
+  cause / evidence / confidence 구조의 JSON을 반환한다.
+
+domain: finance
+use_case: regime_analysis
+
+metadata:
+  created_date: "2026-05-26"
+  author: "team"
+  tags:
+    - regime
+    - analysis
+    - finance
+    - korean-stock
+
+# ── 시스템 프롬프트 ─────────────────────────────────────────────────
+system: |
+  당신은 한국 주식시장 전문 애널리스트입니다.
+  주어진 주가 국면(기간, 방향, 거래량 추세)의 이동 원인을
+  뉴스를 종합해 분석합니다.
+  반드시 JSON 형식으로만 응답하세요. 설명 텍스트는 포함하지 마세요.
+
+# ── 유저 프롬프트 템플릿 ────────────────────────────────────────────
+# 변수: {start} {end} {days} {name} {code} {dir_str} {cum_ret}
+#       {direction} {vol_trend} {sector}
+#       {news_pre} {news_post} {max_news_count} {news_context}
+# 치환 방식: str.replace("{var}", value) — .format() 사용 금지
+#            (JSON 스키마 예시의 { } 와 충돌 방지)
+template: |
+  {start} ~ {end} ({days}일간) {name}({code})의 주가가 {dir_str} {cum_ret} 이동했습니다.
+
+  ■ 구간 요약
+    · 방향: {direction}  누적 수익률: {cum_ret}
+    · 거래량 추세: {vol_trend}  (구간 {days}일)
+    · 섹터: {sector}
+
+  ■ 뉴스 (구간 시작 {news_pre}일 전 ~ 종료 {news_post}일 후, 최대 {max_news_count}건)
+  {news_context}
+
+  ■ 작성 규칙
+    · evidence 의 quote 는 위 뉴스 원문에서 근거가 되는 핵심 구절만 직접 인용하세요 (전후 맥락 포함 최대 80자).
+    · 수치(숫자+단위)는 원문에서 글자 그대로 복사하세요. 단위 환산·요약 절대 금지입니다.
+      예) 원문 "8,500억원" → quote에 반드시 "8,500억원"  (→ "8.5조원"으로 환산 금지)
+      예) 원문 "3.7%" → quote에 반드시 "3.7%"  (→ "약 4%" 등으로 변경 금지)
+    · 원문에 없는 수치는 작성 금지입니다.
+    · 뉴스가 없는 경우 evidence 는 빈 배열 [] 로 두세요.
+
+  위 정보를 바탕으로 이 구간의 주가 이동 원인을 분석하고 아래 JSON 으로만 응답하세요:
+  {
+    "cause":       "주요 원인 한 줄 (100자 이내)",
+    "evidence":    [
+      {"date": "YYYY-MM-DD", "quote": "원문 핵심 구절 직접 인용 (최대 40자)", "point": "이 구절이 가격 변동과 연결되는 이유 (50자 이내)"},
+      {"date": "YYYY-MM-DD", "quote": "원문 핵심 구절 직접 인용 (최대 40자)", "point": "이 구절 선정 이유 (50자 이내)"}
+    ],
+    "vol_insight": "거래량 추세가 시사하는 수급 특성 (50자 이내)",
+    "confidence":  "high|medium|low",
+    "reasoning":   "판단 근거 (200자 이내)"
+  }
+
+# ── 파라미터 정의 ───────────────────────────────────────────────────
+parameters:
+  start:
+    type: string
+    description: "국면 시작일 (YYYY-MM-DD)"
+    required: true
+  end:
+    type: string
+    description: "국면 종료일 (YYYY-MM-DD)"
+    required: true
+  days:
+    type: integer
+    description: "국면 거래일 수"
+    required: true
+  name:
+    type: string
+    description: "종목명"
+    required: true
+  code:
+    type: string
+    description: "종목코드"
+    required: true
+  dir_str:
+    type: string
+    description: "방향 문자열 (예: 상승 ▲)"
+    required: true
+  cum_ret:
+    type: string
+    description: "누적 수익률 문자열 (예: +12.9%)"
+    required: true
+  direction:
+    type: string
+    description: "상승 | 하락"
+    required: true
+  vol_trend:
+    type: string
+    description: "거래량 추세: 증가 | 감소 | 혼조"
+    required: true
+  sector:
+    type: string
+    description: "섹터명"
+    required: true
+  news_pre:
+    type: integer
+    description: "구간 시작 전 뉴스 탐색 일수"
+    required: true
+  news_post:
+    type: integer
+    description: "구간 종료 후 뉴스 탐색 일수"
+    required: true
+  max_news_count:
+    type: integer
+    description: "최대 뉴스 기사 수"
+    required: true
+  news_context:
+    type: string
+    description: "포맷된 뉴스 본문 블록"
+    required: true
+
+# ── 모델 설정 ───────────────────────────────────────────────────────
+model_config:
+  temperature: 0.3
+  max_tokens: 800
+  response_format: json_object
