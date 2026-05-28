@@ -821,7 +821,7 @@ export default function DashboardPage() {
             </div>
             {(() => {
               const n = complexIds.length;
-              const cellH = n <= 6 ? 42 : n <= 8 ? 34 : n <= 10 ? 28 : 24;
+              const cellH = n <= 6 ? 42 : n <= 8 ? 34 : n <= 12 ? 28 : 24;
               const cellStyle = cellH !== 42 ? { height: cellH, lineHeight: `${cellH}px` } : {};
               const lbl = id => { const l = shortLabel(id); return n >= 9 ? l.slice(0, 4) : l; };
               return (
