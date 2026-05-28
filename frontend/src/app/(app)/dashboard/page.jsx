@@ -853,15 +853,15 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="other-card" style={{ flex: '0 0 460px', display: 'flex', flexDirection: 'column' }}>
-            <div className="other-card-title">
+          <div style={{ flex: '0 0 460px', display: 'flex', flexDirection: 'column', background: 'linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%)', border: '1px solid #c4b5fd', borderRadius: 12, padding: '18px 20px' }}>
+            <div className="other-card-title" style={{ color: '#4c1d95' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <span className="ai-badge" style={{ textTransform: 'none', letterSpacing: 0 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
                 종목 분석
               </span>
-              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>{period}</span>
+              <span style={{ fontSize: 9, color: '#a78bfa', fontWeight: 400, textTransform: 'none' }}>{period}</span>
             </div>
-            <div style={{ background: 'linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%)', border: '1px solid #c4b5fd', borderRadius: 10, padding: '14px 16px', flex: 1, fontSize: 13, lineHeight: 1.8, color: '#312e81' }}>
+            <div style={{ flex: 1, fontSize: 13, lineHeight: 1.8, color: '#312e81' }}>
               {insightLines.map((line, i) => (
                 <p key={i} style={{ margin: i === 0 ? 0 : '10px 0 0' }}>{line}</p>
               ))}
