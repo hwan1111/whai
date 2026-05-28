@@ -99,9 +99,19 @@ def get_price_stats(
         WHERE ticker = :ticker ORDER BY date DESC LIMIT 1
     """), {"ticker": ticker}).fetchone()
 
+    prev_row = db.execute(text("""
+        SELECT close FROM price
+        WHERE ticker = :ticker ORDER BY date DESC LIMIT 1 OFFSET 1
+    """), {"ticker": ticker}).fetchone()
+
     fund = db.execute(text("""
         SELECT per, pbr, market_cap FROM fundamental WHERE ticker = :ticker
     """), {"ticker": ticker}).fetchone()
+
+    close = int(latest.close) if latest and latest.close else None
+    prev = int(prev_row.close) if prev_row and prev_row.close else close
+    change = round(close - prev, 2) if close and prev else None
+    change_pct = round((close - prev) / prev * 100, 2) if close and prev else None
 
     return {
         "high52": int(row.high52) if row and row.high52 else None,
@@ -110,4 +120,6 @@ def get_price_stats(
         "per": round(float(fund.per), 2) if fund and fund.per is not None and float(fund.per) > 0 else None,
         "pbr": round(float(fund.pbr), 2) if fund and fund.pbr is not None and float(fund.pbr) > 0 else None,
         "market_cap": int(fund.market_cap) if fund and fund.market_cap else None,
+        "change": change,
+        "change_pct": change_pct,
     }
