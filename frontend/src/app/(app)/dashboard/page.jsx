@@ -76,7 +76,7 @@ function NewsDrawer({ open, onClose }) {
       {open && <div className="news-drawer-backdrop" onClick={onClose} />}
       <div className={`news-drawer${open ? ' open' : ''}`}>
         <div className="news-drawer-header">
-          <div className="news-drawer-title"><span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 뉴스 분석</span></div>
+          <div className="news-drawer-title"><span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span> 뉴스 요약</div>
           <button className="news-drawer-close" onClick={onClose}>✕</button>
         </div>
         <div className="news-drawer-filters">
@@ -676,7 +676,8 @@ export default function DashboardPage() {
           <div className="news-preview-card">
             <div className="news-preview-header">
               <div className="news-preview-title">
-                <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 뉴스 분석</span>
+                <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+                뉴스 요약
               </div>
               <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
             </div>
