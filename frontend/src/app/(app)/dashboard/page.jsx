@@ -559,7 +559,7 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
-              <div ref={searchWrapRef} style={{ position: 'relative', marginLeft: 100 }}>
+              <div ref={searchWrapRef} style={{ position: 'relative', marginLeft: 50 }}>
                 <div className="chart-search-wrap">
                   <svg className="chart-search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <circle cx="8.5" cy="8.5" r="5" />
