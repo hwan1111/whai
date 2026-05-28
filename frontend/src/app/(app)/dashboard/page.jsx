@@ -227,7 +227,7 @@ function fmtChg(pct) {
 }
 
 export default function DashboardPage() {
-  const [activeAssets, setActiveAssets] = useState(['000000']);
+  const [activeAssets, setActiveAssets] = useState([]);
   const [period, setPeriod] = useState('1M');
   const [prices, setPrices] = useState({});
   const [chartSvg, setChartSvg] = useState('');
@@ -268,7 +268,11 @@ export default function DashboardPage() {
         });
       } catch { /* silent */ }
     }
-    fetchFavs().then(setFavs);
+    fetchFavs().then(favSet => {
+      setFavs(favSet);
+      const favArr = [...favSet].filter(id => ASSETS[id]);
+      if (favArr.length > 0) setActiveAssets(favArr);
+    });
     loadLatestPrices();
     loadLatestRates();
     loadPreviewNews();
