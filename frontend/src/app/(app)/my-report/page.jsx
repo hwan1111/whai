@@ -305,12 +305,10 @@ function WeightHistoryChart({ snapshots, prices }) {
                       key={h.id}
                       style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'default' }}
                       onMouseEnter={e => {
-                        const rect = containerRef.current.getBoundingClientRect();
-                        setTooltip({ name: h.info.name || h.id, val: fmtCompact(h.curVal), pct: w.toFixed(1), color: h.info.color || '#94a3b8', x: e.clientX - rect.left, y: e.clientY - rect.top });
+                        setTooltip({ name: h.info.name || h.id, val: fmtCompact(h.curVal), pct: w.toFixed(1), color: h.info.color || '#94a3b8', x: e.clientX, y: e.clientY });
                       }}
                       onMouseMove={e => {
-                        const rect = containerRef.current.getBoundingClientRect();
-                        setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
+                        setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
                       }}
                       onMouseLeave={() => setTooltip(null)}
                     >
@@ -330,9 +328,9 @@ function WeightHistoryChart({ snapshots, prices }) {
 
       {tooltip && (
         <div style={{
-          position: 'absolute',
-          left: tooltip.x + 10,
-          top: tooltip.y - 48,
+          position: 'fixed',
+          left: Math.min(tooltip.x + 12, window.innerWidth - 160),
+          top: tooltip.y - 52,
           background: 'white',
           borderRadius: 8,
           padding: '7px 11px',
