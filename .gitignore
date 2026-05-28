@@ -19,9 +19,23 @@ data/
 docs/
 config/certs/
 mlruns
+
+# 로컬 분석/테스트 파일
+test.py
+test2.py
+test3.py
+tt.py
+test_date.parquet
+test_date2.parquet
+
+# 로컬 임시 파일
+dart_noise_reduction.md
+docs_cache/
+mockup.html
+mockup_preview.html
+
 *.sql
 .DS_Store
 uploads/
-=2.0
 basic_auth.ini
 *.bak
