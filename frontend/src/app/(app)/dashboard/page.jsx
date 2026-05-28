@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, EXCHANGE_PAIRS, fetchAssetData, buildPeriodData } from '@/lib/data';
 import StockDetailModal from '@/components/StockDetailModal';
@@ -95,24 +95,23 @@ function NewsDrawer({ open, onClose }) {
           {loading ? (
             <div style={{ color: '#94a3b8', fontSize: 12, padding: '24px 0', textAlign: 'center' }}>불러오는 중...</div>
           ) : news.length === 0 ? (
-            <div style={{ color: '#94a3b8', fontSize: 12, padding: '24px 0', textAlign: 'center' }}>뉴스가 없습니다.</div>
+            <div style={{ color: '#94a3b8', fontSize: 12, padding: '24px 0', textAlign: 'center' }}>데이터가 없습니다.</div>
           ) : news.map((n, i) => (
             <div key={i} className="news-item">
               <div className="news-meta">
-                <span className="ticker-tag">{n.ticker}</span>
-                <span className="news-date">{n.date_str}</span>
-                <span className="news-source">{n.source}</span>
+                <span className="ticker-tag">{n.name}</span>
+                <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>
+                  {n.direction || '혼조'}
+                </span>
+                <span className="news-date">{n.start_date} ~ {n.end_date}</span>
               </div>
-              <div className="news-title">{n.title}</div>
-              <div className="news-body">{n.body}</div>
-              {n.ai_summary && (
-                <div className="ai-box" style={{ marginTop: 8, padding: '10px 12px' }}>
-                  <div className="ai-header" style={{ marginBottom: 6 }}>
-                    <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 3줄 요약</span>
-                  </div>
-                  <div className="ai-text" style={{ fontSize: 11 }}>{n.ai_summary}</div>
+              <div className="ai-box" style={{ marginTop: 6, padding: '10px 12px' }}>
+                <div className="ai-header" style={{ marginBottom: 6 }}>
+                  <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 장세 분석</span>
                 </div>
-              )}
+                {n.cause && <div className="ai-text" style={{ fontSize: 11, marginBottom: 4 }}>{n.cause}</div>}
+                {n.vol_insight && <div className="ai-text" style={{ fontSize: 11, color: '#4338ca' }}>{n.vol_insight}</div>}
+              </div>
             </div>
           ))}
         </div>
@@ -241,6 +240,9 @@ export default function DashboardPage() {
   const [previewNews, setPreviewNews] = useState([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [expandedNews, setExpandedNews] = useState(null);
+  const [chartSearch, setChartSearch] = useState('');
+  const [showSearchDrop, setShowSearchDrop] = useState(false);
+  const searchWrapRef = useRef(null);
   const PERIODS = ['1W', '1M', '3M', '6M', '1Y', '3Y', 'ALL'];
 
   useEffect(() => {
@@ -275,6 +277,16 @@ export default function DashboardPage() {
   useEffect(() => {
     renderChart();
   }, [activeAssets, period, prices]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target)) {
+        setShowSearchDrop(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   async function loadLatestPrices() {
     try {
@@ -546,22 +558,61 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div
-                className={`kospi-widget${kospiInChart ? ' in-chart' : ''}`}
-                onClick={() => toggleAsset('000000')}
-              >
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#475569', letterSpacing: 1 }}>KOSPI</div>
-                <div style={{ width: 1, height: 28, background: '#e2e8f0' }} />
-                <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>
-                  {kospiPrice ? Number(kospiPrice.price).toLocaleString('ko-KR') : '—'}
+              <div ref={searchWrapRef} style={{ position: 'relative', marginLeft: 12 }}>
+                <div className="chart-search-wrap">
+                  <svg className="chart-search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="8.5" cy="8.5" r="5" />
+                    <line x1="13" y1="13" x2="17" y2="17" />
+                  </svg>
+                  <input
+                    className="chart-search-input"
+                    placeholder="종목 검색"
+                    value={chartSearch}
+                    onChange={e => { setChartSearch(e.target.value); setShowSearchDrop(true); }}
+                    onFocus={() => setShowSearchDrop(true)}
+                  />
+                  {chartSearch && (
+                    <button className="chart-search-clear" onClick={() => { setChartSearch(''); setShowSearchDrop(false); }}>×</button>
+                  )}
                 </div>
-                {kospiPrice && kospiPrice.change_pct !== undefined ? (() => {
-                  const { text, cls } = fmtChg(kospiPrice.change_pct);
-                  return <div className={`tk-chg ${cls}`} style={{ fontSize: 13 }}>{text}</div>;
-                })() : <div className="tk-chg" style={{ fontSize: 13 }}>—</div>}
+                {showSearchDrop && chartSearch.trim() && (
+                  <div className="chart-search-drop">
+                    {[
+                      ...Object.entries(STOCK_NAMES),
+                      ...Object.keys(FX_INFO).map(id => [id, id]),
+                    ]
+                      .filter(([id, name]) => name.toLowerCase().includes(chartSearch.toLowerCase()) || id.toLowerCase().includes(chartSearch.toLowerCase()))
+                      .map(([id, name]) => (
+                        <div
+                          key={id}
+                          className={`chart-search-item${activeAssets.includes(id) ? ' active' : ''}`}
+                          onClick={() => { toggleAsset(id); setChartSearch(''); setShowSearchDrop(false); }}
+                        >
+                          <span className="chart-search-name">{name}</span>
+                        </div>
+                      ))
+                    }
+                    {[...Object.entries(STOCK_NAMES), ...Object.keys(FX_INFO).map(id => [id, id])]
+                      .filter(([id, name]) => name.toLowerCase().includes(chartSearch.toLowerCase()) || id.toLowerCase().includes(chartSearch.toLowerCase())).length === 0 && (
+                      <div className="chart-search-empty">검색 결과 없음</div>
+                    )}
+                  </div>
+                )}
               </div>
+            </div>
+            <div
+              className={`kospi-widget${kospiInChart ? ' in-chart' : ''}`}
+              onClick={() => toggleAsset('000000')}
+            >
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#475569', letterSpacing: 1 }}>KOSPI</div>
+              <div style={{ width: 1, height: 28, background: '#e2e8f0' }} />
+              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>
+                {kospiPrice ? Number(kospiPrice.price).toLocaleString('ko-KR') : '—'}
+              </div>
+              {kospiPrice && kospiPrice.change_pct !== undefined ? (() => {
+                const { text, cls } = fmtChg(kospiPrice.change_pct);
+                return <div className={`tk-chg ${cls}`} style={{ fontSize: 13 }}>{text}</div>;
+              })() : <div className="tk-chg" style={{ fontSize: 13 }}>—</div>}
             </div>
           </div>
 
@@ -643,19 +694,16 @@ export default function DashboardPage() {
             ) : previewNews.length === 0 ? (
               <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>뉴스가 없습니다.</div>
             ) : previewNews.map((n, i) => (
-              <div key={i} className="news-preview-item" style={{ cursor: n.ai_summary ? 'pointer' : 'default' }} onClick={() => n.ai_summary && setExpandedNews(expandedNews === i ? null : i)}>
+              <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setExpandedNews(expandedNews === i ? null : i)}>
                 <div className="news-meta">
-                  <span className="ticker-tag">{n.ticker}</span>
-                  <span className="news-date">{n.date_str}</span>
-                  {n.ai_summary && <span style={{ marginLeft: 'auto', fontSize: 10, color: '#94a3b8' }}>{expandedNews === i ? '▲' : '▼'}</span>}
+                  <span className="ticker-tag">{n.name}</span>
+                  <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                  <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
                 </div>
-                <div className="news-title" style={{ fontSize: 12 }}>{n.title}</div>
-                {expandedNews === i && n.ai_summary && (
+                <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
+                {expandedNews === i && n.vol_insight && (
                   <div className="ai-box" style={{ marginTop: 8, padding: '10px 12px' }}>
-                    <div className="ai-header" style={{ marginBottom: 6 }}>
-                      <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 3줄 요약</span>
-                    </div>
-                    <div className="ai-text" style={{ fontSize: 11 }} dangerouslySetInnerHTML={{ __html: n.ai_summary }} />
+                    <div className="ai-text" style={{ fontSize: 11, color: '#4338ca' }}>{n.vol_insight}</div>
                   </div>
                 )}
               </div>
