@@ -248,7 +248,7 @@ export default function Header({ updateTime }) {
             </Link>
           ) : (
             <Link href="/my-report" className="header-report-btn">
-              📄 마이 리포트
+              📄 마이 포트폴리오
             </Link>
           )}
           <div className="user-menu-wrap" ref={menuRef}>

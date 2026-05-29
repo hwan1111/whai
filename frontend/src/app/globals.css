@@ -33,7 +33,7 @@ body {
   color: var(--text);
   font-size: 14px;
 }
-html, body { height: 100%; min-width: 1280px; }
+html, body { height: 100%; min-width: 1600px; }
 
 /* ── App layout ── */
 .app { display: flex; flex-direction: column; height: 100vh; overflow-x: auto; overflow-y: hidden; }
@@ -189,7 +189,7 @@ html, body { height: 100%; min-width: 1280px; }
 .per-btn:hover { border-color: #93c5fd; color: var(--primary); }
 .per-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
-.kospi-widget { display: flex; align-items: center; gap: 14px; padding: 6px 18px; border-radius: 8px; border: 1px solid var(--border); background: white; cursor: pointer; transition: all 0.15s; }
+.kospi-widget { display: flex; align-items: center; gap: 14px; padding: 6px 18px; border-radius: 8px; border: 1px solid var(--border); background: white; cursor: pointer; transition: all 0.15s; flex-shrink: 0; white-space: nowrap; }
 .kospi-widget:hover { border-color: #94a3b8; background: #f8fafc; }
 .kospi-widget.in-chart { border-color: var(--primary); background: #eff6ff; }
 /* ── 차트 종목 검색 ── */

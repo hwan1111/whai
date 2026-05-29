@@ -550,7 +550,7 @@ export default function DashboardPage() {
         {/* LEFT: Chart */}
         <div className="chart-panel">
           <div className="chart-controls">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>기간</div>
               <div className="period-sel">
                 {PERIODS.map(p => (
