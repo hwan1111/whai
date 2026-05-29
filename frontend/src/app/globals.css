@@ -33,7 +33,7 @@ body {
   color: var(--text);
   font-size: 14px;
 }
-html, body { height: 100%; min-width: 1600px; }
+html, body { height: 100%; overflow: hidden; }
 
 /* ── App layout ── */
 .app { display: flex; flex-direction: column; height: 100vh; overflow-x: auto; overflow-y: hidden; }

@@ -135,8 +135,9 @@ function niceTicks(min, max, target) {
   return ticks;
 }
 
-function renderChartSvg(activeAssets, pd) {
-  if (!pd || activeAssets.length === 0) return '';
+function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, prices }) {
+  const [tooltip, setTooltip] = useState(null);
+  if (!pd || activeAssets.length === 0) return null;
   const n = pd.labels.length;
 
   let allV = [0];
@@ -145,59 +146,134 @@ function renderChartSvg(activeAssets, pd) {
   const pad = Math.max((maxV - minV) * 0.12, 3);
   minV -= pad; maxV += pad;
 
-  let h = '';
-  niceTicks(minV, maxV, 6).forEach(v => {
-    const y = toY(v, minV, maxV);
-    const isZero = Math.abs(v) < 0.01;
-    h += `<line x1="${ML}" y1="${y.toFixed(1)}" x2="${SW - MR}" y2="${y.toFixed(1)}" stroke="${isZero ? '#cbd5e1' : '#f1f5f9'}" stroke-width="${isZero ? 1.5 : 1}" ${isZero ? 'stroke-dasharray="5,4"' : ''}/>`;
-    const label = (v >= 0 ? '+' : '') + v.toFixed(v % 1 === 0 ? 0 : 1) + '%';
-    h += `<text x="${ML - 5}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="${isZero ? '#475569' : '#94a3b8'}" font-weight="${isZero ? 600 : 400}">${label}</text>`;
-  });
-
+  const ticks = niceTicks(minV, maxV, 6);
   const step = Math.max(1, Math.ceil(n / 8));
-  for (let i = 0; i < n; i += step) {
-    const x = toX(i, n);
-    h += `<text x="${x.toFixed(1)}" y="${(MT + CH + 22).toFixed(1)}" text-anchor="middle" font-size="10" fill="#94a3b8">${pd.labels[i]}</text>`;
-  }
-  if ((n - 1) % step !== 0) {
-    const x = toX(n - 1, n);
-    h += `<text x="${x.toFixed(1)}" y="${(MT + CH + 22).toFixed(1)}" text-anchor="middle" font-size="10" fill="#94a3b8">${pd.labels[n - 1]}</text>`;
-  }
+  const xLabelIndices = [];
+  for (let i = 0; i < n; i += step) xLabelIndices.push(i);
+  if ((n - 1) % step !== 0) xLabelIndices.push(n - 1);
 
-  activeAssets.forEach(a => {
-    const vals = pd.d[a];
-    if (!vals) return;
-    const col = ASSETS[a].color;
-    const isFx = a.startsWith('KRW/');
-    const isKospi = a === '000000';
-    const lineAttr = isKospi
-      ? 'stroke-dasharray="1,5" stroke-linecap="round" stroke-width="2.5"'
-      : isFx
-        ? 'stroke-dasharray="7,4" stroke-linecap="butt" stroke-width="1.8"'
-        : 'stroke-linecap="round" stroke-width="2"';
+  return (
+    <>
+    {tooltip && (
+      <div style={{
+        position: 'fixed', left: Math.min(tooltip.x + 14, window.innerWidth - 190), top: tooltip.y - 72,
+        background: 'white', border: `1.5px solid ${tooltip.color}`, borderRadius: 10,
+        padding: '9px 14px', boxShadow: '0 4px 16px rgba(15,23,42,0.12)',
+        zIndex: 200, pointerEvents: 'none', minWidth: 150,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: tooltip.color, flexShrink: 0, display: 'inline-block' }} />
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>{tooltip.name}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 14 }}>
+          <span style={{ color: '#94a3b8' }}>기간 수익률</span>
+          <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#16a34a' : '#dc2626' }}>
+            {tooltip.periodVal >= 0 ? '+' : ''}{tooltip.periodVal.toFixed(2)}%
+          </span>
+        </div>
+        {tooltip.todayChg != null && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 14, marginTop: 4 }}>
+            <span style={{ color: '#94a3b8' }}>전일 대비</span>
+            <span style={{ fontWeight: 700, color: tooltip.todayChg >= 0 ? '#16a34a' : '#dc2626' }}>
+              {tooltip.todayChg >= 0 ? '▲' : '▼'} {Math.abs(tooltip.todayChgPct).toFixed(2)}%
+            </span>
+          </div>
+        )}
+      </div>
+    )}
+    <svg viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none"
+      style={{ width: '100%', minHeight: 280, display: 'block' }}
+      onMouseLeave={() => { onHoverAsset(null); setTooltip(null); }}>
 
-    let seg = [];
-    vals.forEach((v, i) => {
-      if (v === null) {
-        if (seg.length > 1) h += `<polyline points="${seg.join(' ')}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
-        seg = [];
-      } else {
-        seg.push(`${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`);
-      }
-    });
-    if (seg.length > 1) h += `<polyline points="${seg.join(' ')}" fill="none" stroke="${col}" stroke-linejoin="round" ${lineAttr}/>`;
+      {/* 그리드 + y축 라벨 */}
+      {ticks.map(v => {
+        const y = toY(v, minV, maxV);
+        const isZero = Math.abs(v) < 0.01;
+        const label = (v >= 0 ? '+' : '') + v.toFixed(v % 1 === 0 ? 0 : 1) + '%';
+        return (
+          <g key={v}>
+            <line x1={ML} y1={y.toFixed(1)} x2={SW - MR} y2={y.toFixed(1)}
+              stroke={isZero ? '#cbd5e1' : '#f1f5f9'} strokeWidth={isZero ? 1.5 : 1}
+              strokeDasharray={isZero ? '5,4' : undefined} />
+            <text x={ML - 5} y={(y + 4).toFixed(1)} textAnchor="end" fontSize={10}
+              fill={isZero ? '#475569' : '#94a3b8'} fontWeight={isZero ? 600 : 400}>{label}</text>
+          </g>
+        );
+      })}
 
-    let lastIdx = vals.length - 1;
-    while (lastIdx >= 0 && vals[lastIdx] === null) lastIdx--;
-    if (lastIdx < 0) return;
-    const lv = vals[lastIdx];
-    const lx = toX(lastIdx, n), ly = toY(lv, minV, maxV);
-    h += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3.5" fill="${col}"/>`;
-    const sign = lv >= 0 ? '+' : '';
-    h += `<text x="${(lx + 6).toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="10" fill="${col}" font-weight="700">${sign}${lv.toFixed(1)}%</text>`;
-  });
+      {/* x축 라벨 */}
+      {xLabelIndices.map(i => (
+        <text key={i} x={toX(i, n).toFixed(1)} y={(MT + CH + 22).toFixed(1)}
+          textAnchor="middle" fontSize={10} fill="#94a3b8">{pd.labels[i]}</text>
+      ))}
 
-  return h;
+      {/* 라인 */}
+      {activeAssets.map(a => {
+        const vals = pd.d[a];
+        if (!vals) return null;
+        const col = ASSETS[a].color;
+        const isFx = a.startsWith('KRW/');
+        const isKospi = a === '000000';
+        const isDimmed = hoveredAsset !== null && hoveredAsset !== a;
+
+        const strokeDasharray = isKospi ? '1,5' : isFx ? '7,4' : undefined;
+        const strokeLinecap = isFx ? 'butt' : 'round';
+        const strokeWidth = isKospi ? 2.5 : isFx ? 1.8 : 2;
+
+        const segments = [];
+        let seg = [];
+        vals.forEach((v, i) => {
+          if (v === null) {
+            if (seg.length > 1) segments.push([...seg]);
+            seg = [];
+          } else {
+            seg.push(`${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`);
+          }
+        });
+        if (seg.length > 1) segments.push(seg);
+
+        let lastIdx = vals.length - 1;
+        while (lastIdx >= 0 && vals[lastIdx] === null) lastIdx--;
+        if (lastIdx < 0) return null;
+        const lv = vals[lastIdx];
+        const lx = toX(lastIdx, n), ly = toY(lv, minV, maxV);
+        const sign = lv >= 0 ? '+' : '';
+
+        return (
+          <g key={a} style={{ opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' }}>
+            {segments.map((pts, si) => (
+              <polyline key={si} points={pts.join(' ')} fill="none" stroke={col}
+                strokeLinejoin="round" strokeDasharray={strokeDasharray}
+                strokeLinecap={strokeLinecap} strokeWidth={strokeWidth} />
+            ))}
+            {/* hover 인식 영역 (투명 넓은 선) */}
+            {segments.map((pts, si) => (
+              <polyline key={`h${si}`} points={pts.join(' ')} fill="none" stroke="transparent"
+                strokeWidth={14} style={{ cursor: 'pointer' }}
+                onMouseEnter={e => {
+                  onHoverAsset(a);
+                  const pd = prices?.[a];
+                  setTooltip({
+                    x: e.clientX, y: e.clientY,
+                    name: ASSETS[a].label,
+                    color: col,
+                    periodVal: lv,
+                    todayChg: pd?.change ?? null,
+                    todayChgPct: pd?.change_pct ?? null,
+                  });
+                }}
+                onMouseMove={e => setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
+                onMouseLeave={() => { onHoverAsset(null); setTooltip(null); }} />
+            ))}
+            <circle cx={lx.toFixed(1)} cy={ly.toFixed(1)} r={3.5} fill={col} />
+            <text x={(lx + 6).toFixed(1)} y={(ly + 4).toFixed(1)} fontSize={10}
+              fill={col} fontWeight={700}>{sign}{lv.toFixed(1)}%</text>
+          </g>
+        );
+      })}
+    </svg>
+    </>
+  );
 }
 
 async function fetchFavs() {
@@ -230,7 +306,8 @@ export default function DashboardPage() {
   const [activeAssets, setActiveAssets] = useState([]);
   const [period, setPeriod] = useState('1M');
   const [prices, setPrices] = useState({});
-  const [chartSvg, setChartSvg] = useState('');
+  const [chartPd, setChartPd] = useState(null);
+  const [hoveredAsset, setHoveredAsset] = useState(null);
   const [legend, setLegend] = useState([]);
   const [favs, setFavs] = useState(new Set());
   const [detailStockId, setDetailStockId] = useState(null);
@@ -396,11 +473,10 @@ export default function DashboardPage() {
   }
 
   async function renderChart() {
-    if (activeAssets.length === 0) { setChartSvg(''); setLegend([]); setComplexData({}); return; }
+    if (activeAssets.length === 0) { setChartPd(null); setLegend([]); setComplexData({}); return; }
     await Promise.all(activeAssets.map(id => fetchAssetData(id, period)));
     const pd = buildPeriodData(period, activeAssets);
-    const svg = renderChartSvg(activeAssets, pd);
-    setChartSvg(svg);
+    setChartPd(pd);
     setLegend(activeAssets.map(a => {
       const vals = pd?.d[a];
       const last = vals ? (vals.filter(v => v !== null).pop() ?? 0) : 0;
@@ -640,20 +716,20 @@ export default function DashboardPage() {
               </div>
             )}
             <div className="chart-svg-wrap">
-              <svg
-                viewBox={`0 0 ${SW} ${SH}`}
-                preserveAspectRatio="none"
-                style={{ width: '100%', minHeight: 280, display: 'block' }}
-                dangerouslySetInnerHTML={{ __html: chartSvg }}
-              />
+              <LineChart activeAssets={activeAssets} pd={chartPd}
+                hoveredAsset={hoveredAsset} onHoverAsset={setHoveredAsset} prices={prices} />
             </div>
             {legend.length > 0 && (
               <div className="chart-legend">
                 {legend.map(({ id, last }) => {
                   const sign = last >= 0 ? '+' : '';
                   const col = last >= 0 ? '#16a34a' : '#dc2626';
+                  const isDimmed = hoveredAsset !== null && hoveredAsset !== id;
                   return (
-                    <div key={id} className="leg-item">
+                    <div key={id} className="leg-item"
+                      style={{ opacity: isDimmed ? 0.25 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredAsset(id)}
+                      onMouseLeave={() => setHoveredAsset(null)}>
                       <div className="leg-dot" style={{ background: ASSETS[id].color }} />
                       <span className="leg-name">{ASSETS[id].label}</span>
                       <span className="leg-val" style={{ color: col }}>{sign}{last.toFixed(1)}%</span>
