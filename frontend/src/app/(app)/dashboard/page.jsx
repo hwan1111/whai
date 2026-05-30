@@ -135,8 +135,10 @@ function niceTicks(min, max, target) {
   return ticks;
 }
 
-function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, prices }) {
+function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
   const [tooltip, setTooltip] = useState(null);
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+  const svgRef = useRef(null);
   if (!pd || activeAssets.length === 0) return null;
   const n = pd.labels.length;
 
@@ -152,38 +154,80 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, prices }) {
   for (let i = 0; i < n; i += step) xLabelIndices.push(i);
   if ((n - 1) % step !== 0) xLabelIndices.push(n - 1);
 
+  function getIdx(clientX) {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const svgX = (clientX - rect.left) / rect.width * SW;
+    return Math.max(0, Math.min(n - 1, Math.round((svgX - ML) / CW * (n - 1))));
+  }
+
+  function buildTooltip(a, clientX, clientY) {
+    const idx = getIdx(clientX);
+    const closes = pd.closes?.[a];
+    const close = closes?.[idx] ?? null;
+    const prevClose = idx > 0 ? closes?.[idx - 1] : null;
+    const dailyChgPct = close != null && prevClose != null
+      ? (close - prevClose) / prevClose * 100 : null;
+    return {
+      x: clientX, y: clientY,
+      name: ASSETS[a].label,
+      color: ASSETS[a].color,
+      date: pd.labels[idx],
+      close,
+      isFx: EXCHANGE_PAIRS.has(a),
+      periodVal: pd.d[a]?.[idx] ?? 0,
+      dailyChgPct,
+    };
+  }
+
   return (
     <>
     {tooltip && (
       <div style={{
-        position: 'fixed', left: Math.min(tooltip.x + 14, window.innerWidth - 190), top: tooltip.y - 72,
+        position: 'fixed',
+        left: Math.min(tooltip.x + 14, window.innerWidth - 210),
+        top: Math.max(10, tooltip.y - 120),
         background: 'white', border: `1.5px solid ${tooltip.color}`, borderRadius: 10,
         padding: '9px 14px', boxShadow: '0 4px 16px rgba(15,23,42,0.12)',
-        zIndex: 200, pointerEvents: 'none', minWidth: 150,
+        zIndex: 200, pointerEvents: 'none', minWidth: 200,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: tooltip.color, flexShrink: 0, display: 'inline-block' }} />
           <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>{tooltip.name}</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
+          <span style={{ color: '#94a3b8' }}>날짜</span>
+          <span style={{ fontWeight: 600, color: '#374151' }}>{tooltip.date}</span>
+        </div>
+        {tooltip.close != null && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
+            <span style={{ color: '#94a3b8' }}>{tooltip.isFx ? '환율' : '주가'}</span>
+            <span style={{ fontWeight: 700, color: '#1e293b' }}>
+              {tooltip.isFx
+                ? tooltip.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })
+                : `${Number(tooltip.close).toLocaleString('ko-KR')}원`}
+            </span>
+          </div>
+        )}
+        {tooltip.dailyChgPct != null && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
+            <span style={{ color: '#94a3b8' }}>전일 대비</span>
+            <span style={{ fontWeight: 700, color: tooltip.dailyChgPct >= 0 ? '#16a34a' : '#dc2626' }}>
+              {tooltip.dailyChgPct >= 0 ? '▲' : '▼'} {Math.abs(tooltip.dailyChgPct).toFixed(2)}%
+            </span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13 }}>
           <span style={{ color: '#94a3b8' }}>기간 수익률</span>
           <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#16a34a' : '#dc2626' }}>
             {tooltip.periodVal >= 0 ? '+' : ''}{tooltip.periodVal.toFixed(2)}%
           </span>
         </div>
-        {tooltip.todayChg != null && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 14, marginTop: 4 }}>
-            <span style={{ color: '#94a3b8' }}>전일 대비</span>
-            <span style={{ fontWeight: 700, color: tooltip.todayChg >= 0 ? '#16a34a' : '#dc2626' }}>
-              {tooltip.todayChg >= 0 ? '▲' : '▼'} {Math.abs(tooltip.todayChgPct).toFixed(2)}%
-            </span>
-          </div>
-        )}
       </div>
     )}
-    <svg viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none"
+    <svg ref={svgRef} viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none"
       style={{ width: '100%', minHeight: 280, display: 'block' }}
-      onMouseLeave={() => { onHoverAsset(null); setTooltip(null); }}>
+      onMouseLeave={() => { onHoverAsset(null); setTooltip(null); setHoveredIdx(null); }}>
 
       {/* 그리드 + y축 라벨 */}
       {ticks.map(v => {
@@ -193,10 +237,10 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, prices }) {
         return (
           <g key={v}>
             <line x1={ML} y1={y.toFixed(1)} x2={SW - MR} y2={y.toFixed(1)}
-              stroke={isZero ? '#cbd5e1' : '#f1f5f9'} strokeWidth={isZero ? 1.5 : 1}
-              strokeDasharray={isZero ? '5,4' : undefined} />
+              stroke={isZero ? '#94a3b8' : '#f1f5f9'} strokeWidth={isZero ? 1.5 : 1}
+              />
             <text x={ML - 5} y={(y + 4).toFixed(1)} textAnchor="end" fontSize={10}
-              fill={isZero ? '#475569' : '#94a3b8'} fontWeight={isZero ? 600 : 400}>{label}</text>
+              fill={isZero ? '#94a3b8' : '#94a3b8'} fontWeight={isZero ? 600 : 400}>{label}</text>
           </g>
         );
       })}
@@ -206,6 +250,15 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, prices }) {
         <text key={i} x={toX(i, n).toFixed(1)} y={(MT + CH + 22).toFixed(1)}
           textAnchor="middle" fontSize={10} fill="#94a3b8">{pd.labels[i]}</text>
       ))}
+
+      {/* crosshair */}
+      {hoveredIdx !== null && (
+        <line
+          x1={toX(hoveredIdx, n).toFixed(1)} y1={MT}
+          x2={toX(hoveredIdx, n).toFixed(1)} y2={MT + CH}
+          stroke="#cbd5e1" strokeWidth={1} strokeDasharray="3,3" pointerEvents="none"
+        />
+      )}
 
       {/* 라인 */}
       {activeAssets.map(a => {
@@ -246,24 +299,21 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, prices }) {
                 strokeLinejoin="round" strokeDasharray={strokeDasharray}
                 strokeLinecap={strokeLinecap} strokeWidth={strokeWidth} />
             ))}
-            {/* hover 인식 영역 (투명 넓은 선) */}
             {segments.map((pts, si) => (
               <polyline key={`h${si}`} points={pts.join(' ')} fill="none" stroke="transparent"
                 strokeWidth={14} style={{ cursor: 'pointer' }}
                 onMouseEnter={e => {
                   onHoverAsset(a);
-                  const pd = prices?.[a];
-                  setTooltip({
-                    x: e.clientX, y: e.clientY,
-                    name: ASSETS[a].label,
-                    color: col,
-                    periodVal: lv,
-                    todayChg: pd?.change ?? null,
-                    todayChgPct: pd?.change_pct ?? null,
-                  });
+                  const idx = getIdx(e.clientX);
+                  setHoveredIdx(idx);
+                  setTooltip(buildTooltip(a, e.clientX, e.clientY));
                 }}
-                onMouseMove={e => setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
-                onMouseLeave={() => { onHoverAsset(null); setTooltip(null); }} />
+                onMouseMove={e => {
+                  const idx = getIdx(e.clientX);
+                  setHoveredIdx(idx);
+                  setTooltip(buildTooltip(a, e.clientX, e.clientY));
+                }}
+                onMouseLeave={() => { onHoverAsset(null); setTooltip(null); setHoveredIdx(null); }} />
             ))}
             <circle cx={lx.toFixed(1)} cy={ly.toFixed(1)} r={3.5} fill={col} />
             <text x={(lx + 6).toFixed(1)} y={(ly + 4).toFixed(1)} fontSize={10}
@@ -717,7 +767,7 @@ export default function DashboardPage() {
             )}
             <div className="chart-svg-wrap">
               <LineChart activeAssets={activeAssets} pd={chartPd}
-                hoveredAsset={hoveredAsset} onHoverAsset={setHoveredAsset} prices={prices} />
+                hoveredAsset={hoveredAsset} onHoverAsset={setHoveredAsset} />
             </div>
             {legend.length > 0 && (
               <div className="chart-legend">
@@ -941,7 +991,7 @@ export default function DashboardPage() {
                 </table>
               );
             })()}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 10, color: '#64748b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 10, color: '#94a3b8' }}>
               <span>-1.0</span>
               <div style={{ width: 120, height: 8, borderRadius: 4, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
               <span>+1.0</span>

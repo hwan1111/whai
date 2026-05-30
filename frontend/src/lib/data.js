@@ -64,19 +64,26 @@ export function buildPeriodData(period, ids) {
   });
 
   const d = {};
+  const closes = {};
   for (const id of ids) {
     const rows = cache[id];
     if (!rows?.length) continue;
     const byDate = Object.fromEntries(rows.map(r => [r.date, r.return_pct]));
+    const byClose = Object.fromEntries(rows.map(r => [r.date, r.close ?? r.rate ?? null]));
     const firstDate = rows[0].date;
     const lastDate = rows[rows.length - 1].date;
-    let last = 0;
+    let last = 0, lastClose = null;
     d[id] = sortedDates.map(date => {
       if (date < firstDate || date > lastDate) return null;
       if (byDate[date] !== undefined) last = byDate[date];
       return last;
     });
+    closes[id] = sortedDates.map(date => {
+      if (date < firstDate || date > lastDate) return null;
+      if (byClose[date] !== undefined) lastClose = byClose[date];
+      return lastClose;
+    });
   }
 
-  return { labels, d };
+  return { labels, d, closes };
 }

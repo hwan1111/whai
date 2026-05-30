@@ -105,7 +105,8 @@ def get_price_stats(
     """), {"ticker": ticker}).fetchone()
 
     fund = db.execute(text("""
-        SELECT per, pbr, market_cap FROM fundamental WHERE ticker = :ticker
+        SELECT per, pbr, market_cap FROM fundamental
+        WHERE ticker = :ticker ORDER BY date DESC LIMIT 1
     """), {"ticker": ticker}).fetchone()
 
     close = int(latest.close) if latest and latest.close else None
