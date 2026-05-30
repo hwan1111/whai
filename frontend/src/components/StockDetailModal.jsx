@@ -262,9 +262,9 @@ export default function StockDetailModal({ stockId, onClose }) {
                     <svg viewBox="0 0 500 220" width="100%" height={210} style={{ display: 'block' }} dangerouslySetInnerHTML={{ __html: chartSvg }} />
                   </div>
 
-                  <div className="other-card">
+                  <div className="other-card" style={{ display: 'flex', flexDirection: 'column' }}>
                     <div className="other-card-title">주요 지표</div>
-                    <div className="grid g11" style={{ gap: 7 }}>
+                    <div className="grid g11" style={{ gap: 7, flex: 1, alignContent: 'space-between' }}>
                       <div className="metric-box"><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
                       <div className="metric-box"><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
                       <div className="metric-box"><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
@@ -294,33 +294,49 @@ export default function StockDetailModal({ stockId, onClose }) {
               </div>
 
               {/* 우측: 뉴스 */}
-              <div className="other-card">
+              <div className="other-card" style={{ display: 'flex', flexDirection: 'column' }}>
                 <div className="other-card-title">관련 뉴스</div>
-                {news.length === 0 ? (
-                  <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>관련 뉴스가 없습니다.</div>
-                ) : (
-                  news.slice(0, 5).map((n, i) => (
-                    <div key={i} className="news-item" style={{ cursor: 'pointer' }}
-                      onClick={() => setExpandedNews(expandedNews === i ? null : i)}>
-                      <div className="news-meta">
-                        <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>
-                          {n.direction || '혼조'}
-                        </span>
-                        <span className="news-date">{n.start_date} ~ {n.end_date}</span>
-                      </div>
-                      {n.cause && <div className="news-title">{n.cause}</div>}
-                      {expandedNews === i && (n.cause || n.vol_insight) && (
-                        <div className="ai-box" style={{ marginTop: 8, padding: '10px 12px' }}>
-                          <div className="ai-header" style={{ marginBottom: 6 }}>
-                            <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 장세 분석</span>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {news.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>관련 뉴스가 없습니다.</div>
+                  ) : expandedNews !== null ? (
+                    (() => {
+                      const n = news[expandedNews];
+                      return (
+                        <div className="news-item" style={{ cursor: 'pointer' }} onClick={() => setExpandedNews(null)}>
+                          <div className="news-meta">
+                            <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>
+                              {n.direction || '혼조'}
+                            </span>
+                            <span className="news-date">{n.start_date} ~ {n.end_date}</span>
                           </div>
-                          {n.cause && <div className="ai-text" style={{ fontSize: 11, marginBottom: 4 }}>{n.cause}</div>}
-                          {n.vol_insight && <div className="ai-text" style={{ fontSize: 11, color: '#4338ca' }}>{n.vol_insight}</div>}
+                          {n.cause && <div className="news-title" style={{ marginBottom: 8 }}>{n.cause}</div>}
+                          {(n.cause || n.vol_insight) && (
+                            <div className="ai-box" style={{ padding: '10px 12px' }}>
+                              <div className="ai-header" style={{ marginBottom: 6 }}>
+                                <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 장세 분석</span>
+                              </div>
+                              {n.cause && <div className="ai-text" style={{ fontSize: 11, marginBottom: 4 }}>{n.cause}</div>}
+                              {n.vol_insight && <div className="ai-text" style={{ fontSize: 11, color: '#4338ca' }}>{n.vol_insight}</div>}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))
-                )}
+                      );
+                    })()
+                  ) : (
+                    news.slice(0, 5).map((n, i) => (
+                      <div key={i} className="news-item" style={{ cursor: 'pointer' }} onClick={() => setExpandedNews(i)}>
+                        <div className="news-meta">
+                          <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>
+                            {n.direction || '혼조'}
+                          </span>
+                          <span className="news-date">{n.start_date} ~ {n.end_date}</span>
+                        </div>
+                        {n.cause && <div className="news-title">{n.cause}</div>}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
             </div>
