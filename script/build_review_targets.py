@@ -65,8 +65,8 @@ def run(ticker_code: str = "005930") -> None:
             **e,
             "confidence":  s.get("llm_analysis", {}).get("confidence", "N/A"),
             "cause":       s.get("llm_analysis", {}).get("cause", ""),
-            "tokens_in":   s.get("tokens_in"),
-            "tokens_out":  s.get("tokens_out"),
+            "input_tokens":   s.get("input_tokens"),
+            "output_tokens":  s.get("output_tokens"),
             "news_count":  s.get("news_count"),
         })
 
@@ -109,7 +109,7 @@ def run(ticker_code: str = "005930") -> None:
             "cum_return": r["cum_return"],
             "vol_trend":  r.get("vol_trend"),
             "news_count": r.get("news_count"),
-            "tokens_in":  r.get("tokens_in"),
+            "input_tokens":  r.get("input_tokens"),
             "sem_max":    r["sem_max"],
             "sem_mean":   r["sem_mean"],
             "coverage":   r["coverage"],

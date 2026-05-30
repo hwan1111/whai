@@ -464,8 +464,8 @@ def run(provider: str = "groq", model: str | None = None,
             "cum_return":   round(cum_ret, 6),
             "vol_trend":    vol_trend,
             "news_count":   len(news_articles),
-            "tokens_in":    tok_in,
-            "tokens_out":   tok_out,
+            "input_tokens":    tok_in,
+            "output_tokens":   tok_out,
             "llm_analysis": answer,
         })
         done_keys.add(regime_key)
