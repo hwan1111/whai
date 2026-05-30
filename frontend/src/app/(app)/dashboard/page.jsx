@@ -676,11 +676,8 @@ export default function DashboardPage() {
       <div className={`dash-layout${rightOpen ? ' panel-open' : ''}`}>
 
         <div className="left-wrapper">
-          <div style={{ display: 'flex', flex: 1, gap: 14, minHeight: 0 }}>
-        {/* LEFT: Chart */}
-        <div className="chart-panel">
           <div className="chart-controls">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', columnGap: 20 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>기간</div>
               <div className="period-sel">
                 {PERIODS.map(p => (
@@ -693,30 +690,33 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
+              <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0, margin: '0 20px' }} />
+              <div className="active-chips" style={{ margin: 0, padding: 0 }}>
+                {[...favs].filter(id => ASSETS[id]).map(id => {
+                  const isSelected = id === selectedFavId;
+                  const color = ASSETS[id].color;
+                  return (
+                    <span
+                      key={id}
+                      className={`a-chip a-chip-clickable${isSelected ? ' a-chip-active' : ''}`}
+                      style={{
+                        color: isSelected ? 'white' : color,
+                        borderColor: color,
+                        background: isSelected ? color : color + '18',
+                      }}
+                      onClick={() => setSelectedFavId(id)}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: isSelected ? 'white' : color, display: 'inline-block' }} />
+                      {ASSETS[id].label}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </div>
-
-          <div className="active-chips">
-            {[...favs].filter(id => ASSETS[id]).map(id => {
-              const isSelected = id === selectedFavId;
-              const color = ASSETS[id].color;
-              return (
-                <span
-                  key={id}
-                  className={`a-chip a-chip-clickable${isSelected ? ' a-chip-active' : ''}`}
-                  style={{
-                    color: isSelected ? 'white' : color,
-                    borderColor: color,
-                    background: isSelected ? color : color + '18',
-                  }}
-                  onClick={() => setSelectedFavId(id)}
-                >
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: isSelected ? 'white' : color, display: 'inline-block' }} />
-                  {ASSETS[id].label}
-                </span>
-              );
-            })}
-          </div>
+          <div style={{ display: 'flex', flex: 1, gap: 14, minHeight: 0 }}>
+        {/* LEFT: Chart */}
+        <div className="chart-panel">
 
           <div className="chart-body">
             <div className="chart-main">
