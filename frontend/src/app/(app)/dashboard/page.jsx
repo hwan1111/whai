@@ -648,6 +648,25 @@ export default function DashboardPage() {
   const complexIds = activeAssets.filter(id => complexData[id]);
   const showComplex = complexIds.length >= 2;
 
+  const cfg = selectedFavId ? STOCK_CONFIG[selectedFavId] : null;
+  const s = favDetail?.stats;
+  const chgPct = favDetail?.changePct;
+  const chgAmt = favDetail?.change;
+  const chgColor = (chgPct ?? 0) >= 0 ? '#16a34a' : '#dc2626';
+  const chgArrow = (chgPct ?? 0) >= 0 ? '▲' : '▼';
+  function fmt(v) { return v ? Number(v).toLocaleString('ko-KR') : '—'; }
+  function fmtVol(v) {
+    if (!v) return '—';
+    if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
+    if (v >= 1_000) return (v / 1_000).toFixed(0) + 'K';
+    return String(v);
+  }
+  function fmtCap(v) {
+    if (!v) return '—';
+    const jo = v / 1e12;
+    return jo >= 1 ? jo.toFixed(1) + '조원' : (v / 1e8).toFixed(1) + '억원';
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} />
@@ -656,6 +675,8 @@ export default function DashboardPage() {
       )}
       <div className={`dash-layout${rightOpen ? ' panel-open' : ''}`}>
 
+        <div className="left-wrapper">
+          <div style={{ display: 'flex', flex: 1, gap: 14, minHeight: 0 }}>
         {/* LEFT: Chart */}
         <div className="chart-panel">
           <div className="chart-controls">
@@ -732,159 +753,143 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-            {showComplex && (
-              <div className="matrix-side">
-                <div className="matrix-side-title">
-                  상관계수 매트릭스
-                  <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400 }}>Pearson</span>
-                </div>
-                {(() => {
-                  const n = complexIds.length;
-                  const cellH = n <= 6 ? 36 : n <= 8 ? 30 : n <= 12 ? 25 : 22;
-                  const cellStyle = { height: cellH, lineHeight: `${cellH}px` };
-                  const lbl = id => { const l = shortLabel(id); return n >= 9 ? l.slice(0, 4) : l; };
-                  return (
-                    <table className="matrix-table">
-                      <thead>
-                        <tr>
-                          <th className="mh" style={cellStyle} />
-                          {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {complexIds.map(row => (
-                          <tr key={row}>
-                            <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
-                            {complexIds.map(col => {
-                              if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
-                              const v = calcPearson(complexData[row], complexData[col]);
-                              const { background, color } = corrStyle(v);
-                              return <td key={col} className="mc" style={{ ...cellStyle, background, color }}>{v.toFixed(2)}</td>;
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  );
-                })()}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 10, color: '#94a3b8' }}>
-                  <span>-1.0</span>
-                  <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
-                  <span>+1.0</span>
-                </div>
-                {(() => {
-                  let maxV = -Infinity, minV = Infinity;
-                  let maxPair = null, minPair = null;
-                  for (let i = 0; i < complexIds.length; i++) {
-                    for (let j = i + 1; j < complexIds.length; j++) {
-                      const v = calcPearson(complexData[complexIds[i]], complexData[complexIds[j]]);
-                      if (v > maxV) { maxV = v; maxPair = [complexIds[i], complexIds[j]]; }
-                      if (v < minV) { minV = v; minPair = [complexIds[i], complexIds[j]]; }
-                    }
-                  }
-                  return (
-                    <div className="ai-box" style={{ marginTop: 8 }}>
-                      <div className="ai-header">
-                        <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 상관 분석</span>
-                      </div>
-                      <div className="ai-text" style={{ fontSize: 11 }}>
-                        {maxPair && <div>최강 연동 <b style={{ color: '#4338ca' }}>{shortLabel(maxPair[0])} · {shortLabel(maxPair[1])} ({maxV.toFixed(2)})</b></div>}
-                        {minV < 0 && minPair && <div>역상관 <b>{shortLabel(minPair[0])} · {shortLabel(minPair[1])} ({minV.toFixed(2)})</b></div>}
-                        <div style={{ marginTop: 4, fontSize: 10, color: '#6d28d9' }}>|r| ≥ 0.7 강함 · 0.3 ~ 0.7 보통 · 0 ~ 0.3 약함</div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
           </div>
         </div>
 
         {/* 종목 상세 패널 */}
-        {(() => {
-          const cfg = selectedFavId ? STOCK_CONFIG[selectedFavId] : null;
-          const s = favDetail?.stats;
-          const chgPct = favDetail?.changePct;
-          const chgAmt = favDetail?.change;
-          const chgColor = (chgPct ?? 0) >= 0 ? '#16a34a' : '#dc2626';
-          const chgArrow = (chgPct ?? 0) >= 0 ? '▲' : '▼';
-          function fmt(v) { return v ? Number(v).toLocaleString('ko-KR') : '—'; }
-          function fmtVol(v) {
-            if (!v) return '—';
-            if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
-            if (v >= 1_000) return (v / 1_000).toFixed(0) + 'K';
-            return String(v);
-          }
-          function fmtCap(v) {
-            if (!v) return '—';
-            const jo = v / 1e12;
-            return jo >= 1 ? jo.toFixed(1) + '조원' : (v / 1e8).toFixed(1) + '억원';
-          }
-          return (
-            <div className="ai-main-panel">
-              {/* 종목 헤더 + 주요 지표 */}
-              <div className="ai-main-card" style={{ flex: 2 }}>
-                {cfg && (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 7, background: '#fff', border: '1px solid #e8ecf0', padding: 3, overflow: 'hidden', flexShrink: 0 }}>
-                        <img src={`/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedFavId}</span></div>
-                        <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
-                      </div>
-                      {favDetail?.price && (
-                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                          <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span></div>
-                          {chgPct != null && (
-                            <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
-                          )}
-                        </div>
+        <div className="ai-main-panel">
+          <div className="ai-main-card">
+            {cfg && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 7, background: '#fff', border: '1px solid #e8ecf0', padding: 3, overflow: 'hidden', flexShrink: 0 }}>
+                    <img src={`/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedFavId}</span></div>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
+                  </div>
+                  {favDetail?.price && (
+                    <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                      <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span></div>
+                      {chgPct != null && (
+                        <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
                       )}
                     </div>
-                    <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
-                  </>
-                )}
-                <div className="ai-main-title" style={{ marginBottom: 10 }}>주요 지표</div>
-                {favDetailLoading ? (
-                  <div className="grid g11" style={{ gap: 7 }}>
-                    {[0,1,2,3,4,5].map(i => <div key={i} className="metric-box"><span className="skeleton" style={{ width: '60%', height: 12 }} /><span className="skeleton" style={{ width: '40%', height: 16, marginTop: 4 }} /></div>)}
-                  </div>
-                ) : !cfg ? (
-                  <div style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>관심종목을 선택해주세요</div>
-                ) : (
-                  <div className="grid g11" style={{ gap: 7 }}>
-                    <div className="metric-box"><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
-                    <div className="metric-box"><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
-                    <div className="metric-box"><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
-                    <div className="metric-box"><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
-                    <div className="metric-box"><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
-                    <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
-                  </div>
-                )}
-              </div>
-
-              {/* 주가 변동 원인 분석 */}
-              {cfg && (
-                <div className="ai-main-card" style={{ flex: 3 }}>
-                  <div className="ai-main-title" style={{ marginBottom: 10 }}>주가 변동 원인 분석</div>
-                  {cfg.factors.map(f => (
-                    <div key={f.label}>
-                      <div className="factor-row">
-                        <div className="factor-label">{f.label}</div>
-                        <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: f.color }} /></div>
-                        <div className={`factor-val ${f.val.startsWith('-') ? 'negative' : 'positive'}`}>{f.val}</div>
-                      </div>
-                      <div className="factor-desc">{f.desc}</div>
-                    </div>
-                  ))}
+                  )}
                 </div>
-              )}
-
+                <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
+              </>
+            )}
+            <div className="ai-main-title" style={{ marginBottom: 10 }}>주요 지표</div>
+            {favDetailLoading ? (
+              <div className="grid g11" style={{ gap: 7 }}>
+                {[0,1,2,3,4,5].map(i => <div key={i} className="metric-box"><span className="skeleton" style={{ width: '60%', height: 12 }} /><span className="skeleton" style={{ width: '40%', height: 16, marginTop: 4 }} /></div>)}
+              </div>
+            ) : !cfg ? (
+              <div style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>관심종목을 선택해주세요</div>
+            ) : (
+              <div className="grid g11" style={{ gap: 7 }}>
+                <div className="metric-box"><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
+                <div className="metric-box"><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
+                <div className="metric-box"><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
+                <div className="metric-box"><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
+                <div className="metric-box"><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
+                <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
+              </div>
+            )}
+          </div>
+        </div>
+          </div>
+          {cfg && (
+            <div className="ai-main-card" style={{ flex: 'none' }}>
+              <div className="ai-main-title" style={{ marginBottom: 10 }}>주가 변동 원인 분석</div>
+              {cfg.factors.map(f => (
+                <div key={f.label}>
+                  <div className="factor-row">
+                    <div className="factor-label">{f.label}</div>
+                    <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: f.color }} /></div>
+                    <div className={`factor-val ${f.val.startsWith('-') ? 'negative' : 'positive'}`}>{f.val}</div>
+                  </div>
+                  <div className="factor-desc">{f.desc}</div>
+                </div>
+              ))}
             </div>
-          );
-        })()}
+          )}
+        </div>
+
+        {/* MATRIX column */}
+        <div className="matrix-col">
+          {showComplex ? (
+            <div className="matrix-side" style={{ flex: 1 }}>
+              <div className="matrix-side-title">
+                상관계수 매트릭스
+                <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400 }}>Pearson</span>
+              </div>
+              {(() => {
+                const n = complexIds.length;
+                const cellH = n <= 6 ? 36 : n <= 8 ? 30 : n <= 12 ? 25 : 22;
+                const cellStyle = { height: cellH, lineHeight: `${cellH}px` };
+                const lbl = id => { const l = shortLabel(id); return n >= 9 ? l.slice(0, 4) : l; };
+                return (
+                  <table className="matrix-table">
+                    <thead>
+                      <tr>
+                        <th className="mh" style={cellStyle} />
+                        {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {complexIds.map(row => (
+                        <tr key={row}>
+                          <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
+                          {complexIds.map(col => {
+                            if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
+                            const v = calcPearson(complexData[row], complexData[col]);
+                            const { background, color } = corrStyle(v);
+                            return <td key={col} className="mc" style={{ ...cellStyle, background, color }}>{v.toFixed(2)}</td>;
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 10, color: '#94a3b8' }}>
+                <span>-1.0</span>
+                <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
+                <span>+1.0</span>
+              </div>
+              {(() => {
+                let maxV = -Infinity, minV = Infinity;
+                let maxPair = null, minPair = null;
+                for (let i = 0; i < complexIds.length; i++) {
+                  for (let j = i + 1; j < complexIds.length; j++) {
+                    const v = calcPearson(complexData[complexIds[i]], complexData[complexIds[j]]);
+                    if (v > maxV) { maxV = v; maxPair = [complexIds[i], complexIds[j]]; }
+                    if (v < minV) { minV = v; minPair = [complexIds[i], complexIds[j]]; }
+                  }
+                }
+                return (
+                  <div className="ai-box" style={{ marginTop: 8 }}>
+                    <div className="ai-header">
+                      <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 상관 분석</span>
+                    </div>
+                    <div className="ai-text" style={{ fontSize: 11 }}>
+                      {maxPair && <div>최강 연동 <b style={{ color: '#4338ca' }}>{shortLabel(maxPair[0])} · {shortLabel(maxPair[1])} ({maxV.toFixed(2)})</b></div>}
+                      {minV < 0 && minPair && <div>역상관 <b>{shortLabel(minPair[0])} · {shortLabel(minPair[1])} ({minV.toFixed(2)})</b></div>}
+                      <div style={{ marginTop: 4, fontSize: 10, color: '#6d28d9' }}>|r| ≥ 0.7 강함 · 0.3 ~ 0.7 보통 · 0 ~ 0.3 약함</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <div style={{ flex: 1, background: 'white', border: '1px solid var(--border)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 11, textAlign: 'center', padding: 20 }}>
+              종목 2개 이상<br/>선택 시 표시
+            </div>
+          )}
+        </div>
 
         {/* NEWS column */}
         <div className="news-col">

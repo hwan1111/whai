@@ -182,6 +182,7 @@ html, body { height: 100%; overflow: hidden; }
    ============================================================ */
 .dash-layout { display: flex; gap: 14px; position: relative; flex: 1; min-height: 0; height: 100%; }
 
+.left-wrapper { flex: 3 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .chart-panel { flex: 2 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow: hidden; }
 .chart-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 8px; }
 .period-sel { display: flex; gap: 3px; }
@@ -255,7 +256,8 @@ html, body { height: 100%; overflow: hidden; }
 .dash-layout.panel-open .sidebar-tab:hover { background: #eff6ff; color: #2563eb; }
 
 /* ── AI 메인 패널 (차트 옆 고정 컬럼) ── */
-.ai-main-panel { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
+.ai-main-panel { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.matrix-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
 .news-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
 .ai-main-card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; flex: 9; display: flex; flex-direction: column; }
 .ai-main-title { font-size: 11px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
