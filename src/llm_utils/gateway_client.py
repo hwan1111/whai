@@ -52,11 +52,25 @@ class GatewayClient:
     DEFAULT_TEMPERATURE = 0.7
     DEFAULT_MAX_TOKENS = 512
 
-    def __init__(self, validate_connection: bool = True):
+    # 모델별 Gateway Route 매핑
+    MODEL_ROUTES = {
+        "mid_performance_llm": "mid_performance_llm",    # 고성능 LLM (레퍼런스용)
+        "low_performance_llm": "low_performance_llm",    # 저성능 LLM (배치용)
+    }
+
+    def __init__(
+        self,
+        model_type: str = "low_performance_llm",
+        validate_connection: bool = True,
+    ):
         """
         MLflow AI Gateway 클라이언트 초기화
 
         Args:
+            model_type: LLM 모델 타입
+                - "mid_performance_llm": 고성능 LLM (기본값, 레퍼런스 생성용)
+                - "low_performance_llm": 저성능 LLM (배치 요약 생성용)
+                - 또는 커스텀 Gateway Route 이름
             validate_connection: 초기화 시 연결 검증 여부
 
         Raises:
@@ -69,13 +83,17 @@ class GatewayClient:
         )
         self.MLFLOW_TRACKING_USERNAME = os.getenv("MLFLOW_TRACKING_USERNAME", "")
         self.MLFLOW_TRACKING_PASSWORD = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
-        self.ROUTE_NAME = os.getenv("MLFLOW_SUMMARIZE_URI", "summarlize-llm")
+
+        # 모델 타입에 따라 Route 선택
+        self.ROUTE_NAME = self.MODEL_ROUTES.get(model_type, model_type)
+        self.model_type = model_type
 
         logger.debug(
             f"환경 변수 로드 확인:\n"
             f"  MLFLOW_TRACKING_USERNAME: {self.MLFLOW_TRACKING_USERNAME}\n"
             f"  MLFLOW_TRACKING_PASSWORD: {'*' * len(self.MLFLOW_TRACKING_PASSWORD) if self.MLFLOW_TRACKING_PASSWORD else '(empty)'}\n"
             f"  GATEWAY_BASE_URL: {self.GATEWAY_BASE_URL}\n"
+            f"  MODEL_TYPE: {self.model_type}\n"
             f"  ROUTE_NAME: {self.ROUTE_NAME}"
         )
 
@@ -116,6 +134,7 @@ class GatewayClient:
         logger.info(
             f"✓ MLflow AI Gateway 클라이언트 초기화 완료\n"
             f"   Gateway URL: {self.GATEWAY_BASE_URL}\n"
+            f"   Model Type: {self.model_type}\n"
             f"   Route: {self.ROUTE_NAME}"
         )
 

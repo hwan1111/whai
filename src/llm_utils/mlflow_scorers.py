@@ -91,3 +91,110 @@ def summary_similarity_score(outputs: str, expectations: dict) -> float:
     except Exception as e:
         logger.error(f"종합 유사도 계산 실패: {str(e)}")
         return 0.0
+
+
+@mlflow.genai.scorer
+def entity_preservation_scorer(outputs: str, expectations: dict) -> float:
+    """
+    엔티티 보존도 스코어러 (금융 뉴스 특화)
+
+    금융 뉴스에서 중요한 엔티티(티커, 가격, 수치 등)의 보존도를 평가합니다.
+    Task #3에서 구현한 EntityPreservationMetrics를 MLflow와 통합합니다.
+
+    Args:
+        outputs: 생성된 요약
+        expectations: 참조 요약을 포함한 기대값 dict {"reference_summary": "..."}
+
+    Returns:
+        엔티티 보존도 F1 점수 (0~1)
+    """
+    try:
+        from src.llm_utils.evaluation_metrics import EntityPreservationMetrics
+
+        reference = expectations.get("reference_summary", "")
+        if not reference:
+            logger.debug("엔티티 보존도: 참조 요약이 없음")
+            return 0.0
+
+        scores = EntityPreservationMetrics.calculate(reference, outputs)
+        logger.debug(
+            f"엔티티 보존도 계산: "
+            f"overall_f1={scores.overall_f1:.3f}, "
+            f"missing={len(scores.missing_entities)}, "
+            f"extra={len(scores.extra_entities)}"
+        )
+        return scores.overall_f1
+
+    except Exception as e:
+        logger.error(f"엔티티 보존도 계산 실패: {str(e)}")
+        return 0.0
+
+
+@mlflow.genai.scorer
+def number_accuracy_scorer(outputs: str, expectations: dict) -> float:
+    """
+    수치 정확도 스코어러 (금융 뉴스 특화)
+
+    금융 뉴스에서 중요한 수치(퍼센트, 가격, 거래량 등)의 정확도를 평가합니다.
+    Task #3에서 구현한 NumberAccuracyMetrics를 MLflow와 통합합니다.
+
+    Args:
+        outputs: 생성된 요약
+        expectations: 참조 요약을 포함한 기대값 dict {"reference_summary": "..."}
+
+    Returns:
+        수치 정확도 점수 (0~1)
+    """
+    try:
+        from src.llm_utils.evaluation_metrics import NumberAccuracyMetrics
+
+        reference = expectations.get("reference_summary", "")
+        if not reference:
+            logger.debug("수치 정확도: 참조 요약이 없음")
+            return 0.0
+
+        scores = NumberAccuracyMetrics.calculate(reference, outputs)
+        logger.debug(
+            f"수치 정확도 계산: "
+            f"overall={scores.overall_number_accuracy:.3f}, "
+            f"false_numbers={scores.false_numbers}"
+        )
+        return scores.overall_number_accuracy
+
+    except Exception as e:
+        logger.error(f"수치 정확도 계산 실패: {str(e)}")
+        return 0.0
+
+
+@mlflow.genai.scorer
+def financial_quality_score(outputs: str, expectations: dict) -> float:
+    """
+    금융 뉴스 종합 품질 스코어러
+
+    엔티티 보존도와 수치 정확도의 가중 평균으로 금융 뉴스의 종합 품질을 평가합니다.
+    - 엔티티 보존도: 50% (금융 정보 핵심 유지)
+    - 수치 정확도: 50% (금융 수치 정확성)
+
+    Args:
+        outputs: 생성된 요약
+        expectations: 참조 요약을 포함한 기대값 dict {"reference_summary": "..."}
+
+    Returns:
+        종합 품질 점수 (0~1)
+    """
+    try:
+        entity_score = entity_preservation_scorer(outputs, expectations)
+        number_score = number_accuracy_scorer(outputs, expectations)
+
+        # 가중 평균: 엔티티 50%, 수치 50%
+        quality_score = (entity_score * 0.5) + (number_score * 0.5)
+
+        logger.debug(
+            f"금융 종합 품질 점수: {quality_score:.3f} "
+            f"(엔티티={entity_score:.3f}, 수치={number_score:.3f})"
+        )
+        return quality_score
+
+    except Exception as e:
+        logger.error(f"금융 종합 품질 계산 실패: {str(e)}")
+        return 0.0
