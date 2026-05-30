@@ -872,7 +872,7 @@ export default function DashboardPage() {
               >
                 <div className="tk-card-head">
                   <div className="tk-card-logo">
-                    <img src="/assets/indices/kospi.svg" alt="KOSPI" />
+                    <img src="/assets/flags/kr.png" alt="KOSPI" />
                   </div>
                   <div className="tk-card-name">KOSPI 지수</div>
                 </div>
