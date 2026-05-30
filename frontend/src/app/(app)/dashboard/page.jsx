@@ -2,9 +2,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, EXCHANGE_PAIRS, fetchAssetData, buildPeriodData } from '@/lib/data';
-import StockDetailModal from '@/components/StockDetailModal';
+import StockDetailModal, { STOCK_CONFIG } from '@/components/StockDetailModal';
 
-const SW = 860, SH = 300, ML = 52, MR = 72, MT = 22, MB = 38;
+const SW = 860, SH = 300, ML = 52, MR = 16, MT = 22, MB = 38;
 const CW = SW - ML - MR, CH = SH - MT - MB;
 
 const STOCK_SECTORS = [
@@ -18,7 +18,7 @@ const STOCK_SECTORS = [
 const STOCK_NAMES = {
   '005930': '삼성전자', '000660': 'SK하이닉스',
   '005380': '현대차',   '000270': '기아',
-  '079550': 'LIG디펜스앤에어로', '012450': '한화에어로스페이스',
+  '079550': 'LIG디펜스앤에어로스페이스', '012450': '한화에어로스페이스',
   '105560': 'KB금융',   '055550': '신한지주',
   '051910': 'LG화학',   '096770': 'SK이노베이션',
 };
@@ -43,7 +43,7 @@ const LOGO = id => `/assets/logos/${({
 const NEWS_TICKER_OPTIONS = [
   { value: '005930', label: '삼성전자' }, { value: '000660', label: 'SK하이닉스' },
   { value: '005380', label: '현대차' },   { value: '000270', label: '기아' },
-  { value: '079550', label: 'LIG디펜스앤에어로' }, { value: '012450', label: '한화에어로스페이스' },
+  { value: '079550', label: 'LIG디펜스앤에어로스페이스' }, { value: '012450', label: '한화에어로스페이스' },
   { value: '105560', label: 'KB금융' },   { value: '055550', label: '신한지주' },
   { value: '051910', label: 'LG화학' },   { value: '096770', label: 'SK이노베이션' },
   { value: 'KRW/USD', label: 'KRW/USD' }, { value: 'KRW/EUR', label: 'KRW/EUR' },
@@ -226,7 +226,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
       </div>
     )}
     <svg ref={svgRef} viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none"
-      style={{ width: '100%', minHeight: 280, display: 'block' }}
+      style={{ width: '100%', height: '100%', display: 'block' }}
       onMouseLeave={() => { onHoverAsset(null); setTooltip(null); setHoveredIdx(null); }}>
 
       {/* 그리드 + y축 라벨 */}
@@ -315,9 +315,6 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
                 }}
                 onMouseLeave={() => { onHoverAsset(null); setTooltip(null); setHoveredIdx(null); }} />
             ))}
-            <circle cx={lx.toFixed(1)} cy={ly.toFixed(1)} r={3.5} fill={col} />
-            <text x={(lx + 6).toFixed(1)} y={(ly + 4).toFixed(1)} fontSize={10}
-              fill={col} fontWeight={700}>{sign}{lv.toFixed(1)}%</text>
           </g>
         );
       })}
@@ -364,12 +361,10 @@ export default function DashboardPage() {
   const [complexData, setComplexData] = useState({});
   const [rightOpen, setRightOpen] = useState(false);
   const [newsDrawerOpen, setNewsDrawerOpen] = useState(false);
-  const [previewNews, setPreviewNews] = useState([]);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [expandedNews, setExpandedNews] = useState(null);
-  const [chartSearch, setChartSearch] = useState('');
-  const [showSearchDrop, setShowSearchDrop] = useState(false);
-  const searchWrapRef = useRef(null);
+  const [selectedFavId, setSelectedFavId] = useState(null);
+  const [favDetail, setFavDetail] = useState(null);
+  const [favDetailLoading, setFavDetailLoading] = useState(false);
+  const [favNewsExpanded, setFavNewsExpanded] = useState(null);
   const PERIODS = ['1W', '1M', '3M', '6M', '1Y', '3Y', 'ALL'];
 
   useEffect(() => {
@@ -398,26 +393,22 @@ export default function DashboardPage() {
     fetchFavs().then(favSet => {
       setFavs(favSet);
       const favArr = [...favSet].filter(id => ASSETS[id]);
-      setActiveAssets(['000000', ...favArr]);
+      setActiveAssets([...favArr]);
+      const firstStock = favArr.find(id => STOCK_CONFIG[id]);
+      if (firstStock) setSelectedFavId(firstStock);
     });
     loadLatestPrices();
     loadLatestRates();
-    loadPreviewNews();
   }, []);
+
+  useEffect(() => {
+    if (selectedFavId) loadFavDetail(selectedFavId);
+  }, [selectedFavId]);
 
   useEffect(() => {
     renderChart();
   }, [activeAssets, period, prices]);
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target)) {
-        setShowSearchDrop(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   async function loadLatestPrices() {
     try {
@@ -434,15 +425,24 @@ export default function DashboardPage() {
     } catch { /* silent */ }
   }
 
-  async function loadPreviewNews() {
-    setPreviewLoading(true);
+  async function loadFavDetail(id) {
+    if (!STOCK_CONFIG[id]) return;
+    setFavDetailLoading(true);
+    setFavDetail(null);
+    setFavNewsExpanded(null);
     try {
-      const res = await fetchWithAuth('/api/v1/news?days=30');
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setPreviewNews(data.slice(0, 5));
-    } catch { setPreviewNews([]); }
-    setPreviewLoading(false);
+      const [priceRes, statsRes, newsRes] = await Promise.all([
+        fetchWithAuth('/api/v1/prices/latest'),
+        fetchWithAuth(`/api/v1/prices/${id}/stats`),
+        fetchWithAuth(`/api/v1/news?ticker=${id}&days=90`),
+      ]);
+      const allPrices = priceRes.ok ? await priceRes.json() : [];
+      const row = allPrices.find(r => r.ticker === id);
+      const stats = statsRes.ok ? await statsRes.json() : null;
+      const news = newsRes.ok ? await newsRes.json() : [];
+      setFavDetail({ price: row?.close, changePct: row?.change_pct, change: row?.change, stats, news });
+    } catch { setFavDetail({ price: null, changePct: null, change: null, stats: null, news: [] }); }
+    setFavDetailLoading(false);
   }
 
   async function loadLatestRates() {
@@ -647,28 +647,6 @@ export default function DashboardPage() {
 
   const complexIds = activeAssets.filter(id => complexData[id]);
   const showComplex = complexIds.length >= 2;
-  const insightLines = (() => {
-    if (complexIds.length < 2) return [];
-    const sorted = [...complexIds].sort((a, b) => complexData[b].totalReturn - complexData[a].totalReturn);
-    const best = sorted[0];
-    let minCorr = 1, minPair = null;
-    for (let i = 0; i < complexIds.length; i++) {
-      for (let j = i + 1; j < complexIds.length; j++) {
-        const c = calcPearson(complexData[complexIds[i]], complexData[complexIds[j]]);
-        if (c < minCorr) { minCorr = c; minPair = [complexIds[i], complexIds[j]]; }
-      }
-    }
-    const lines = [];
-    const r = complexData[best].totalReturn;
-    lines.push(`${shortLabel(best)}(${r >= 0 ? '+' : ''}${r.toFixed(1)}%)이 선택 종목 중 가장 높은 수익률을 기록했습니다.`);
-    if (minPair) lines.push(`${shortLabel(minPair[0])}와 ${shortLabel(minPair[1])}의 상관계수는 ${minCorr.toFixed(2)}로 가장 낮아 분산 효과가 큽니다.`);
-    const allPos = complexIds.every(id => complexData[id].totalReturn >= 0);
-    const allNeg = complexIds.every(id => complexData[id].totalReturn < 0);
-    if (allPos) lines.push('전 종목이 플러스 수익률을 기록 중입니다.');
-    else if (allNeg) lines.push('전 종목이 마이너스 수익률을 기록 중입니다.');
-    lines.push('((환율은 원래 상관관계가 높다? 이런 거 적는 것도 고려해보자~ (메모)))');
-    return lines;
-  })();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -694,136 +672,248 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
-              <div ref={searchWrapRef} style={{ position: 'relative', marginLeft: 60 }}>
-                <div className="chart-search-wrap">
-                  <svg className="chart-search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <circle cx="8.5" cy="8.5" r="5" />
-                    <line x1="13" y1="13" x2="17" y2="17" />
-                  </svg>
-                  <input
-                    className="chart-search-input"
-                    placeholder="종목 검색"
-                    value={chartSearch}
-                    onChange={e => { setChartSearch(e.target.value); setShowSearchDrop(true); }}
-                    onFocus={() => setShowSearchDrop(true)}
-                  />
-                  {chartSearch && (
-                    <button className="chart-search-clear" onClick={() => { setChartSearch(''); setShowSearchDrop(false); }}>×</button>
-                  )}
-                </div>
-                {showSearchDrop && chartSearch.trim() && (
-                  <div className="chart-search-drop">
-                    {[
-                      ...Object.entries(STOCK_NAMES),
-                      ...Object.keys(FX_INFO).map(id => [id, id]),
-                    ]
-                      .filter(([id, name]) => name.toLowerCase().includes(chartSearch.toLowerCase()) || id.toLowerCase().includes(chartSearch.toLowerCase()))
-                      .map(([id, name]) => (
-                        <div
-                          key={id}
-                          className={`chart-search-item${activeAssets.includes(id) ? ' active' : ''}`}
-                          onClick={() => { toggleAsset(id); setChartSearch(''); setShowSearchDrop(false); }}
-                        >
-                          <span className="chart-search-name">{name}</span>
-                        </div>
-                      ))
-                    }
-                    {[...Object.entries(STOCK_NAMES), ...Object.keys(FX_INFO).map(id => [id, id])]
-                      .filter(([id, name]) => name.toLowerCase().includes(chartSearch.toLowerCase()) || id.toLowerCase().includes(chartSearch.toLowerCase())).length === 0 && (
-                      <div className="chart-search-empty">검색 결과 없음</div>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
           <div className="active-chips">
-            {[...activeAssets.filter(a => a === '000000'), ...activeAssets.filter(a => a !== '000000')].map(a => (
-              <span key={a} className="a-chip" style={{ color: ASSETS[a].color, borderColor: ASSETS[a].color, background: ASSETS[a].color + '18' }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: ASSETS[a].color, display: 'inline-block' }} />
-                {ASSETS[a].label}
-                <span className="rm" onClick={e => { e.stopPropagation(); setActiveAssets(prev => prev.filter(x => x !== a)); }}>✕</span>
-              </span>
-            ))}
+            {[...favs].filter(id => ASSETS[id]).map(id => {
+              const isSelected = id === selectedFavId;
+              const color = ASSETS[id].color;
+              return (
+                <span
+                  key={id}
+                  className={`a-chip a-chip-clickable${isSelected ? ' a-chip-active' : ''}`}
+                  style={{
+                    color: isSelected ? 'white' : color,
+                    borderColor: color,
+                    background: isSelected ? color : color + '18',
+                  }}
+                  onClick={() => setSelectedFavId(id)}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: isSelected ? 'white' : color, display: 'inline-block' }} />
+                  {ASSETS[id].label}
+                </span>
+              );
+            })}
           </div>
 
-          <div className="chart-card">
-            {activeAssets.length === 0 && (
-              <div className="chart-empty">
-                <div style={{ fontSize: 48 }}>🖥️</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#334155' }}>종목을 선택해주세요</div>
-                <div style={{ fontSize: 12, color: '#94a3b8' }}>오른쪽 목록에서 종목을 클릭하면 차트가 표시됩니다</div>
+          <div className="chart-body">
+            <div className="chart-main">
+              <div className="chart-card">
+                {activeAssets.length === 0 && (
+                  <div className="chart-empty">
+                    <div style={{ fontSize: 48 }}>🖥️</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#334155' }}>종목을 선택해주세요</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>오른쪽 목록에서 종목을 클릭하면 차트가 표시됩니다</div>
+                  </div>
+                )}
+                <div className="chart-svg-wrap">
+                  <LineChart activeAssets={activeAssets} pd={chartPd}
+                    hoveredAsset={hoveredAsset} onHoverAsset={setHoveredAsset} />
+                </div>
+                {legend.length > 0 && (
+                  <div className="chart-legend">
+                    {legend.map(({ id, last }) => {
+                      const sign = last >= 0 ? '+' : '';
+                      const col = last >= 0 ? '#16a34a' : '#dc2626';
+                      const isDimmed = hoveredAsset !== null && hoveredAsset !== id;
+                      return (
+                        <div key={id} className="leg-item"
+                          style={{ opacity: isDimmed ? 0.25 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
+                          onMouseEnter={() => setHoveredAsset(id)}
+                          onMouseLeave={() => setHoveredAsset(null)}>
+                          <div className="leg-dot" style={{ background: ASSETS[id].color }} />
+                          <span className="leg-name">{ASSETS[id].label}</span>
+                          <span className="leg-val" style={{ color: col }}>{sign}{last.toFixed(1)}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
-            <div className="chart-svg-wrap">
-              <LineChart activeAssets={activeAssets} pd={chartPd}
-                hoveredAsset={hoveredAsset} onHoverAsset={setHoveredAsset} />
             </div>
-            {legend.length > 0 && (
-              <div className="chart-legend">
-                {legend.map(({ id, last }) => {
-                  const sign = last >= 0 ? '+' : '';
-                  const col = last >= 0 ? '#16a34a' : '#dc2626';
-                  const isDimmed = hoveredAsset !== null && hoveredAsset !== id;
+            {showComplex && (
+              <div className="matrix-side">
+                <div className="matrix-side-title">
+                  상관계수 매트릭스
+                  <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400 }}>Pearson</span>
+                </div>
+                {(() => {
+                  const n = complexIds.length;
+                  const cellH = n <= 6 ? 36 : n <= 8 ? 30 : n <= 12 ? 25 : 22;
+                  const cellStyle = { height: cellH, lineHeight: `${cellH}px` };
+                  const lbl = id => { const l = shortLabel(id); return n >= 9 ? l.slice(0, 4) : l; };
                   return (
-                    <div key={id} className="leg-item"
-                      style={{ opacity: isDimmed ? 0.25 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
-                      onMouseEnter={() => setHoveredAsset(id)}
-                      onMouseLeave={() => setHoveredAsset(null)}>
-                      <div className="leg-dot" style={{ background: ASSETS[id].color }} />
-                      <span className="leg-name">{ASSETS[id].label}</span>
-                      <span className="leg-val" style={{ color: col }}>{sign}{last.toFixed(1)}%</span>
+                    <table className="matrix-table">
+                      <thead>
+                        <tr>
+                          <th className="mh" style={cellStyle} />
+                          {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {complexIds.map(row => (
+                          <tr key={row}>
+                            <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
+                            {complexIds.map(col => {
+                              if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
+                              const v = calcPearson(complexData[row], complexData[col]);
+                              const { background, color } = corrStyle(v);
+                              return <td key={col} className="mc" style={{ ...cellStyle, background, color }}>{v.toFixed(2)}</td>;
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 10, color: '#94a3b8' }}>
+                  <span>-1.0</span>
+                  <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
+                  <span>+1.0</span>
+                </div>
+                {(() => {
+                  let maxV = -Infinity, minV = Infinity;
+                  let maxPair = null, minPair = null;
+                  for (let i = 0; i < complexIds.length; i++) {
+                    for (let j = i + 1; j < complexIds.length; j++) {
+                      const v = calcPearson(complexData[complexIds[i]], complexData[complexIds[j]]);
+                      if (v > maxV) { maxV = v; maxPair = [complexIds[i], complexIds[j]]; }
+                      if (v < minV) { minV = v; minPair = [complexIds[i], complexIds[j]]; }
+                    }
+                  }
+                  return (
+                    <div className="ai-box" style={{ marginTop: 8 }}>
+                      <div className="ai-header">
+                        <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 상관 분석</span>
+                      </div>
+                      <div className="ai-text" style={{ fontSize: 11 }}>
+                        {maxPair && <div>최강 연동 <b style={{ color: '#4338ca' }}>{shortLabel(maxPair[0])} · {shortLabel(maxPair[1])} ({maxV.toFixed(2)})</b></div>}
+                        {minV < 0 && minPair && <div>역상관 <b>{shortLabel(minPair[0])} · {shortLabel(minPair[1])} ({minV.toFixed(2)})</b></div>}
+                        <div style={{ marginTop: 4, fontSize: 10, color: '#6d28d9' }}>|r| ≥ 0.7 강함 · 0.3 ~ 0.7 보통 · 0 ~ 0.3 약함</div>
+                      </div>
                     </div>
                   );
-                })}
+                })()}
               </div>
             )}
           </div>
         </div>
 
-        {/* AI 메인 패널 */}
-        <div className="ai-main-panel">
-          <div className="ai-main-card">
-            <div className="ai-main-title">
-              <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-              개인화된 시장 분석
+        {/* 종목 상세 패널 */}
+        {(() => {
+          const cfg = selectedFavId ? STOCK_CONFIG[selectedFavId] : null;
+          const s = favDetail?.stats;
+          const chgPct = favDetail?.changePct;
+          const chgAmt = favDetail?.change;
+          const chgColor = (chgPct ?? 0) >= 0 ? '#16a34a' : '#dc2626';
+          const chgArrow = (chgPct ?? 0) >= 0 ? '▲' : '▼';
+          function fmt(v) { return v ? Number(v).toLocaleString('ko-KR') : '—'; }
+          function fmtVol(v) {
+            if (!v) return '—';
+            if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
+            if (v >= 1_000) return (v / 1_000).toFixed(0) + 'K';
+            return String(v);
+          }
+          function fmtCap(v) {
+            if (!v) return '—';
+            const jo = v / 1e12;
+            return jo >= 1 ? jo.toFixed(1) + '조원' : (v / 1e8).toFixed(1) + '억원';
+          }
+          return (
+            <div className="ai-main-panel">
+              {/* 종목 헤더 + 주요 지표 */}
+              <div className="ai-main-card" style={{ flex: 2 }}>
+                {cfg && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 7, background: '#fff', border: '1px solid #e8ecf0', padding: 3, overflow: 'hidden', flexShrink: 0 }}>
+                        <img src={`/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedFavId}</span></div>
+                        <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
+                      </div>
+                      {favDetail?.price && (
+                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                          <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span></div>
+                          {chgPct != null && (
+                            <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
+                  </>
+                )}
+                <div className="ai-main-title" style={{ marginBottom: 10 }}>주요 지표</div>
+                {favDetailLoading ? (
+                  <div className="grid g11" style={{ gap: 7 }}>
+                    {[0,1,2,3,4,5].map(i => <div key={i} className="metric-box"><span className="skeleton" style={{ width: '60%', height: 12 }} /><span className="skeleton" style={{ width: '40%', height: 16, marginTop: 4 }} /></div>)}
+                  </div>
+                ) : !cfg ? (
+                  <div style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>관심종목을 선택해주세요</div>
+                ) : (
+                  <div className="grid g11" style={{ gap: 7 }}>
+                    <div className="metric-box"><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
+                    <div className="metric-box"><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
+                    <div className="metric-box"><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
+                    <div className="metric-box"><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
+                    <div className="metric-box"><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
+                    <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
+                  </div>
+                )}
+              </div>
+
+              {/* 주가 변동 원인 분석 */}
+              {cfg && (
+                <div className="ai-main-card" style={{ flex: 3 }}>
+                  <div className="ai-main-title" style={{ marginBottom: 10 }}>주가 변동 원인 분석</div>
+                  {cfg.factors.map(f => (
+                    <div key={f.label}>
+                      <div className="factor-row">
+                        <div className="factor-label">{f.label}</div>
+                        <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: f.color }} /></div>
+                        <div className={`factor-val ${f.val.startsWith('-') ? 'negative' : 'positive'}`}>{f.val}</div>
+                      </div>
+                      <div className="factor-desc">{f.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
             </div>
-            <div className="ai-main-body">
-              방산주 강세 지속. 달러 약세로 수출주 단기 환율 리스크.<br /><br />
-              반도체는 HBM 수요 기반 상승 모멘텀 유지 중.<br /><br />
-              <span style={{ color: '#6d28d9', fontWeight: 600 }}>회원님의 관심 종목</span> 중 KB금융은 금리 인하 수혜 기대감으로 단기 매수세 유입 가능성이 높습니다. ((대시보드 AI는 개인화된 것이되, 좀 더 일반적인 걸로 하기! (메모)))
-            </div>
-          </div>
-          <div className="news-preview-card">
+          );
+        })()}
+
+        {/* NEWS column */}
+        <div className="news-col">
+          <div className="news-preview-card" style={{ flex: 1, overflow: 'hidden' }}>
             <div className="news-preview-header">
               <div className="news-preview-title">
                 <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-                뉴스 요약
+                관련 뉴스{selectedFavId && STOCK_CONFIG[selectedFavId] ? ` — ${STOCK_CONFIG[selectedFavId].name}` : ''}
               </div>
               <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
             </div>
-            {previewLoading ? (
-              <>
-                {[0, 1, 2].map(i => (
-                  <div key={i} className="news-preview-item">
-                    <div className="news-meta" style={{ gap: 6 }}>
-                      <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
-                      <span className="skeleton" style={{ width: 56, height: 12 }} />
-                    </div>
-                    <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
-                    <span className="skeleton" style={{ width: '65%', height: 13, marginTop: 4 }} />
+            {favDetailLoading ? (
+              [0, 1, 2].map(i => (
+                <div key={i} className="news-preview-item">
+                  <div className="news-meta" style={{ gap: 6 }}>
+                    <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
+                    <span className="skeleton" style={{ width: 56, height: 12 }} />
                   </div>
-                ))}
-              </>
-            ) : previewNews.length === 0 ? (
-              <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>뉴스가 없습니다.</div>
-            ) : expandedNews !== null ? (
-              /* 펼쳐진 상태: 선택된 항목만 표시 */
-              (() => { const n = previewNews[expandedNews]; return (
-                <div className="news-preview-item" style={{ cursor: 'pointer', flex: 1 }} onClick={() => setExpandedNews(null)}>
+                  <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
+                </div>
+              ))
+            ) : !favDetail || favDetail.news.length === 0 ? (
+              <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
+                {selectedFavId && STOCK_CONFIG[selectedFavId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
+              </div>
+            ) : favNewsExpanded !== null ? (
+              (() => { const n = favDetail.news[favNewsExpanded]; return (
+                <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
                   <div className="news-meta">
-                    <span className="ticker-tag">{n.name}</span>
                     <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
                     <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
                   </div>
@@ -835,10 +925,9 @@ export default function DashboardPage() {
                   )}
                 </div>
               ); })()
-            ) : previewNews.map((n, i) => (
-              <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setExpandedNews(i)}>
+            ) : favDetail.news.slice(0, 5).map((n, i) => (
+              <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
                 <div className="news-meta">
-                  <span className="ticker-tag">{n.name}</span>
                   <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
                   <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
                 </div>
@@ -859,13 +948,9 @@ export default function DashboardPage() {
 
         {/* RIGHT panel */}
         <div className={`right-panel${rightOpen ? '' : ' right-panel-closed'}`}>
-          {/* KOSPI */}
-          <div className="card">
-            <div className="card-title">
-              KOSPI 지수
-              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>클릭하면 차트에 추가</span>
-            </div>
-            <div className="stock-grid">
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div className="panel-section-label">KOSPI 지수</div>
               <div
                 className={`tk-card${kospiInChart ? ' in-chart' : ''}`}
                 onClick={() => toggleAsset('000000')}
@@ -891,107 +976,26 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Watchlist */}
-          <div className="card">
-            <div className="card-title">
-              KRX 주요 종목
-              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>클릭하면 차트에 추가</span>
+            <div>
+              <div className="panel-section-label">KRX 주요 종목</div>
+              <div className="stock-grid">
+                {STOCK_SECTORS.flatMap(s => s.ids).map(id => (
+                  <TkCard key={id} id={id} name={STOCK_NAMES[id]} />
+                ))}
+              </div>
             </div>
-            <div className="stock-grid">
-              {STOCK_SECTORS.flatMap(s => s.ids).map(id => (
-                <TkCard key={id} id={id} name={STOCK_NAMES[id]} />
-              ))}
-            </div>
-          </div>
 
-          {/* Exchange rates */}
-          <div className="card">
-            <div className="card-title">
-              주요국 환율
-              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>클릭하면 차트에 추가</span>
-            </div>
-            <div className="fx-grid">
-              {Object.keys(FX_INFO).map(id => <FxCard key={id} id={id} />)}
+            <div>
+              <div className="panel-section-label">주요국 환율</div>
+              <div className="fx-grid">
+                {Object.keys(FX_INFO).map(id => <FxCard key={id} id={id} />)}
+              </div>
             </div>
           </div>
-
         </div>
       </div>
 
-      {showComplex && (
-        <div style={{ display: 'flex', gap: 14, marginTop: 14 }}>
-          <div className="other-card" style={{ flex: 1, minWidth: 0 }}>
-            <div className="other-card-title">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                상관계수 매트릭스
-                <div className="period-sel">
-                  {PERIODS.map(p => (
-                    <button
-                      key={p}
-                      className={`per-btn${period === p ? ' active' : ''}`}
-                      onClick={() => setPeriod(p)}
-                    >
-                      {p === '1W' ? '1주' : p === '1M' ? '1개월' : p === '3M' ? '3개월' : p === '6M' ? '6개월' : p === '1Y' ? '1년' : p === '3Y' ? '3년' : '전체'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>Pearson</span>
-            </div>
-            {(() => {
-              const n = complexIds.length;
-              const cellH = n <= 6 ? 42 : n <= 8 ? 34 : n <= 12 ? 28 : 24;
-              const cellStyle = cellH !== 42 ? { height: cellH, lineHeight: `${cellH}px` } : {};
-              const lbl = id => { const l = shortLabel(id); return n >= 9 ? l.slice(0, 4) : l; };
-              return (
-                <table className="matrix-table">
-                  <thead>
-                    <tr>
-                      <th className="mh" style={cellStyle} />
-                      {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {complexIds.map(row => (
-                      <tr key={row}>
-                        <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
-                        {complexIds.map(col => {
-                          if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
-                          const v = calcPearson(complexData[row], complexData[col]);
-                          const { background, color } = corrStyle(v);
-                          return <td key={col} className="mc" style={{ ...cellStyle, background, color }}>{v.toFixed(2)}</td>;
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              );
-            })()}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 10, color: '#94a3b8' }}>
-              <span>-1.0</span>
-              <div style={{ width: 120, height: 8, borderRadius: 4, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
-              <span>+1.0</span>
-            </div>
-          </div>
-
-          <div style={{ flex: '0 0 460px', display: 'flex', flexDirection: 'column', background: 'linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%)', border: '1px solid #c4b5fd', borderRadius: 12, padding: '18px 20px' }}>
-            <div className="other-card-title" style={{ color: '#4c1d95' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span className="ai-badge" style={{ textTransform: 'none', letterSpacing: 0 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-                종목 분석
-              </span>
-              <span style={{ fontSize: 9, color: '#a78bfa', fontWeight: 400, textTransform: 'none' }}>{period}</span>
-            </div>
-            <div style={{ flex: 1, fontSize: 13, lineHeight: 1.8, color: '#312e81' }}>
-              {insightLines.map((line, i) => (
-                <p key={i} style={{ margin: i === 0 ? 0 : '10px 0 0' }}>{line}</p>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

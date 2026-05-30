@@ -154,16 +154,16 @@ html, body { height: 100%; overflow: hidden; }
 .rbtn { padding: 4px 9px; border-radius: 5px; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text-secondary); font-family: inherit; }
 .rbtn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
-.metric-box { background: #f8fafc; border-radius: 8px; padding: 10px 11px; }
+.metric-box { background: #f8fafc; border-radius: 8px; padding: 7px 9px; }
 .metric-label { font-size: 10px; color: var(--text-secondary); }
-.metric-value { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.metric-value { font-size: 13px; font-weight: 700; margin-top: 1px; }
 
-.factor-row { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.factor-row { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
 .factor-label { font-size: 11px; color: var(--text-secondary); width: 108px; flex-shrink: 0; }
 .factor-bar-bg { flex: 1; height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
 .factor-fill { height: 100%; border-radius: 3px; }
 .factor-val { font-size: 11px; font-weight: 600; width: 40px; text-align: right; flex-shrink: 0; }
-.factor-desc { font-size: 10px; color: #94a3b8; margin-bottom: 9px; margin-left: 117px; margin-top: -3px; }
+.factor-desc { font-size: 10px; color: #94a3b8; margin-bottom: 5px; margin-left: 117px; margin-top: -2px; }
 
 .matrix-table { border-collapse: separate; border-spacing: 3px; }
 .mh { width: 70px; height: 42px; font-size: 10px; font-weight: 600; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px; }
@@ -182,7 +182,7 @@ html, body { height: 100%; overflow: hidden; }
    ============================================================ */
 .dash-layout { display: flex; gap: 14px; position: relative; flex: 1; min-height: 0; height: 100%; }
 
-.chart-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.chart-panel { flex: 2 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow: hidden; }
 .chart-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 8px; }
 .period-sel { display: flex; gap: 3px; }
 .per-btn { padding: 5px 11px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text-secondary); transition: all 0.15s; font-family: inherit; }
@@ -226,11 +226,18 @@ html, body { height: 100%; overflow: hidden; }
 
 .active-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
 .a-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1.5px solid; white-space: nowrap; }
+.a-chip-clickable { cursor: pointer; transition: opacity 0.15s, box-shadow 0.15s; }
+.a-chip-clickable:hover { opacity: 0.85; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.a-chip-active { font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
 .a-chip .rm { cursor: pointer; opacity: 0.6; font-size: 10px; margin-left: 1px; }
 .a-chip .rm:hover { opacity: 1; }
 
-.chart-card { flex: 1; display: flex; flex-direction: column; min-height: 300px; position: relative; }
-.chart-svg-wrap { flex: 1; position: relative; }
+.chart-body { display: flex; flex: 1; gap: 12px; min-height: 0; align-items: stretch; }
+.matrix-side { flex: 1; display: flex; flex-direction: column; border-radius: 10px; padding: 10px 12px; background: white; overflow: auto; }
+.matrix-side-title { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.chart-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.chart-card { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
+.chart-svg-wrap { flex: 1; position: relative; min-height: 0; max-height: 320px; }
 .chart-empty { display: flex; position: absolute; inset: 0; z-index: 10; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: white; border-radius: 12px; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
 .leg-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
@@ -238,23 +245,24 @@ html, body { height: 100%; overflow: hidden; }
 .leg-name { color: var(--text-secondary); }
 .leg-val { font-weight: 700; }
 
-.right-panel { position: fixed; right: 0; top: 54px; width: 900px; height: calc(100vh - 54px); z-index: 50; background: var(--bg); display: flex; flex-direction: column; justify-content: space-between; overflow-y: auto; padding: 18px 20px; box-shadow: -6px 0 28px rgba(15,23,42,0.12); transition: transform 0.28s cubic-bezier(.4,0,.2,1); }
+.right-panel { position: fixed; right: 0; top: 54px; width: 400px; height: calc(100vh - 54px); z-index: 50; background: var(--bg); display: flex; flex-direction: column; gap: 14px; overflow-y: auto; padding: 14px 14px; box-shadow: -6px 0 28px rgba(15,23,42,0.12); transition: transform 0.28s cubic-bezier(.4,0,.2,1); }
 .right-panel.right-panel-closed { transform: translateX(100%); pointer-events: none; }
 .right-panel::-webkit-scrollbar { width: 4px; }
 .right-panel::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
 .sidebar-tab { position: fixed; right: 0; top: 50vh; transform: translateY(-50%); z-index: 51; width: 22px; height: 180px; background: #2563eb; border: none; border-radius: 10px 0 0 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: white; padding: 0; box-shadow: -2px 0 8px rgba(37,99,235,0.3); opacity: 0.85; pointer-events: auto; transition: right 0.28s cubic-bezier(.4,0,.2,1), opacity 0.18s, background 0.15s; }
 .sidebar-tab:hover { opacity: 1; background: #1d4ed8; }
-.dash-layout.panel-open .sidebar-tab { right: 900px; opacity: 1; }
+.dash-layout.panel-open .sidebar-tab { right: 360px; opacity: 1; }
 .dash-layout.panel-open .sidebar-tab:hover { background: #eff6ff; color: #2563eb; }
 
 /* ── AI 메인 패널 (차트 옆 고정 컬럼) ── */
-.ai-main-panel { flex: 0 0 460px; display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
-.ai-main-card { background: linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%); border: 1px solid #c4b5fd; border-radius: 12px; padding: 16px 18px; flex: 9; display: flex; flex-direction: column; }
-.ai-main-title { font-size: 11px; font-weight: 700; color: #4c1d95; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
-.ai-main-body { flex: 1; font-size: 13px; line-height: 1.8; color: #312e81; }
+.ai-main-panel { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
+.news-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
+.ai-main-card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; flex: 9; display: flex; flex-direction: column; }
+.ai-main-title { font-size: 11px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
+.ai-main-body { flex: 1; font-size: 13px; line-height: 1.8; color: #334155; }
 
 /* ── 관심종목 뉴스 미리보기 카드 ── */
-.news-preview-card { background: linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%); border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px 16px; flex: 11; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.news-preview-card { background: linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%); border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; }
 .news-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .news-preview-title { font-size: 11px; font-weight: 700; color: #4c1d95; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 7px; }
 .news-preview-more { background: none; border: none; font-size: 11px; font-weight: 600; color: #6d28d9; cursor: pointer; padding: 0; }
@@ -275,39 +283,40 @@ html, body { height: 100%; overflow: hidden; }
 
 .card { background: white; border-radius: 12px; border: 1px solid var(--border); padding: 14px 16px; }
 .card-title { font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+.panel-section-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
 
 .sect-label { font-size: 9px; font-weight: 700; color: var(--text-light); letter-spacing: 0.5px; margin: 8px 0 4px; }
 .sect-label:first-child { margin-top: 0; }
 .tk-chg { font-size: 10px; margin-top: 1px; }
 
 /* ── 종목 카드 ── */
-.stock-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; margin-bottom: 2px; }
-.tk-card { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 10px 10px 9px; cursor: pointer; transition: background 0.12s, border-color 0.12s; min-width: 0; }
+.stock-grid { display: flex; flex-direction: column; gap: 2px; }
+.tk-card { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 7px; padding: 4px 10px; cursor: pointer; transition: background 0.12s, border-color 0.12s; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .tk-card:hover { background: #eff6ff; border-color: #93c5fd; }
 .tk-card.in-chart { background: #dbeafe; border: 2px solid #2563eb; }
-.tk-card-head { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; }
-.tk-card-logo { width: 22px; height: 22px; border-radius: 5px; border: 1px solid #e8ecf0; overflow: hidden; background: white; flex-shrink: 0; }
+.tk-card-head { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.tk-card-logo { width: 20px; height: 20px; border-radius: 4px; border: 1px solid #e8ecf0; overflow: hidden; background: white; flex-shrink: 0; }
 .tk-card-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.tk-card-name { font-size: 11px; font-weight: 700; color: #1e293b; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-card-name { font-size: 11px; font-weight: 700; color: #1e293b; min-width: 0; }
 .tk-card-acts { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .tk-card-star { background: none; border: none; cursor: pointer; font-size: 11px; color: #d1d5db; padding: 0; line-height: 1; transition: color 0.15s; }
 .tk-card-star:hover { color: #fbbf24; }
 .tk-card-star.starred { color: #f59e0b; }
 .tk-card-det { background: none; border: none; cursor: pointer; font-size: 10px; color: #94a3b8; padding: 0 0 0 3px; line-height: 1; transition: color 0.15s; }
 .tk-card-det:hover { color: #2563eb; }
-.tk-card-bottom { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+.tk-card-bottom { display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; }
 .tk-card-price { font-size: 11px; font-weight: 700; color: #0f172a; }
 .tk-card .tk-chg { margin-top: 0; }
 
 /* ── 환율 3열 카드 그리드 ── */
-.fx-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
-.fx-card { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 9px; padding: 8px 10px; cursor: pointer; transition: background 0.12s, border-color 0.12s; min-width: 0; }
+.fx-grid { display: flex; flex-direction: column; gap: 2px; }
+.fx-card { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 7px; padding: 4px 10px; cursor: pointer; transition: background 0.12s, border-color 0.12s; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .fx-card:hover { background: #eff6ff; border-color: #93c5fd; }
 .fx-card.in-chart { background: #dbeafe; border: 2px solid #2563eb; }
-.fx-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.fx-card-head { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
 .fx-card-flag { width: 20px; height: 14px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
-.fx-card-code { font-size: 12px; font-weight: 700; color: #1e293b; flex: 1; min-width: 0; }
-.fx-card-bottom { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.fx-card-code { font-size: 11px; font-weight: 700; color: #1e293b; }
+.fx-card-bottom { display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; }
 .fx-card-rate { font-size: 11px; font-weight: 700; color: #0f172a; white-space: nowrap; }
 .fx-card .tk-chg { margin-top: 0; font-size: 10px; }
 
