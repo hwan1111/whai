@@ -164,14 +164,12 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick, hoveredStock
             style={{ cursor: 'pointer', transition: 'opacity 0.2s, filter 0.2s', opacity: hoveredStockId !== null && hoveredStockId !== seg.h.id ? 0.55 : 1, filter: hoveredStockId === seg.h.id ? 'brightness(1.12)' : 'none' }}
             onMouseEnter={e => {
               onHoverStock?.(seg.h.id);
-              const rect = wrapRef.current.getBoundingClientRect();
               const pnl = seg.h.curVal - seg.h.cost;
               const retPct = seg.h.cost > 0 ? pnl / seg.h.cost * 100 : 0;
-              setTooltip({ name: seg.h.info.name || seg.h.id, pct: seg.w.toFixed(1), val: fmtCompact(seg.h.curVal), pnl, retPct: retPct.toFixed(2), color: seg.h.info.color || '#94a3b8', x: e.clientX - rect.left, y: e.clientY - rect.top });
+              setTooltip({ name: seg.h.info.name || seg.h.id, pct: seg.w.toFixed(1), val: fmtCompact(seg.h.curVal), pnl, retPct: retPct.toFixed(2), color: seg.h.info.color || '#94a3b8', x: e.clientX, y: e.clientY });
             }}
             onMouseMove={e => {
-              const rect = wrapRef.current.getBoundingClientRect();
-              setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
+              setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
             }}
             onMouseLeave={() => { onHoverStock?.(null); }}
             onClick={() => { setTooltip(null); onSegmentClick && onSegmentClick(seg.h); }}
@@ -182,8 +180,8 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick, hoveredStock
       </svg>
       {tooltip && (
         <div style={{
-          position: 'absolute',
-          left: tooltip.x + 14,
+          position: 'fixed',
+          left: Math.min(tooltip.x + 14, window.innerWidth - 210),
           top: tooltip.y - 14,
           background: 'white',
           border: '1px solid #e2e8f0',
@@ -273,10 +271,10 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   // 5. 메모
   lines.push(`<strong>📝 메모</strong>: 포트폴리오 AI는 대시보드 AI보다는 좀 더 포트폴리오 쪽에 치중하도록! 나이대, 성별, 투자성향은 여기에 반영하는게 맞을까?`);
 
-  return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:14px;color:#312e81">${l}</p>`).join('');
+  return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:16px;color:#312e81">${l}</p>`).join('');
 }
 
-function WeightHistoryChart({ snapshots, prices, onSnapClick }) {
+function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) {
   const [tooltip, setTooltip] = useState(null);
   const [sortMode, setSortMode] = useState('value');
   const [hoveredId, setHoveredId] = useState(null);
@@ -296,7 +294,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick }) {
   const allIds = [...new Set(snapshots.flatMap(s => s.holdings.map(h => h.id)))];
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
       <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
         {[{ key: 'value', label: '금액순' }, { key: 'name', label: '가나다순' }].map(({ key, label }) => (
           <button key={key} onClick={() => setSortMode(key)} style={{
@@ -310,17 +308,17 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick }) {
         const maxVal = Math.max(...rows.map(r => r.totalVal));
         const barWidthPct = maxVal > 0 ? totalVal / maxVal * 100 : 0;
         const d = new Date(snap.datetime);
-        const label = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const label = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
         const displaySorted = sortMode === 'name'
           ? [...sorted].sort((a, b) => (a.info.name || a.id).localeCompare(b.info.name || b.id, 'ko'))
           : sorted;
         return (
-          <div key={snap.id} onClick={() => onSnapClick?.(snap.id)} style={{ cursor: 'pointer' }}>
+          <div key={snap.id} onClick={() => onSnapClick?.(snap.id)} style={{ cursor: 'pointer', borderRadius: 7, padding: '4px 6px', margin: '0 -6px', background: selectedSnapId === snap.id ? '#eff6ff' : 'transparent', outline: selectedSnapId === snap.id ? '1.5px solid #bfdbfe' : '1.5px solid transparent', transition: 'background 0.15s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{label}</span>
               <span style={{ fontSize: 11, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
             </div>
-            <div style={{ height: 25, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ height: 20, overflow: 'hidden', position: 'relative', borderRadius: 3 }}>
               <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex' }}>
                 {displaySorted.filter(h => h.curVal > 0).map(h => {
                   const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
@@ -485,18 +483,11 @@ function AssetDrawer({ holding, prices, onClose }) {
   );
 }
 
-function SnapshotCard({ snap, prices, onDelete, autoOpen, hoveredStockId, onHoverStock }) {
+function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [drawerHolding, setDrawerHolding] = useState(null);
-  const cardRef = useRef(null);
   const { totalVal, totalCost, sorted } = calcTotals(snap.holdings, prices);
 
-  useEffect(() => {
-    if (autoOpen) {
-      setDetailOpen(true);
-      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [autoOpen]);
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
   const pnlColor = totalPnl >= 0 ? '#16a34a' : '#dc2626';
@@ -507,7 +498,7 @@ function SnapshotCard({ snap, prices, onDelete, autoOpen, hoveredStockId, onHove
     {drawerHolding && (
       <AssetDrawer holding={drawerHolding} prices={prices} onClose={() => setDrawerHolding(null)} />
     )}
-    <div className="snapshot-card" ref={cardRef}>
+    <div className="snapshot-card">
       <div className="snapshot-card-header">
         <span className="snapshot-datetime">{fmtDatetime(snap.datetime)}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -591,13 +582,11 @@ function SnapshotCard({ snap, prices, onDelete, autoOpen, hoveredStockId, onHove
           <div dangerouslySetInnerHTML={{ __html: aiHtml }} />
         </div>
 
-        {/* 2열: 도넛 차트 */}
-        <div className="snapshot-chart-center">
-          <DonutChart sorted={sorted} totalVal={totalVal} size={460} onSegmentClick={setDrawerHolding} hoveredStockId={hoveredStockId} onHoverStock={onHoverStock} />
-        </div>
-
-        {/* 3열: 요약 */}
-        <div className="snapshot-right">
+        {/* 2열: 도넛 차트 (상단) + 1행 4열 요약 (하단) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', alignItems: 'center' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
+            <DonutChart sorted={sorted} totalVal={totalVal} size={220} onSegmentClick={setDrawerHolding} hoveredStockId={hoveredStockId} onHoverStock={onHoverStock} />
+          </div>
           <div className="snapshot-summary">
             {[
               { label: '총 매입 원가', val: fmtCompact(totalCost) },
@@ -630,14 +619,14 @@ export default function MyReportPage() {
   const [addPrice, setAddPrice] = useState('');
   const [generating, setGenerating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [openDetailSnapId, setOpenDetailSnapId] = useState(null);
+  const [selectedSnapId, setSelectedSnapId] = useState(null);
   const [hoveredStockId, setHoveredStockId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editQty, setEditQty] = useState('');
   const [editPrice, setEditPrice] = useState('');
 
   useEffect(() => {
-    fetchSnapshots().then(s => { setSnapshots(s); setSnapshotsLoaded(true); });
+    fetchSnapshots().then(s => { setSnapshots(s); setSnapshotsLoaded(true); setSelectedSnapId(s[0]?.id ?? null); });
     loadPrices();
   }, []);
 
@@ -698,6 +687,7 @@ export default function MyReportPage() {
       }
       const next = await fetchSnapshots();
       setSnapshots(next);
+      setSelectedSnapId(next[0]?.id ?? null);
       setHoldings([]);
       setAddQty('1'); setAddPrice(prices[addAsset] ? String(prices[addAsset]) : '');
       setFormOpen(false);
@@ -708,8 +698,13 @@ export default function MyReportPage() {
   function deleteSnapshot(id) { setDeleteTarget(id); }
 
   async function confirmDelete() {
-    await deleteSnapshotApi(deleteTarget);
-    setSnapshots(prev => prev.filter(s => s.id !== deleteTarget));
+    const deletedId = deleteTarget;
+    await deleteSnapshotApi(deletedId);
+    setSnapshots(prev => {
+      const next = prev.filter(s => s.id !== deletedId);
+      if (selectedSnapId === deletedId) setSelectedSnapId(next[0]?.id ?? null);
+      return next;
+    });
     setDeleteTarget(null);
   }
 
@@ -720,7 +715,7 @@ export default function MyReportPage() {
 
   return (
     <>
-    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 20, alignItems: 'stretch' }}>
       {/* 메인 콘텐츠 */}
       <div style={{ flex: 1, minWidth: 0, overflowX: 'auto' }}>
       <div className="sec-header">
@@ -899,33 +894,27 @@ export default function MyReportPage() {
         </div>
       )}
 
-      {/* 스냅샷 타임라인 */}
+      {/* 스냅샷 뷰 */}
       {snapshots.length === 0 ? (
         <div className="other-card" style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8', fontSize: 13 }}>
           📋 기록된 스냅샷이 없습니다.<br />
           <span style={{ fontSize: 12, marginTop: 6, display: 'block' }}>위의 버튼을 눌러 포트폴리오를 기록해보세요.</span>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {snapshots.map(snap => (
-            <SnapshotCard key={snap.id} snap={snap} prices={prices} onDelete={deleteSnapshot} autoOpen={openDetailSnapId === snap.id} hoveredStockId={hoveredStockId} onHoverStock={setHoveredStockId} />
-          ))}
-          {snapshots.length >= MAX_SNAPSHOTS && (
-            <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '4px 0 8px' }}>
-              최대 {MAX_SNAPSHOTS}개 보관 — 새 스냅샷 추가 시 가장 오래된 기록이 자동 삭제됩니다.
-            </div>
-          )}
-        </div>
-      )}
+      ) : (() => {
+        const selectedSnap = snapshots.find(s => s.id === selectedSnapId) ?? snapshots[0];
+        return selectedSnap ? (
+          <SnapshotCard key={selectedSnap.id} snap={selectedSnap} prices={prices} onDelete={deleteSnapshot} hoveredStockId={hoveredStockId} onHoverStock={setHoveredStockId} />
+        ) : null;
+      })()}
       </div>{/* end 메인 콘텐츠 */}
 
       {/* 오른쪽 고정 패널: 비중 추이 */}
-      <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 4, alignSelf: 'flex-start' }}>
-        <div className="other-card" style={{ padding: '10px 12px 10px', maxHeight: 'calc(100vh - 60px)', overflowY: 'auto' }}>
+      <div style={{ width: 280, flexShrink: 0, position: 'relative' }}>
+        <div className="other-card" style={{ position: 'absolute', inset: 0, padding: '10px 12px', boxSizing: 'border-box' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8 }}>
             자산 비중 추이
           </div>
-          <WeightHistoryChart snapshots={snapshots} prices={prices} onSnapClick={id => setOpenDetailSnapId(id)} />
+          <WeightHistoryChart snapshots={snapshots} prices={prices} onSnapClick={id => setSelectedSnapId(id)} selectedSnapId={selectedSnapId} />
         </div>
       </div>
     </div>{/* end 2열 wrapper */}

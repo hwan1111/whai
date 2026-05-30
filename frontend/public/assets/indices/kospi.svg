@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 60">
+  <!-- White background -->
+  <rect width="90" height="60" fill="white"/>
+
+  <!--
+    Taeguk centered at (45,30) radius 13.
+    Base paths: red on RIGHT, blue on LEFT (vertical S-curve axis).
+    rotate(-135, 45, 30) → red moves to UPPER-LEFT, blue to LOWER-RIGHT,
+    matching the official Korean flag orientation.
+  -->
+  <g transform="rotate(-135,45,30)">
+    <!-- Red (yang) -->
+    <path d="M45,17 A13,13,0,0,1,45,43 A6.5,6.5,0,0,0,45,30 A6.5,6.5,0,0,1,45,17Z" fill="#C60C30"/>
+    <!-- Blue (yin) -->
+    <path d="M45,17 A13,13,0,0,0,45,43 A6.5,6.5,0,0,1,45,30 A6.5,6.5,0,0,0,45,17Z" fill="#003478"/>
+  </g>
+
+  <!--
+    Official Korean flag trigrams (괘), each rotated 45° toward center:
+    Top-left:     건 ☰  (Geon)  — 3 solid bars,        rotate -45° around (12, 9)
+    Top-right:    감 ☵  (Gam)   — broken·solid·broken,  rotate +45° around (78, 9)
+    Bottom-left:  이 ☲  (Li)    — solid·broken·solid,   rotate +45° around (12, 51)
+    Bottom-right: 곤 ☷  (Gon)   — 3 broken bars,        rotate -45° around (78, 51)
+  -->
+
+  <!-- 건 ☰ top-left -->
+  <g transform="rotate(-45,12,9)">
+    <rect x="4"  y="5.5"  width="16" height="2" fill="#000"/>
+    <rect x="4"  y="9"    width="16" height="2" fill="#000"/>
+    <rect x="4"  y="12.5" width="16" height="2" fill="#000"/>
+  </g>
+
+  <!-- 감 ☵ top-right: broken · solid · broken -->
+  <g transform="rotate(45,78,9)">
+    <rect x="70"   y="5.5"  width="6.5" height="2" fill="#000"/>
+    <rect x="78.5" y="5.5"  width="6.5" height="2" fill="#000"/>
+    <rect x="70"   y="9"    width="16"  height="2" fill="#000"/>
+    <rect x="70"   y="12.5" width="6.5" height="2" fill="#000"/>
+    <rect x="78.5" y="12.5" width="6.5" height="2" fill="#000"/>
+  </g>
+
+  <!-- 이 ☲ bottom-left: solid · broken · solid -->
+  <g transform="rotate(45,12,51)">
+    <rect x="4"    y="47.5" width="16"  height="2" fill="#000"/>
+    <rect x="4"    y="51"   width="6.5" height="2" fill="#000"/>
+    <rect x="12.5" y="51"   width="6.5" height="2" fill="#000"/>
+    <rect x="4"    y="54.5" width="16"  height="2" fill="#000"/>
+  </g>
+
+  <!-- 곤 ☷ bottom-right: 3 broken bars -->
+  <g transform="rotate(-45,78,51)">
+    <rect x="70"   y="47.5" width="6.5" height="2" fill="#000"/>
+    <rect x="78.5" y="47.5" width="6.5" height="2" fill="#000"/>
+    <rect x="70"   y="51"   width="6.5" height="2" fill="#000"/>
+    <rect x="78.5" y="51"   width="6.5" height="2" fill="#000"/>
+    <rect x="70"   y="54.5" width="6.5" height="2" fill="#000"/>
+    <rect x="78.5" y="54.5" width="6.5" height="2" fill="#000"/>
+  </g>
+</svg>

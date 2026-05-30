@@ -545,7 +545,12 @@ export default function DashboardPage() {
     e.stopPropagation();
     const prev = new Set(favs);
     const next = new Set(favs);
-    if (next.has(id)) next.delete(id); else next.add(id);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      if (next.size >= 3) return;
+      next.add(id);
+    }
     setFavs(next);
     pushFavs(next, () => setFavs(prev));
   }
@@ -731,20 +736,6 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-            <div
-              className={`kospi-widget${kospiInChart ? ' in-chart' : ''}`}
-              onClick={() => toggleAsset('000000')}
-            >
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#475569', letterSpacing: 1 }}>KOSPI</div>
-              <div style={{ width: 1, height: 28, background: '#e2e8f0' }} />
-              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>
-                {kospiPrice ? Number(kospiPrice.price).toLocaleString('ko-KR') : '—'}
-              </div>
-              {kospiPrice && kospiPrice.change_pct !== undefined ? (() => {
-                const { text, cls } = fmtChg(kospiPrice.change_pct);
-                return <div className={`tk-chg ${cls}`} style={{ fontSize: 13 }}>{text}</div>;
-              })() : <div className="tk-chg" style={{ fontSize: 13 }}>—</div>}
-            </div>
           </div>
 
           <div className="active-chips">
@@ -868,57 +859,44 @@ export default function DashboardPage() {
 
         {/* RIGHT panel */}
         <div className={`right-panel${rightOpen ? '' : ' right-panel-closed'}`}>
-          {/* Favorites */}
+          {/* KOSPI */}
           <div className="card">
-            <div className="card-title">⭐ 즐겨찾기</div>
-            {favs.size === 0 ? (
-              <div className="fav-empty">별 아이콘을 눌러 추가하세요</div>
-            ) : (
-              <div className="fav-grid">
-                {[...favs].map(id => {
-                  if (!ASSETS[id]) return null;
-                  const inChart = activeAssets.includes(id);
-                  const d = prices[id];
-                  const isFx = EXCHANGE_PAIRS.has(id);
-                  let ps = '—', amtStr = null;
-                  if (d) {
-                    ps = isFx ? Number(d.price).toLocaleString('ko-KR') : Number(d.price).toLocaleString('ko-KR') + '원';
-                    if (d.change !== undefined) {
-                      const pos = d.change >= 0;
-                      amtStr = {
-                        text: isFx
-                          ? `${pos ? '+' : ''}${d.change.toFixed(2)}`
-                          : `${pos ? '+' : ''}${Math.round(d.change).toLocaleString('ko-KR')}원`,
-                        cls: pos ? 'positive' : 'negative',
-                      };
-                    }
-                  }
-                  const icon = isFx
-                    ? <img src={FX_INFO[id]?.flag} alt={id} style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} />
-                    : <div className="tk-card-logo"><img src={LOGO(id)} alt={ASSETS[id].label} /></div>;
-                  return (
-                    <div key={id} className={`fav-card${inChart ? ' in-chart' : ''}`} onClick={() => toggleAsset(id)} title={ASSETS[id].label}>
-                      <div className="tk-card-head">
-                        {icon}
-                        <div className="tk-card-name">{ASSETS[id].label}</div>
-                        <button className="tk-card-star starred" onClick={e => toggleFav(id, e)}>★</button>
-                      </div>
-                      <div className="tk-card-bottom">
-                        <span className="tk-card-price">{ps}</span>
-                        <ChgEl id={id} />
-                        {amtStr && <span className={`fav-amt ${amtStr.cls}`}>{amtStr.text}</span>}
-                      </div>
-                    </div>
-                  );
-                })}
+            <div className="card-title">
+              KOSPI 지수
+              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>클릭하면 차트에 추가</span>
+            </div>
+            <div className="stock-grid">
+              <div
+                className={`tk-card${kospiInChart ? ' in-chart' : ''}`}
+                onClick={() => toggleAsset('000000')}
+              >
+                <div className="tk-card-head">
+                  <div className="tk-card-logo">
+                    <img src="/assets/indices/kospi.svg" alt="KOSPI" />
+                  </div>
+                  <div className="tk-card-name">KOSPI 지수</div>
+                </div>
+                <div className="tk-card-bottom">
+                  {kospiPrice ? (
+                    <>
+                      <span className="tk-card-price">{Number(kospiPrice.price).toLocaleString('ko-KR')}</span>
+                      <ChgEl id="000000" />
+                    </>
+                  ) : (
+                    <>
+                      <span className="skeleton" style={{ width: 76, height: 15 }} />
+                      <span className="skeleton" style={{ width: 54, height: 13 }} />
+                    </>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Watchlist */}
           <div className="card">
             <div className="card-title">
-              종목 현황
+              KRX 주요 종목
               <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>클릭하면 차트에 추가</span>
             </div>
             <div className="stock-grid">
@@ -931,7 +909,7 @@ export default function DashboardPage() {
           {/* Exchange rates */}
           <div className="card">
             <div className="card-title">
-              환율 현황
+              주요국 환율
               <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>클릭하면 차트에 추가</span>
             </div>
             <div className="fx-grid">
