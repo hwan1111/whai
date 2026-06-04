@@ -212,14 +212,14 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
         {tooltip.dailyChgPct != null && (
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
             <span style={{ color: '#94a3b8' }}>전일 대비</span>
-            <span style={{ fontWeight: 700, color: tooltip.dailyChgPct >= 0 ? '#16a34a' : '#dc2626' }}>
+            <span style={{ fontWeight: 700, color: tooltip.dailyChgPct >= 0 ? '#dc2626' : '#2563eb' }}>
               {tooltip.dailyChgPct >= 0 ? '▲' : '▼'} {Math.abs(tooltip.dailyChgPct).toFixed(2)}%
             </span>
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13 }}>
           <span style={{ color: '#94a3b8' }}>{tooltip.isFx ? '기간 변동률' : '기간 수익률'}</span>
-          <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#16a34a' : '#dc2626' }}>
+          <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#dc2626' : '#2563eb' }}>
             {tooltip.periodVal >= 0 ? '+' : ''}{tooltip.periodVal.toFixed(2)}%
           </span>
         </div>
@@ -688,7 +688,7 @@ export default function DashboardPage() {
   const s = favDetail?.stats;
   const chgPct = favDetail?.changePct;
   const chgAmt = favDetail?.change;
-  const chgColor = (chgPct ?? 0) >= 0 ? '#16a34a' : '#dc2626';
+  const chgColor = (chgPct ?? 0) >= 0 ? '#dc2626' : '#2563eb';
   const chgArrow = (chgPct ?? 0) >= 0 ? '▲' : '▼';
   function fmt(v) { return v ? Number(v).toLocaleString('ko-KR') : '—'; }
   function fmtVol(v) {
@@ -812,7 +812,7 @@ export default function DashboardPage() {
               </div>
               <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0, margin: '0 20px' }} />
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
-                {activeAssets.filter(id => ASSETS[id]).map(id => {
+                {[...favs].filter(id => ASSETS[id]).map(id => {
                   const isSelected = id === selectedStockId;
                   const color = ASSETS[id].color;
                   return (
@@ -856,7 +856,7 @@ export default function DashboardPage() {
                   <div className="chart-legend">
                     {legend.map(({ id, last }) => {
                       const sign = last >= 0 ? '+' : '';
-                      const col = last >= 0 ? '#16a34a' : '#dc2626';
+                      const col = last >= 0 ? '#dc2626' : '#2563eb';
                       const isDimmed = hoveredAsset !== null && hoveredAsset !== id;
                       return (
                         <div key={id} className="leg-item"
@@ -959,7 +959,7 @@ export default function DashboardPage() {
                   if (!avg) return null;
                   const diff = s.per - avg;
                   const isAbove = diff > 0;
-                  const diffColor = isAbove ? '#dc2626' : '#16a34a';
+                  const diffColor = isAbove ? '#dc2626' : '#2563eb';
                   return (
                     <div style={{ marginTop: 8, padding: '7px 10px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
