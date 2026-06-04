@@ -154,9 +154,9 @@ html, body { height: 100%; overflow: hidden; }
 .rbtn { padding: 4px 9px; border-radius: 5px; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text-secondary); font-family: inherit; }
 .rbtn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
-.metric-box { background: #f8fafc; border-radius: 8px; padding: 7px 9px; }
-.metric-label { font-size: 10px; color: var(--text-secondary); }
-.metric-value { font-size: 13px; font-weight: 700; margin-top: 1px; }
+.metric-box { background: #f8fafc; border-radius: 7px; padding: 5px 8px; }
+.metric-label { font-size: 9px; color: var(--text-secondary); }
+.metric-value { font-size: 12px; font-weight: 700; margin-top: 1px; }
 
 .factor-row { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
 .factor-label { font-size: 11px; color: var(--text-secondary); width: 108px; flex-shrink: 0; }
@@ -182,7 +182,7 @@ html, body { height: 100%; overflow: hidden; }
    ============================================================ */
 .dash-layout { display: flex; gap: 14px; position: relative; flex: 1; min-height: 0; height: 100%; }
 
-.left-wrapper { flex: 3 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.left-wrapper { flex: 3 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; min-height: 0; height: calc(100vh - 76px); overflow: hidden; }
 .chart-panel { flex: 2 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow: hidden; }
 .chart-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 8px; }
 .period-sel { display: flex; gap: 3px; }
@@ -256,10 +256,10 @@ html, body { height: 100%; overflow: hidden; }
 .dash-layout.panel-open .sidebar-tab:hover { background: #eff6ff; color: #2563eb; }
 
 /* ── AI 메인 패널 (차트 옆 고정 컬럼) ── */
-.ai-main-panel { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-.matrix-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
-.news-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 100px); align-self: flex-start; }
-.ai-main-card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; flex: 9; display: flex; flex-direction: column; }
+.ai-main-panel { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.matrix-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 76px); align-self: flex-start; }
+.news-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 76px); align-self: flex-start; }
+.ai-main-card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: flex-start; overflow: hidden; }
 .ai-main-title { font-size: 11px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
 .ai-main-body { flex: 1; font-size: 13px; line-height: 1.8; color: #334155; }
 

@@ -218,7 +218,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13 }}>
-          <span style={{ color: '#94a3b8' }}>기간 수익률</span>
+          <span style={{ color: '#94a3b8' }}>{tooltip.isFx ? '기간 변동률' : '기간 수익률'}</span>
           <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#16a34a' : '#dc2626' }}>
             {tooltip.periodVal >= 0 ? '+' : ''}{tooltip.periodVal.toFixed(2)}%
           </span>
@@ -364,13 +364,15 @@ export default function DashboardPage() {
   const [showMatrix, setShowMatrix] = useState(false);
   const matrixColRef = useRef(null);
   const [panelWidth, setPanelWidth] = useState(400);
+  const [matrixColWidth, setMatrixColWidth] = useState(250);
   const PERIODS = ['1W', '1M', '3M', '6M', '1Y', '3Y', 'ALL'];
 
   useEffect(() => {
     const update = () => {
       if (matrixColRef.current) {
-        const left = matrixColRef.current.getBoundingClientRect().left;
-        setPanelWidth(window.innerWidth - left);
+        const rect = matrixColRef.current.getBoundingClientRect();
+        setPanelWidth(window.innerWidth - rect.left);
+        setMatrixColWidth(rect.width);
       }
     };
     update();
@@ -718,11 +720,12 @@ export default function DashboardPage() {
                 const n = complexIds.length;
                 const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
                 const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-                // 모달 크롬 높이: 패딩(44) + 헤더(54) + thead행(25) + 컬러바(55) + 셀 간격(n*3) = 178 + n*3
-                const cellH = Math.max(22, Math.floor((vh * 0.90 - 178 - n * 3) / n));
+                // 셀 크기: 뷰포트 기준 계산 + 최대 70px 상한 (종목 수 적어도 너무 커지지 않게)
+                const cellH = Math.max(22, Math.min(70, Math.floor((vh * 0.90 - 178 - n * 3) / n)));
                 const cellW = Math.max(44, Math.min(96, Math.floor((vw * 0.88 - 110 - n * 3) / n)));
                 const minDim = Math.min(cellW, cellH);
-                const fs = minDim >= 44 ? 13 : minDim >= 34 ? 12 : 11;
+                // 셀이 클수록 글자도 크게
+                const fs = minDim >= 60 ? 17 : minDim >= 50 ? 15 : minDim >= 40 ? 13 : 11;
                 const lbl = id => { const l = shortLabel(id); return cellW < 54 ? l.slice(0, 3) : l; };
                 return (
                   <table style={{ borderCollapse: 'separate', borderSpacing: 3 }}>
@@ -771,7 +774,6 @@ export default function DashboardPage() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 600, color: '#475569', marginTop: 5, padding: '0 24px' }}>
                 <span>강한 음의 상관관계</span>
-                <span>무상관</span>
                 <span>강한 양의 상관관계</span>
               </div>
             </div>
@@ -863,7 +865,7 @@ export default function DashboardPage() {
 
         {/* 종목 상세 패널 */}
         <div className="ai-main-panel">
-          <div className="ai-main-card">
+          <div className="ai-main-card" style={{ flex: 1 }}>
             {cfg && (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -886,22 +888,22 @@ export default function DashboardPage() {
                 <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
               </>
             )}
-            <div className="ai-main-title" style={{ marginBottom: 10 }}>주요 지표</div>
+            <div className="ai-main-title" style={{ marginBottom: 6 }}>주요 지표</div>
             {favDetailLoading ? (
-              <div className="grid g11" style={{ gap: 7 }}>
+              <div className="grid g11" style={{ gap: 5 }}>
                 {[0,1,2,3,4,5].map(i => <div key={i} className="metric-box"><span className="skeleton" style={{ width: '60%', height: 12 }} /><span className="skeleton" style={{ width: '40%', height: 16, marginTop: 4 }} /></div>)}
               </div>
             ) : !cfg ? (
               <div style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>관심종목을 선택해주세요</div>
             ) : (
               <>
-                <div className="grid g11" style={{ gap: 7 }}>
-                  <div className="metric-box"><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
-                  <div className="metric-box"><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
-                  <div className="metric-box"><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
-                  <div className="metric-box"><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
-                  <div className="metric-box"><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
-                  <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
+                <div className="grid g11" style={{ gap: 5, flex: 1, alignContent: 'stretch' }}>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? <>{s.per.toFixed(2)}<span style={{ fontSize: 10, fontWeight: 400 }}>배</span></> : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? <>{s.pbr.toFixed(2)}<span style={{ fontSize: 10, fontWeight: 400 }}>배</span></> : '—'}</div></div>
                 </div>
 
                 {/* 52주 가격 위치 바 */}
@@ -911,9 +913,9 @@ export default function DashboardPage() {
                   const pct = range > 0 ? Math.round(((price - s.low52) / range) * 100) : 50;
                   const safePct = Math.max(0, Math.min(100, pct));
                   return (
-                    <div style={{ marginTop: 12 }}>
+                    <div style={{ marginTop: 8 }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>52주 가격 위치</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', marginBottom: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', marginBottom: 3 }}>
                         <span>최저 {fmt(s.low52)}원</span>
                         <span>최고 {fmt(s.high52)}원</span>
                       </div>
@@ -946,23 +948,23 @@ export default function DashboardPage() {
                   const isAbove = diff > 0;
                   const diffColor = isAbove ? '#dc2626' : '#16a34a';
                   return (
-                    <div style={{ marginTop: 12, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ marginTop: 8, padding: '7px 10px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                         <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>PER 업종 평균 비교</span>
                         <span style={{ fontSize: 8, color: '#cbd5e1' }}>KRX · 2026 Q1</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
                         <div style={{ flex: 1, textAlign: 'center' }}>
-                          <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>현재 PER</div>
-                          <div style={{ fontSize: 18, fontWeight: 800, color: diffColor, lineHeight: 1 }}>{s.per.toFixed(1)}<span style={{ fontSize: 10, fontWeight: 600 }}>배</span></div>
+                          <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 2 }}>PER</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: diffColor, lineHeight: 1 }}>{s.per.toFixed(1)}<span style={{ fontSize: 10, fontWeight: 600 }}>배</span></div>
                         </div>
-                        <div style={{ width: 1, height: 36, background: '#e2e8f0', flexShrink: 0 }} />
+                        <div style={{ width: 1, height: 28, background: '#e2e8f0', flexShrink: 0 }} />
                         <div style={{ flex: 1, textAlign: 'center' }}>
-                          <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>{cfg.sector} 업종 평균</div>
-                          <div style={{ fontSize: 18, fontWeight: 800, color: '#334155', lineHeight: 1 }}>{avg}<span style={{ fontSize: 10, fontWeight: 600 }}>배</span></div>
+                          <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 2 }}>{cfg.sector} 업종 평균</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: '#334155', lineHeight: 1 }}>{avg}<span style={{ fontSize: 10, fontWeight: 600 }}>배</span></div>
                         </div>
                       </div>
-                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: diffColor }}>{isAbove ? '▲' : '▼'} {isAbove ? '+' : ''}{diff.toFixed(1)}배</span>
                         <span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>업종 평균 대비 {isAbove ? '높음' : '낮음'}</span>
                       </div>
@@ -975,7 +977,7 @@ export default function DashboardPage() {
         </div>
           </div>
           {cfg && (
-            <div className="ai-main-card" style={{ flex: 'none' }}>
+            <div className="ai-main-card">
               <div className="ai-main-title" style={{ marginBottom: 10 }}>주가 변동 원인 분석</div>
               {cfg.factors.map(f => (
                 <div key={f.label}>
@@ -1009,8 +1011,8 @@ export default function DashboardPage() {
               return '#94a3b8';
             }
             const CORR_THRESHOLD = 0.3;
-            const posPairs = byAbs.filter(p => p.v >= CORR_THRESHOLD).slice(0, 5);
-            const negPairs = byAbs.filter(p => p.v <= -CORR_THRESHOLD).reverse().slice(0, 5);
+            const posPairs = byAbs.filter(p => p.v >= CORR_THRESHOLD).slice(0, 3);
+            const negPairs = byAbs.filter(p => p.v <= -CORR_THRESHOLD).reverse().slice(0, 3);
             const allMeaningful = allPairs.filter(p => Math.abs(p.v) >= CORR_THRESHOLD).sort((a, b) => b.v - a.v);
             function corrLabel(v) {
               const a = Math.abs(v);
@@ -1022,16 +1024,18 @@ export default function DashboardPage() {
             /* ── 히트맵 JSX ── */
             const HeatmapView = () => {
               const n = complexIds.length;
-              const CW = n <= 4 ? 62 : n <= 6 ? 52 : n <= 8 ? 44 : 38;
-              const SP = 3;
-              const tblW = (n + 1) * CW + n * SP;
-              const cellH = n <= 6 ? 36 : n <= 8 ? 30 : n <= 12 ? 25 : 22;
-              const mcFs = n <= 6 ? 12 : n <= 8 ? 11 : 10;
+              const availW = Math.max(80, matrixColWidth - 28);
+              const CW = Math.max(24, Math.floor(availW / (n + 1.5)));
+              const cellH = CW >= 50 ? 36 : CW >= 40 ? 30 : CW >= 32 ? 26 : 22;
+              const mcFs = CW >= 50 ? 12 : CW >= 38 ? 11 : 10;
               const cellStyle = { height: cellH, lineHeight: `${cellH}px`, width: CW, minWidth: CW, maxWidth: CW };
-              const lbl = id => { const l = shortLabel(id); return n >= 7 ? l.slice(0, 3) : n >= 5 ? l.slice(0, 4) : l; };
+              const lbl = id => {
+                const l = shortLabel(id);
+                return CW < 30 ? l.slice(0, 1) : CW < 38 ? l.slice(0, 2) : CW < 48 ? l.slice(0, 3) : CW < 60 ? l.slice(0, 4) : l;
+              };
               return (
                 <>
-                  <table className="matrix-table" style={{ width: tblW }}>
+                  <table className="matrix-table" style={{ tableLayout: 'fixed', width: '100%' }}>
                     <thead><tr>
                       <th className="mh" style={cellStyle} />
                       {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
@@ -1055,9 +1059,10 @@ export default function DashboardPage() {
                     <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'linear-gradient(to right,rgb(30,64,175),rgb(248,250,252),rgb(185,28,28))' }} />
                     <span>+1.0</span>
                   </div>
-                  <div style={{ fontSize: 9, color: '#475569', marginTop: 4, lineHeight: 1.7 }}>
-                    <div>+1에 가까울수록 강한 선형 관계 &nbsp;·&nbsp; 0은 무관계 &nbsp;·&nbsp; −1에 가까울수록 강한 역선형 관계</div>
-                  </div>
+                  <ul style={{ margin: '5px 0 0', paddingLeft: 15, fontSize: 10, color: '#475569', lineHeight: 2.0 }}>
+                    <li>+1에 가까울수록 <b>강한 양의 상관관계</b></li>
+                    <li>−1에 가까울수록 <b>강한 음의 상관관계</b></li>
+                  </ul>
                 </>
               );
             };
@@ -1080,16 +1085,16 @@ export default function DashboardPage() {
                     return (
                       <div key={idx}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-                          <span style={{ fontSize: 10, color: '#312e81', fontWeight: 600 }}>{shortLabel(a)} · {shortLabel(b)}</span>
+                          <span style={{ fontSize: 11, color: '#312e81', fontWeight: 600 }}>{shortLabel(a)} · {shortLabel(b)}</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: textCol }}>{v.toFixed(2)}</span>
-                            <span style={{ fontSize: 9, color: textCol, background: 'rgba(255,255,255,0.6)', padding: '1px 5px', borderRadius: 4, whiteSpace: 'nowrap' }}>{corrLabel(v)}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: textCol }}>{v.toFixed(2)}</span>
+                            <span style={{ fontSize: 10, color: textCol, background: 'rgba(255,255,255,0.6)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>{corrLabel(v)}</span>
                           </div>
                         </div>
                         <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: 3 }}>
                           <div style={{ width: `${barW}%`, height: '100%', borderRadius: 3, background: barCol, transition: 'width 0.3s' }} />
                         </div>
-                        <div style={{ fontSize: 9, color: '#6d28d9', lineHeight: 1.4 }}>{desc}</div>
+                        <div style={{ fontSize: 10, color: '#6d28d9', lineHeight: 1.5 }}>{desc}</div>
                       </div>
                     );
                   })}
@@ -1132,16 +1137,16 @@ export default function DashboardPage() {
                 ) : (
                   /* 5개 이상: 정상관 / 역상관 섹션 분리 */
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', marginBottom: 5 }}>강한 양의 상관 관계 TOP 5</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', marginBottom: 5 }}>강한 양의 상관관계 TOP 3</div>
                     {posPairs.length > 0 && <BarView pairs={posPairs} />}
-                    {posPairs.length < 5 && (
+                    {posPairs.length < 3 && (
                       <div style={{ fontSize: 9, color: '#94a3b8', marginTop: posPairs.length > 0 ? 6 : 0, padding: '5px 8px', background: '#f8fafc', borderRadius: 6, border: '1px dashed #e2e8f0', lineHeight: 1.6 }}>
                         {posPairs.length === 0 ? '해당 쌍 없음 · ' : `${posPairs.length}개 표시 중 · `}선형 상관계수 r ≥ 0.3인 쌍만 표시됩니다
                       </div>
                     )}
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', marginTop: 10, marginBottom: 5 }}>강한 역의 상관 관계 TOP 5</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', marginTop: 10, marginBottom: 5 }}>강한 음의 상관관계 TOP 3</div>
                     {negPairs.length > 0 && <BarView pairs={negPairs} />}
-                    {negPairs.length < 5 && (
+                    {negPairs.length < 3 && (
                       <div style={{ fontSize: 9, color: '#94a3b8', marginTop: negPairs.length > 0 ? 6 : 0, padding: '5px 8px', background: '#f8fafc', borderRadius: 6, border: '1px dashed #e2e8f0', lineHeight: 1.6 }}>
                         {negPairs.length === 0 ? '해당 쌍 없음 · ' : `${negPairs.length}개 표시 중 · `}선형 상관계수 r ≤ −0.3인 쌍만 표시됩니다
                       </div>
