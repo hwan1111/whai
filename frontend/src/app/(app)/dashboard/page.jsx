@@ -357,7 +357,7 @@ export default function DashboardPage() {
   const [complexData, setComplexData] = useState({});
   const [rightOpen, setRightOpen] = useState(false);
   const [newsDrawerOpen, setNewsDrawerOpen] = useState(false);
-  const [selectedFavId, setSelectedFavId] = useState(null);
+  const [selectedStockId, setSelectedStockId] = useState(null);
   const [favDetail, setFavDetail] = useState(null);
   const [favDetailLoading, setFavDetailLoading] = useState(false);
   const [favNewsExpanded, setFavNewsExpanded] = useState(null);
@@ -410,15 +410,15 @@ export default function DashboardPage() {
       const favArr = [...favSet].filter(id => ASSETS[id]);
       setActiveAssets([...favArr]);
       const firstStock = favArr.find(id => STOCK_CONFIG[id]);
-      if (firstStock) setSelectedFavId(firstStock);
+      if (firstStock) setSelectedStockId(firstStock);
     });
     loadLatestPrices();
     loadLatestRates();
   }, []);
 
   useEffect(() => {
-    if (selectedFavId) loadFavDetail(selectedFavId);
-  }, [selectedFavId]);
+    if (selectedStockId) loadFavDetail(selectedStockId);
+  }, [selectedStockId]);
 
   useEffect(() => {
     renderChart();
@@ -556,9 +556,21 @@ export default function DashboardPage() {
   }
 
   async function toggleAsset(id) {
-    setActiveAssets(prev =>
-      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
-    );
+    setActiveAssets(prev => {
+      if (prev.includes(id)) {
+        const next = prev.filter(a => a !== id);
+        // 제거된 종목이 현재 선택된 상세 종목이면 다른 주식으로 전환
+        if (id === selectedStockId) {
+          const nextStock = next.find(a => STOCK_CONFIG[a]);
+          setSelectedStockId(nextStock ?? null);
+        }
+        return next;
+      } else {
+        // 추가 시 상세 패널에 종목이 없으면 자동 선택
+        if (!selectedStockId && STOCK_CONFIG[id]) setSelectedStockId(id);
+        return [...prev, id];
+      }
+    });
   }
 
   function toggleFav(id, e) {
@@ -668,7 +680,7 @@ export default function DashboardPage() {
   const complexIds = activeAssets.filter(id => complexData[id]);
   const showComplex = complexIds.length >= 2;
 
-  const cfg = selectedFavId ? STOCK_CONFIG[selectedFavId] : null;
+  const cfg = selectedStockId ? STOCK_CONFIG[selectedStockId] : null;
   const s = favDetail?.stats;
   const chgPct = favDetail?.changePct;
   const chgAmt = favDetail?.change;
@@ -799,8 +811,8 @@ export default function DashboardPage() {
               </div>
               <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0, margin: '0 20px' }} />
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
-                {[...favs].filter(id => ASSETS[id]).map(id => {
-                  const isSelected = id === selectedFavId;
+                {activeAssets.filter(id => ASSETS[id]).map(id => {
+                  const isSelected = id === selectedStockId;
                   const color = ASSETS[id].color;
                   return (
                     <span
@@ -811,7 +823,7 @@ export default function DashboardPage() {
                         borderColor: color,
                         background: isSelected ? color : color + '18',
                       }}
-                      onClick={() => setSelectedFavId(id)}
+                      onClick={() => setSelectedStockId(id)}
                     >
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: isSelected ? 'white' : color, display: 'inline-block' }} />
                       {ASSETS[id].label}
@@ -873,7 +885,7 @@ export default function DashboardPage() {
                     <img src={`/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedFavId}</span></div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedStockId}</span></div>
                     <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
                   </div>
                   {favDetail?.price && (
@@ -1199,7 +1211,7 @@ export default function DashboardPage() {
                 ))
               ) : !favDetail || favDetail.news.length === 0 ? (
                 <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
-                  {selectedFavId && STOCK_CONFIG[selectedFavId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
+                  {selectedStockId && STOCK_CONFIG[selectedStockId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
                 </div>
               ) : favNewsExpanded !== null ? (
                 (() => { const n = favDetail.news[favNewsExpanded]; return (
