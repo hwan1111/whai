@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
 
 export const STOCK_CONFIG = {
+  '000000': { name: 'KOSPI 지수', sector: null, meta: '한국종합주가지수', logoSrc: '/assets/flags/kr.png', color: '#16a34a', factors: [] },
   '005930': { name: '삼성전자', sector: '반도체', meta: '코스피 · 반도체', logo: 'samsung.svg', color: '#034EA2',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 38, color: '#2563eb', val: '+38%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: 'HBM 수요 증가', pct: 42, color: '#7c3aed', val: '+42%', desc: 'AI 서버향 HBM3E 수요 급증' },

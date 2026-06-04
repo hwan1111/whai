@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, EXCHANGE_PAIRS, fetchAssetData, buildPeriodData } from '@/lib/data';
-import StockDetailModal, { STOCK_CONFIG } from '@/components/StockDetailModal';
+import { STOCK_CONFIG } from '@/components/StockDetailModal';
 
 const SW = 860, SH = 300, ML = 52, MR = 16, MT = 22, MB = 38;
 const CW = SW - ML - MR, CH = SH - MT - MB;
@@ -353,7 +353,6 @@ export default function DashboardPage() {
   const [hoveredAsset, setHoveredAsset] = useState(null);
   const [legend, setLegend] = useState([]);
   const [favs, setFavs] = useState(new Set());
-  const [detailStockId, setDetailStockId] = useState(null);
   const [complexData, setComplexData] = useState({});
   const [rightOpen, setRightOpen] = useState(false);
   const [newsDrawerOpen, setNewsDrawerOpen] = useState(false);
@@ -555,6 +554,11 @@ export default function DashboardPage() {
     computeComplex(activeAssets, period);
   }
 
+  function selectStock(id) {
+    setActiveAssets(prev => prev.includes(id) ? prev : [...prev, id]);
+    setSelectedStockId(id);
+  }
+
   async function toggleAsset(id) {
     setActiveAssets(prev => {
       if (prev.includes(id)) {
@@ -620,8 +624,8 @@ export default function DashboardPage() {
             >{starred ? '★' : '☆'}</button>
             <button
               className="tk-card-det"
-              onClick={e => { e.stopPropagation(); setDetailStockId(id); }}
-              title="자세히 보기"
+              onClick={e => { e.stopPropagation(); selectStock(id); }}
+              title="대시보드에서 상세 보기"
             >상세</button>
           </div>
         </div>
@@ -702,9 +706,6 @@ export default function DashboardPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} />
-      {detailStockId && (
-        <StockDetailModal stockId={detailStockId} onClose={() => setDetailStockId(null)} />
-      )}
       {showMatrix && showComplex && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -882,7 +883,7 @@ export default function DashboardPage() {
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                   <div style={{ width: 32, height: 32, borderRadius: 7, background: '#fff', border: '1px solid #e8ecf0', padding: 3, overflow: 'hidden', flexShrink: 0 }}>
-                    <img src={`/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <img src={cfg.logoSrc ?? `/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedStockId}</span></div>
@@ -912,8 +913,8 @@ export default function DashboardPage() {
                 <div className="grid g11" style={{ gap: 5, flex: 1, alignContent: 'stretch' }}>
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
-                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
-                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최고</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#dc2626' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최저</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#2563eb' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? <>{s.per.toFixed(2)}<span style={{ fontSize: 10, fontWeight: 400 }}>배</span></> : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? <>{s.pbr.toFixed(2)}<span style={{ fontSize: 10, fontWeight: 400 }}>배</span></> : '—'}</div></div>
                 </div>
@@ -1265,6 +1266,17 @@ export default function DashboardPage() {
                     <img src="/assets/flags/kr.png" alt="KOSPI" />
                   </div>
                   <div className="tk-card-name">KOSPI 지수</div>
+                  <div className="tk-card-acts">
+                    <button
+                      className={`tk-card-star${favs.has('000000') ? ' starred' : ''}`}
+                      onClick={e => toggleFav('000000', e)}
+                    >{favs.has('000000') ? '★' : '☆'}</button>
+                    <button
+                      className="tk-card-det"
+                      onClick={e => { e.stopPropagation(); selectStock('000000'); }}
+                      title="대시보드에서 상세 보기"
+                    >상세</button>
+                  </div>
                 </div>
                 <div className="tk-card-bottom">
                   {kospiPrice ? (
