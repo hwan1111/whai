@@ -88,7 +88,7 @@ html, body { height: 100%; overflow: hidden; }
 .modal-msg.ok { color: #16a34a; }
 
 /* ── Content ── */
-.content { flex: 1; overflow: auto; padding: 12px 20px; }
+.content { flex: 1; overflow: hidden; padding: 12px 20px; display: flex; flex-direction: column; }
 .content::-webkit-scrollbar { width: 5px; }
 .content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 

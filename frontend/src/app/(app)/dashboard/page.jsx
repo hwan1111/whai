@@ -688,7 +688,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} />
       {detailStockId && (
         <StockDetailModal stockId={detailStockId} onClose={() => setDetailStockId(null)} />
@@ -1016,8 +1016,8 @@ export default function DashboardPage() {
             const allMeaningful = allPairs.filter(p => Math.abs(p.v) >= CORR_THRESHOLD).sort((a, b) => b.v - a.v);
             function corrLabel(v) {
               const a = Math.abs(v);
-              if (a >= 0.7) return v > 0 ? '강한 양의 상관 관계' : '강한 역의 상관 관계';
-              if (a >= 0.3) return v > 0 ? '중간 양의 상관 관계' : '중간 역의 상관 관계';
+              if (a >= 0.7) return v > 0 ? '강한 양의 상관 관계' : '강한 음의 상관 관계';
+              if (a >= 0.3) return v > 0 ? '중간 양의 상관 관계' : '중간 음의 상관 관계';
               return '약한/무관계';
             }
 
@@ -1076,19 +1076,19 @@ export default function DashboardPage() {
                     const barW = Math.abs(v) / maxAbs * 100;
                     const barCol = corrStyle(v).background;
                     const textCol = corrColor(v);
+                    const isPos = v > 0;
                     const abs = Math.abs(v);
                     const desc = abs >= 0.7
-                      ? (v > 0 ? '강하게 함께 움직임' : '강하게 반대로 움직임')
+                      ? (isPos ? '강하게 함께 움직임' : '강하게 반대로 움직임')
                       : abs >= 0.3
-                      ? (v > 0 ? '비슷한 방향으로 움직임' : '반대 방향으로 움직임')
+                      ? (isPos ? '비슷한 방향으로 움직임' : '반대 방향으로 움직임')
                       : '뚜렷한 선형 관계 없음';
                     return (
                       <div key={idx}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
                           <span style={{ fontSize: 11, color: '#312e81', fontWeight: 600 }}>{shortLabel(a)} · {shortLabel(b)}</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: textCol }}>{v.toFixed(2)}</span>
-                            <span style={{ fontSize: 10, color: textCol, background: 'rgba(255,255,255,0.6)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>{corrLabel(v)}</span>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: textCol }}>{isPos ? '▲' : '▼'} {v.toFixed(2)}</span>
                           </div>
                         </div>
                         <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: 3 }}>
@@ -1125,34 +1125,47 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {isCompact ? (
-                  /* 4개 이하: 히트맵 + 의미 있는 쌍 바 차트 */
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <HeatmapView />
-                    {allMeaningful.length > 0
-                      ? <BarView pairs={allMeaningful} />
-                      : <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', padding: '6px 0' }}>|r| ≥ 0.3인 쌍 없음</div>
-                    }
-                  </div>
-                ) : (
-                  /* 5개 이상: 정상관 / 역상관 섹션 분리 */
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', marginBottom: 5 }}>강한 양의 상관관계 TOP 3</div>
-                    {posPairs.length > 0 && <BarView pairs={posPairs} />}
-                    {posPairs.length < 3 && (
-                      <div style={{ fontSize: 9, color: '#94a3b8', marginTop: posPairs.length > 0 ? 6 : 0, padding: '5px 8px', background: '#f8fafc', borderRadius: 6, border: '1px dashed #e2e8f0', lineHeight: 1.6 }}>
-                        {posPairs.length === 0 ? '해당 쌍 없음 · ' : `${posPairs.length}개 표시 중 · `}선형 상관계수 r ≥ 0.3인 쌍만 표시됩니다
-                      </div>
-                    )}
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', marginTop: 10, marginBottom: 5 }}>강한 음의 상관관계 TOP 3</div>
-                    {negPairs.length > 0 && <BarView pairs={negPairs} />}
-                    {negPairs.length < 3 && (
-                      <div style={{ fontSize: 9, color: '#94a3b8', marginTop: negPairs.length > 0 ? 6 : 0, padding: '5px 8px', background: '#f8fafc', borderRadius: 6, border: '1px dashed #e2e8f0', lineHeight: 1.6 }}>
-                        {negPairs.length === 0 ? '해당 쌍 없음 · ' : `${negPairs.length}개 표시 중 · `}선형 상관계수 r ≤ −0.3인 쌍만 표시됩니다
-                      </div>
-                    )}
-                  </div>
-                )}
+                {(() => {
+                  const emptyBox = (count, isPos) => count < 3 && (
+                    <div style={{ fontSize: 11, color: '#374151', marginTop: count > 0 ? 6 : 0, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, border: '1px dashed #cbd5e1', lineHeight: 1.7 }}>
+                      <div style={{ fontWeight: 700 }}>{count === 0 ? '해당 쌍 없음' : `${count}개 표시 중`}</div>
+                      <div style={{ fontSize: 10, color: '#64748b' }}>선형 상관계수 r {isPos ? '≥ 0.3' : '≤ −0.3'}인 쌍만 표시됩니다.</div>
+                    </div>
+                  );
+                  const PosHeader = () => (
+                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 5 }}>
+                      <span style={{ color: '#2563eb' }}>▲ 양의</span> 상관관계 TOP 3
+                    </div>
+                  );
+                  const NegHeader = ({ mt = 4 }) => (
+                    <div style={{ fontSize: 11, fontWeight: 700, marginTop: mt, marginBottom: 5 }}>
+                      <span style={{ color: '#dc2626' }}>▼ 음의</span> 상관관계 TOP 3
+                    </div>
+                  );
+                  return isCompact ? (
+                    /* 4개 이하: 히트맵 + 정상관/역상관 섹션 */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <HeatmapView />
+                      <div style={{ height: 1, background: '#e2e8f0', margin: '6px 0' }} />
+                      <PosHeader />
+                      {posPairs.length > 0 && <BarView pairs={posPairs} />}
+                      {emptyBox(posPairs.length, true)}
+                      <NegHeader />
+                      {negPairs.length > 0 && <BarView pairs={negPairs} />}
+                      {emptyBox(negPairs.length, false)}
+                    </div>
+                  ) : (
+                    /* 5개 이상: 정상관 / 역상관 섹션 분리 */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <PosHeader />
+                      {posPairs.length > 0 && <BarView pairs={posPairs} />}
+                      {emptyBox(posPairs.length, true)}
+                      <NegHeader mt={10} />
+                      {negPairs.length > 0 && <BarView pairs={negPairs} />}
+                      {emptyBox(negPairs.length, false)}
+                    </div>
+                  );
+                })()}
 
               </div>
             );
