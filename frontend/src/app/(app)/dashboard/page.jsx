@@ -218,7 +218,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13 }}>
-          <span style={{ color: '#94a3b8' }}>{tooltip.isFx ? '기간 변동률' : '기간 수익률'}</span>
+          <span style={{ color: '#94a3b8' }}>기간 변동률</span>
           <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#dc2626' : '#2563eb' }}>
             {tooltip.periodVal >= 0 ? '+' : ''}{tooltip.periodVal.toFixed(2)}%
           </span>
@@ -339,6 +339,160 @@ async function pushFavs(s, onFail) {
   } catch { onFail?.(); }
 }
 
+const CORR_PAIR_DESCRIPTIONS = {
+  'semiconductor:semiconductor': {
+    pos: 'AI 서버·HBM 수요 급증으로 동일한 반도체 업황 사이클에 노출되어 동반 등락',
+    neg: '메모리 시장 점유율 경쟁 심화로 이익률 방향이 엇갈려 역행',
+  },
+  'auto:auto': {
+    pos: '현대차그룹 완성차 계열사로 북미 수출 호조와 원/달러 환율 영향을 함께 반영',
+    neg: '차종 구성 및 생산 일정 차이로 분기 실적이 엇갈리는 구간 발생',
+  },
+  'defense:defense': {
+    pos: 'K-방산 수출 수주 모멘텀과 국방예산 증액 기대를 동일하게 공유하며 동반 상승',
+    neg: '수주 경쟁 및 사업 부문 구성 차이로 수익성 방향이 다르게 나타남',
+  },
+  'finance:finance': {
+    pos: '기준금리 변화와 NIM 방향성에 국내 대형 시중은행이 동시에 반응',
+    neg: '대출 포트폴리오·충당금 적립 차이로 실적 방향이 상이하게 나타남',
+  },
+  'chemical:chemical': {
+    pos: '국제 납사 가격과 배터리 소재 수요 변화가 동시에 영향을 미쳐 함께 움직임',
+    neg: '석유화학 vs 배터리 소재 사업 비중 차이로 유가 수혜 방향이 엇갈림',
+  },
+  'auto:semiconductor': {
+    pos: '글로벌 경기 회복 기대에 국내 수출 대형주가 함께 강세를 보임',
+    neg: '전기차 가속 시 반도체 수혜 증가, 완성차 전환 비용 증가로 방향이 엇갈림',
+  },
+  'defense:semiconductor': {
+    pos: '지정학 리스크 고조·기술 안보 투자 확대에 반도체·방산 동반 매수세 유입',
+    neg: '방산 예산 확대가 IT 민수 설비 투자 위축을 동반하는 국면에서 역행',
+  },
+  'finance:semiconductor': {
+    pos: 'KOSPI 대형주 동반 강세 장세에서 반도체·금융주가 함께 상승',
+    neg: '금리 인상 구간에서 반도체(성장주) 하락, 은행은 NIM 확대로 강세 역행',
+  },
+  'chemical:semiconductor': {
+    pos: '글로벌 제조업 PMI 개선 기대에 소재·IT 대형주 동반 매수세 유입',
+    neg: '에너지 비용 상승이 화학 마진을 압박하는 반면 반도체는 수요 호조로 상반',
+  },
+  'auto:defense': {
+    pos: '경기 회복·정부 지출 확대 기대에 수출·방산 종목이 동반 상승',
+    neg: '원자재 비용 변동 방향이 달라 수익성 기대치가 다르게 나타남',
+  },
+  'auto:finance': {
+    pos: '국내 경기 회복 기대에 소비·금융 관련 대형주가 동반 강세를 보임',
+    neg: '금리 인상이 자동차 할부 수요를 억제하는 반면 은행은 NIM 개선으로 역행',
+  },
+  'auto:chemical': {
+    pos: '전기차 전환 가속으로 배터리 화학과 완성차가 동반 수혜를 기대',
+    neg: '유가 상승 시 화학 원재료 부담 증가 vs 완성차 연비 수요로 방향이 상충',
+  },
+  'defense:finance': {
+    pos: '지정학 리스크 대응 수요·안정 배당 기대에 방산·금융주 동반 매수',
+    neg: '금리 급등기에 방산 성장주 밸류에이션 하락 vs 은행 NIM 개선이 상충',
+  },
+  'chemical:defense': {
+    pos: '글로벌 공급망 재편 수혜 기대로 방산·소재 종목이 동반 모멘텀을 받음',
+    neg: '유가 급등이 화학 마진을 압박하는 반면 방산 수주는 무관하여 역행',
+  },
+  'chemical:finance': {
+    pos: '경기 민감 업종 동반 강세 장세에서 화학·금융주가 함께 상승',
+    neg: '유가 상승 시 화학 원가 압박 우려 vs 은행 NIM 개선 기대로 방향이 엇갈림',
+  },
+  'eur:semiconductor': {
+    pos: '글로벌 경기 회복 기대에 유로 강세와 반도체 수출 수요 증가가 동반 반영',
+    neg: '유로 약세(유럽 경기 부진)가 반도체 유럽향 수요에 부정적으로 작용',
+  },
+  'auto:eur': {
+    pos: '유로 강세가 유럽 수출 차량의 원화 환산 이익을 높여 동반 상승',
+    neg: '유로 약세(유럽 소비 둔화)와 국내 완성차 유럽 판매 감소가 동반',
+  },
+  'eur:finance': {
+    pos: '유럽 금리 인상 사이클이 국내 채권 금리 상승을 유도하며 동반 강세',
+    neg: '유로존 불안 시 금융 리스크 프리미엄이 높아지며 국내 은행주 약세',
+  },
+  'defense:eur': {
+    pos: '유럽 방위비 증액 기대와 K-방산 수출 호조가 동반 강세로 반영',
+    neg: '유로 약세(유럽 재정 우려)로 방산 수출 원화 환산 수익이 감소',
+  },
+  'chemical:eur': {
+    pos: '유럽 제조업 회복과 국내 화학 수출 수요 증가가 동반 반영',
+    neg: '유로 약세가 화학 수출 마진을 압박하며 동반 약세',
+  },
+  'semiconductor:usd': {
+    pos: '달러 강세로 반도체 수출 원화 환산 실적이 개선되며 동반 상승',
+    neg: '달러 약세(글로벌 위험선호)와 반도체 수요 기대가 상충하는 구간',
+  },
+  'auto:usd': {
+    pos: '달러 강세가 미국 수출 차량의 원화 환산 이익을 높여 동반 상승',
+    neg: '달러 약세 시 수출 자동차 마진 압박과 원화 강세가 동반',
+  },
+  'finance:usd': {
+    pos: '달러 강세 구간에서 외화 자산 평가이익이 금융사 실적에 우호적으로 반영',
+    neg: '달러 약세(글로벌 위험선호)와 금융주 강세가 방향 상충',
+  },
+  'defense:usd': {
+    pos: '달러 강세 구간에서 방산 수출 계약의 원화 환산 이익 증가',
+    neg: '달러 약세(지정학 긴장 완화)와 방산 수요 기대 약화가 동반',
+  },
+  'chemical:usd': {
+    pos: '달러 강세 시 수출 화학 제품의 원화 환산 수익이 개선되어 동반',
+    neg: '달러 강세로 납사·원자재 달러 비용이 늘어나 화학 마진 압박',
+  },
+  'jpy:semiconductor': {
+    pos: '엔화 약세로 일본 반도체 경쟁사의 가격 경쟁력이 약화되어 국내 반사 수혜',
+    neg: '엔화 강세(안전자산 선호)와 반도체 업황 위축이 동시에 나타남',
+  },
+  'auto:jpy': {
+    pos: '엔화 약세로 일본 완성차의 수출 경쟁력이 약화되어 현대·기아 반사 수혜',
+    neg: '엔화 강세(글로벌 리스크 오프)와 자동차 수요 위축이 동반',
+  },
+  'cny:semiconductor': {
+    pos: '위안화 강세(중국 경기 회복)가 반도체 최대 수출국 수요 개선과 동반',
+    neg: '위안화 약세(중국 경기 부진)와 반도체 대중 수출 감소가 동반',
+  },
+  'auto:cny': {
+    pos: '위안화 강세(중국 소비 회복)가 국내 완성차 중국 판매 수요 개선과 동반',
+    neg: '위안화 약세와 중국 내수 부진으로 완성차 중국 판매 감소가 동반',
+  },
+  'index:semiconductor': {
+    pos: 'KOSPI 시총 1·2위 반도체 대형주가 지수 방향을 주도하며 함께 상승',
+    neg: '반도체 업황 부진이 KOSPI 지수 하락을 견인하는 국면',
+  },
+  'auto:index': {
+    pos: '완성차 수출 호조가 KOSPI 지수 방향과 동반 상승',
+    neg: '자동차 섹터 부진이 KOSPI 지수와 역행하는 국면',
+  },
+  'finance:index': {
+    pos: '시중은행 대형주의 NIM 수혜가 KOSPI 지수와 동반 상승',
+    neg: '금융 섹터 부진이 KOSPI 지수와 역행하는 국면',
+  },
+};
+
+function getPairDesc(idA, idB, isPos, absR) {
+  const SECTOR = {
+    '005930': 'semiconductor', '000660': 'semiconductor',
+    '005380': 'auto',          '000270': 'auto',
+    '079550': 'defense',       '012450': 'defense',
+    '105560': 'finance',       '055550': 'finance',
+    '051910': 'chemical',      '096770': 'chemical',
+    '000000': 'index',
+    'KRW/USD': 'usd', 'KRW/EUR': 'eur',
+    'KRW/JPY': 'jpy', 'KRW/CNY': 'cny',
+    'KRW/CHF': 'chf', 'KRW/GBP': 'gbp',
+  };
+  const typeA = SECTOR[idA] ?? 'other';
+  const typeB = SECTOR[idB] ?? 'other';
+  const key = [typeA, typeB].sort().join(':');
+  const entry = CORR_PAIR_DESCRIPTIONS[key];
+  if (!entry) {
+    const intensity = absR >= 0.7 ? '강하게' : absR >= 0.3 ? '중간 정도로' : '약하게';
+    return isPos ? `${intensity} 같은 방향으로 움직이는 경향` : `${intensity} 반대 방향으로 움직이는 경향`;
+  }
+  return isPos ? entry.pos : entry.neg;
+}
+
 function fmtChg(pct) {
   const sign = pct >= 0 ? '▲' : '▼';
   const cls = pct >= 0 ? 'positive' : 'negative';
@@ -357,10 +511,12 @@ export default function DashboardPage() {
   const [rightOpen, setRightOpen] = useState(false);
   const [newsDrawerOpen, setNewsDrawerOpen] = useState(false);
   const [selectedStockId, setSelectedStockId] = useState(null);
+  const [selectedFxId, setSelectedFxId] = useState(null);
   const [favDetail, setFavDetail] = useState(null);
   const [favDetailLoading, setFavDetailLoading] = useState(false);
   const [favNewsExpanded, setFavNewsExpanded] = useState(null);
   const [showMatrix, setShowMatrix] = useState(false);
+  const [expandedPairKey, setExpandedPairKey] = useState(null);
   const matrixColRef = useRef(null);
   const [panelWidth, setPanelWidth] = useState(400);
   const [matrixColWidth, setMatrixColWidth] = useState(250);
@@ -557,6 +713,13 @@ export default function DashboardPage() {
   function selectStock(id) {
     setActiveAssets(prev => prev.includes(id) ? prev : [...prev, id]);
     setSelectedStockId(id);
+    setSelectedFxId(null);
+  }
+
+  function selectFx(id) {
+    setActiveAssets(prev => prev.includes(id) ? prev : [...prev, id]);
+    setSelectedFxId(id);
+    setSelectedStockId(null);
   }
 
   async function toggleAsset(id) {
@@ -656,10 +819,17 @@ export default function DashboardPage() {
         <div className="fx-card-head">
           <img src={info.flag} alt={currency} className="fx-card-flag" />
           <span className="fx-card-code">{currency}</span>
-          <button
-            className={`tk-card-star${starred ? ' starred' : ''}`}
-            onClick={e => toggleFav(id, e)}
-          >{starred ? '★' : '☆'}</button>
+          <div className="tk-card-acts">
+            <button
+              className={`tk-card-star${starred ? ' starred' : ''}`}
+              onClick={e => toggleFav(id, e)}
+            >{starred ? '★' : '☆'}</button>
+            <button
+              className="tk-card-det"
+              onClick={e => { e.stopPropagation(); selectFx(id); }}
+              title="대시보드에서 상세 보기"
+            >상세</button>
+          </div>
         </div>
         <div className="fx-card-bottom">
           {prices[id] ? (
@@ -797,8 +967,8 @@ export default function DashboardPage() {
 
         <div className="left-wrapper">
           <div className="chart-controls">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', columnGap: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>기간</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginRight: 4 }}>기간</div>
               <div className="period-sel">
                 {PERIODS.map(p => (
                   <button
@@ -810,7 +980,9 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
-              <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0, margin: '0 20px' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기</span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
                 {[...favs].filter(id => ASSETS[id]).map(id => {
                   const isSelected = id === selectedStockId;
@@ -876,9 +1048,62 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 종목 상세 패널 */}
+        {/* 종목/환율 상세 패널 */}
         <div className="ai-main-panel">
-          <div className="ai-main-card" style={{ flex: 1 }}>
+          <div className="ai-main-card" style={{ flex: 1, overflowY: 'auto' }}>
+            {/* ── 환율 상세 ── */}
+            {selectedFxId ? (() => {
+              const fxInfo = FX_INFO[selectedFxId];
+              const fxPrice = prices[selectedFxId];
+              const fxChgPct = fxPrice?.change_pct;
+              const fxChgAmt = fxPrice?.change;
+              const fxChgColor = (fxChgPct ?? 0) >= 0 ? '#dc2626' : '#2563eb';
+              const fxChgArrow = (fxChgPct ?? 0) >= 0 ? '▲' : '▼';
+              const currency = selectedFxId.split('/')[1];
+              return (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <img src={fxInfo.flag} alt={currency} style={{ width: 32, height: 22, borderRadius: 4, objectFit: 'cover', border: '1px solid #e8ecf0', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{fxInfo.desc} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{currency}</span></div>
+                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{selectedFxId} · 원화 기준</div>
+                    </div>
+                    {fxPrice ? (
+                      <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                        <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span></div>
+                        {fxChgPct != null && (
+                          <div style={{ fontSize: 11, fontWeight: 600, color: fxChgColor }}>{fxChgArrow} {fxChgAmt != null ? Math.abs(fxChgAmt).toFixed(2) : ''} ({Math.abs(fxChgPct).toFixed(2)}%)</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ marginLeft: 'auto' }}>
+                        <span className="skeleton" style={{ width: 80, height: 18, display: 'block', marginBottom: 5 }} />
+                        <span className="skeleton" style={{ width: 60, height: 13, display: 'block' }} />
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
+                  <div className="ai-main-title" style={{ marginBottom: 6 }}>환율 정보</div>
+                  <div className="grid g11" style={{ gap: 5 }}>
+                    {[
+                      { label: '현재 환율', value: fxPrice ? `${Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—' },
+                      { label: '전일 대비', value: fxChgAmt != null ? `${fxChgAmt >= 0 ? '+' : ''}${fxChgAmt.toFixed(2)}` : '—', color: fxChgAmt != null ? fxChgColor : undefined },
+                      { label: '변동률', value: fxChgPct != null ? `${fxChgPct >= 0 ? '+' : ''}${fxChgPct.toFixed(2)}%` : '—', color: fxChgPct != null ? fxChgColor : undefined },
+                      { label: '기준통화', value: 'KRW (원화)' },
+                      { label: '대상통화', value: currency },
+                      { label: '통화권', value: fxInfo.desc },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div className="metric-label">{label}</div>
+                        <div className="metric-value" style={{ whiteSpace: 'nowrap', ...(color ? { color } : {}) }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })() : (
+            /* ── 주식 상세 ── */
+            <>
             {cfg && (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -889,14 +1114,19 @@ export default function DashboardPage() {
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedStockId}</span></div>
                     <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
                   </div>
-                  {favDetail?.price && (
+                  {favDetailLoading ? (
+                    <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                      <span className="skeleton" style={{ width: 90, height: 18, display: 'block', marginBottom: 5 }} />
+                      <span className="skeleton" style={{ width: 70, height: 13, display: 'block' }} />
+                    </div>
+                  ) : favDetail?.price ? (
                     <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                       <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span></div>
                       {chgPct != null && (
                         <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
                       )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
                 <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
               </>
@@ -904,7 +1134,12 @@ export default function DashboardPage() {
             <div className="ai-main-title" style={{ marginBottom: 6 }}>주요 지표</div>
             {favDetailLoading ? (
               <div className="grid g11" style={{ gap: 5 }}>
-                {[0,1,2,3,4,5].map(i => <div key={i} className="metric-box"><span className="skeleton" style={{ width: '60%', height: 12 }} /><span className="skeleton" style={{ width: '40%', height: 16, marginTop: 4 }} /></div>)}
+                {['거래량', '시가총액', '52주 최고', '52주 최저', 'PER', 'PBR'].map(label => (
+                  <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div className="metric-label">{label}</div>
+                    <span className="skeleton" style={{ width: '65%', height: 18, marginTop: 5 }} />
+                  </div>
+                ))}
               </div>
             ) : !cfg ? (
               <div style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>관심종목을 선택해주세요</div>
@@ -986,10 +1221,12 @@ export default function DashboardPage() {
                 })()}
               </>
             )}
+            </>
+            )}
           </div>
         </div>
           </div>
-          {cfg && (
+          {cfg && !selectedFxId && (
             <div className="ai-main-card">
               <div className="ai-main-title" style={{ marginBottom: 10 }}>주가 변동 원인 분석</div>
               {cfg.factors.map(f => (
@@ -1015,99 +1252,105 @@ export default function DashboardPage() {
                 const v = calcPearson(complexData[complexIds[i]], complexData[complexIds[j]]);
                 allPairs.push({ a: complexIds[i], b: complexIds[j], v });
               }
-            const byAbs = [...allPairs].sort((a, b) => b.v - a.v);
-
             function corrColor(v) {
               const a = Math.abs(v);
               if (a >= 0.7) return v > 0 ? '#1e3a8a' : '#7f1d1d';
               if (a >= 0.3) return v > 0 ? '#2563eb' : '#dc2626';
               return '#94a3b8';
             }
-            const CORR_THRESHOLD = 0.3;
-            const posPairs = byAbs.filter(p => p.v >= CORR_THRESHOLD).slice(0, 3);
-            const negPairs = byAbs.filter(p => p.v <= -CORR_THRESHOLD).reverse().slice(0, 3);
-            const allMeaningful = allPairs.filter(p => Math.abs(p.v) >= CORR_THRESHOLD).sort((a, b) => b.v - a.v);
-            function corrLabel(v) {
-              const a = Math.abs(v);
-              if (a >= 0.7) return v > 0 ? '강한 양의 상관 관계' : '강한 음의 상관 관계';
-              if (a >= 0.3) return v > 0 ? '중간 양의 상관 관계' : '중간 음의 상관 관계';
-              return '약한/무관계';
-            }
+            const isTiny = complexIds.length <= 3;
+            const isCompact = complexIds.length === 4;
+            const pairCount = isCompact ? 3 : 5;
+            const sortedDesc = [...allPairs].sort((a, b) => b.v - a.v);
+            const topPairs = sortedDesc.slice(0, pairCount);
+            const topKeys = new Set(topPairs.map(p => `${p.a}|${p.b}`));
+            const bottomPairs = [...sortedDesc].reverse().filter(p => !topKeys.has(`${p.a}|${p.b}`)).slice(0, pairCount);
+            const globalMaxAbs = Math.max(...allPairs.map(p => Math.abs(p.v)), 0.01);
 
             /* ── 히트맵 JSX ── */
             const HeatmapView = () => {
               const n = complexIds.length;
               const availW = Math.max(80, matrixColWidth - 28);
               const CW = Math.max(24, Math.floor(availW / (n + 1.5)));
-              const cellH = CW >= 50 ? 36 : CW >= 40 ? 30 : CW >= 32 ? 26 : 22;
+              // isTiny: 셀을 정사각형으로 만들어 넓어 보이게 / 그 외: 행 높이 ~90px 고정
+              const cellH = isTiny ? CW : Math.max(16, Math.min(30, Math.floor(90 / n)));
               const mcFs = CW >= 50 ? 12 : CW >= 38 ? 11 : 10;
               const cellStyle = { height: cellH, lineHeight: `${cellH}px`, width: CW, minWidth: CW, maxWidth: CW };
+              // 행 레이블 열은 데이터 셀보다 좁게 → 색상 셀이 더 왼쪽에서 시작
+              const labelW = Math.max(20, Math.round(CW * 0.9));
+              const labelStyle = { height: cellH, lineHeight: `${cellH}px`, width: labelW, minWidth: labelW, maxWidth: labelW };
               const lbl = id => {
                 const l = shortLabel(id);
                 return CW < 30 ? l.slice(0, 1) : CW < 38 ? l.slice(0, 2) : CW < 48 ? l.slice(0, 3) : CW < 60 ? l.slice(0, 4) : l;
               };
               return (
                 <>
-                  <table className="matrix-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-                    <thead><tr>
-                      <th className="mh" style={cellStyle} />
-                      {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
-                    </tr></thead>
-                    <tbody>
-                      {complexIds.map(row => (
-                        <tr key={row}>
-                          <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
-                          {complexIds.map(col => {
-                            if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
-                            const v = calcPearson(complexData[row], complexData[col]);
-                            const { background, color } = corrStyle(v);
-                            return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background, color }}>{v.toFixed(2)}</td>;
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 10, color: '#94a3b8' }}>
-                    <span>-1.0</span>
-                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'linear-gradient(to right,rgb(30,64,175),rgb(248,250,252),rgb(185,28,28))' }} />
-                    <span>+1.0</span>
+                  <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                    <table className="matrix-table" style={{ tableLayout: 'fixed' }}>
+                      <thead><tr>
+                        <th className="mh" style={{ ...labelStyle, height: 'auto', lineHeight: 'normal', paddingBottom: 5 }} />
+                        {complexIds.map(id => <th key={id} className="mh" style={{ ...cellStyle, height: 'auto', lineHeight: 'normal', paddingBottom: 5 }}>{lbl(id)}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {complexIds.map(row => (
+                          <tr key={row}>
+                            <th className="mh" style={{ ...labelStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
+                            {complexIds.map(col => {
+                              if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
+                              const v = calcPearson(complexData[row], complexData[col]);
+                              const { background, color } = corrStyle(v);
+                              return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background, color }}>{v.toFixed(2)}</td>;
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <ul style={{ margin: '5px 0 0', paddingLeft: 15, fontSize: 10, color: '#475569', lineHeight: 2.0 }}>
-                    <li>+1에 가까울수록 <b>강한 양의 상관관계</b></li>
-                    <li>−1에 가까울수록 <b>강한 음의 상관관계</b></li>
-                  </ul>
+                  <div style={{ marginTop: isTiny ? 12 : 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#94a3b8' }}>
+                      <span>-1.0</span>
+                      <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'linear-gradient(to right,rgb(30,64,175),rgb(248,250,252),rgb(185,28,28))' }} />
+                      <span>+1.0</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 600, color: '#475569', marginTop: 4 }}>
+                      <span>강한 음의 상관관계</span>
+                      <span>강한 양의 상관관계</span>
+                    </div>
+                  </div>
                 </>
               );
             };
 
             /* ── 바 차트 JSX ── */
-            const BarView = ({ pairs }) => {
-              const maxAbs = Math.max(...pairs.map(p => Math.abs(p.v)), 0.01);
+            const BarView = ({ pairs, maxAbs = globalMaxAbs, showFull = false }) => {
               return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: showFull ? 10 : 7 }}>
                   {pairs.map(({ a, b, v }, idx) => {
                     const barW = Math.abs(v) / maxAbs * 100;
                     const barCol = corrStyle(v).background;
                     const textCol = corrColor(v);
                     const isPos = v > 0;
                     const abs = Math.abs(v);
-                    const desc = abs >= 0.7
-                      ? (isPos ? '강하게 함께 움직임' : '강하게 반대로 움직임')
-                      : abs >= 0.3
-                      ? (isPos ? '비슷한 방향으로 움직임' : '반대 방향으로 움직임')
-                      : '뚜렷한 선형 관계 없음';
+                    const desc = abs >= 0.3
+                      ? getPairDesc(a, b, isPos, abs)
+                      : `|r| = ${abs.toFixed(2)} · 0.3 미만으로 통계적으로 유의미한 상관관계가 없습니다.`;
+                    const pairKey = `${a}|${b}`;
+                    const isExpanded = showFull || expandedPairKey === pairKey;
                     return (
-                      <div key={idx}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-                          <span style={{ fontSize: 11, color: '#312e81', fontWeight: 600 }}>{shortLabel(a)} · {shortLabel(b)}</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{ fontSize: 11, fontWeight: 800, color: textCol }}>{isPos ? '▲' : '▼'} {v.toFixed(2)}</span>
-                          </div>
+                      <div key={idx}
+                        onClick={showFull ? undefined : () => setExpandedPairKey(isExpanded ? null : pairKey)}
+                        style={{ cursor: showFull ? 'default' : 'pointer' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: showFull ? 4 : 3 }}>
+                          <span style={{ fontSize: showFull ? 12 : 11, color: '#312e81', fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortLabel(a)} · {shortLabel(b)}</span>
+                          <span style={{ fontSize: showFull ? 12 : 11, fontWeight: 800, color: textCol, flexShrink: 0 }}>{isPos ? '▲' : '▼'} {v.toFixed(2)}</span>
                         </div>
-                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: 3 }}>
+                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: showFull ? 4 : 3 }}>
                           <div style={{ width: `${barW}%`, height: '100%', borderRadius: 3, background: barCol, transition: 'width 0.3s' }} />
                         </div>
-                        <div style={{ fontSize: 10, color: '#6d28d9', lineHeight: 1.5 }}>{desc}</div>
+                        <div style={{
+                          fontSize: showFull ? 11 : 10, color: '#6d28d9', lineHeight: 1.5, fontWeight: 500,
+                          ...(isExpanded ? {} : { overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }),
+                        }}>{desc}</div>
                       </div>
                     );
                   })}
@@ -1115,10 +1358,9 @@ export default function DashboardPage() {
               );
             };
 
-            const isCompact = complexIds.length <= 4;
 
             return (
-              <div className="matrix-side" style={{ flex: 1 }}>
+              <div className="matrix-side">
                 <div className="matrix-side-title">
                   상관계수 분석
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1139,43 +1381,68 @@ export default function DashboardPage() {
                 </div>
 
                 {(() => {
-                  const emptyBox = (count, isPos) => count < 3 && (
-                    <div style={{ fontSize: 11, color: '#374151', marginTop: count > 0 ? 6 : 0, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, border: '1px dashed #cbd5e1', lineHeight: 1.7 }}>
-                      <div style={{ fontWeight: 700 }}>{count === 0 ? '해당 쌍 없음' : `${count}개 표시 중`}</div>
-                      <div style={{ fontSize: 10, color: '#64748b' }}>선형 상관계수 r {isPos ? '≥ 0.3' : '≤ −0.3'}인 쌍만 표시됩니다.</div>
+                  const EmptySection = ({ isTop }) => (
+                    <div style={{ flex: 1, minHeight: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f8fafc', borderRadius: 8, border: '1px dashed #e2e8f0', padding: '12px 16px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>해당 쌍 없음</div>
+                      <div style={{ fontSize: 10, color: '#cbd5e1', lineHeight: 1.7 }}>
+                        {isTop
+                          ? '모든 쌍이 하위 3개에 포함되어 있습니다.'
+                          : '종목 수가 적어 상위 3쌍이 전부입니다.'}
+                      </div>
                     </div>
                   );
-                  const PosHeader = () => (
-                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 5 }}>
-                      <span style={{ color: '#2563eb' }}>▲ 양의</span> 상관관계 TOP 3
+                  const TopHeader = () => (
+                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, flexShrink: 0 }}>
+                      <span style={{ color: '#2563eb' }}>▲ 높은 상관계수</span> TOP {pairCount}
                     </div>
                   );
-                  const NegHeader = ({ mt = 4 }) => (
-                    <div style={{ fontSize: 11, fontWeight: 700, marginTop: mt, marginBottom: 5 }}>
-                      <span style={{ color: '#dc2626' }}>▼ 음의</span> 상관관계 TOP 3
+                  const BottomHeader = () => (
+                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, flexShrink: 0 }}>
+                      <span style={{ color: '#dc2626' }}>▼ 낮은 상관계수</span> TOP {pairCount}
                     </div>
                   );
-                  return isCompact ? (
-                    /* 4개 이하: 히트맵 + 정상관/역상관 섹션 */
+
+                  const topSection = (
+                    <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <TopHeader />
+                      {topPairs.length > 0 ? <BarView pairs={topPairs} /> : <EmptySection isTop />}
+                    </div>
+                  );
+                  const bottomSection = (
+                    <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <BottomHeader />
+                      {bottomPairs.length > 0 ? <BarView pairs={bottomPairs} /> : <EmptySection isTop={false} />}
+                    </div>
+                  );
+
+                  const divider = <div style={{ height: 1, background: '#e2e8f0', flexShrink: 0, margin: `${isCompact ? 14 : 8}px 0` }} />;
+
+                  return isTiny ? (
+                    /* 3개 이하: 히트맵 + 전체 쌍 나열 (TOP N 없이, 설명 전체 표시) */
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <HeatmapView />
-                      <div style={{ height: 1, background: '#e2e8f0', margin: '6px 0' }} />
-                      <PosHeader />
-                      {posPairs.length > 0 && <BarView pairs={posPairs} />}
-                      {emptyBox(posPairs.length, true)}
-                      <NegHeader />
-                      {negPairs.length > 0 && <BarView pairs={negPairs} />}
-                      {emptyBox(negPairs.length, false)}
+                      <div style={{ flexShrink: 0 }}>
+                        <HeatmapView />
+                        <div style={{ height: 1, background: '#e2e8f0', margin: '18px 0' }} />
+                      </div>
+                      <BarView pairs={sortedDesc} showFull />
+                    </div>
+                  ) : isCompact ? (
+                    /* 4개: 히트맵 + TOP 3 split */
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                      <div style={{ flexShrink: 0 }}>
+                        <HeatmapView />
+                        <div style={{ height: 1, background: '#e2e8f0', margin: '12px 0' }} />
+                      </div>
+                      {topSection}
+                      {divider}
+                      {bottomSection}
                     </div>
                   ) : (
-                    /* 5개 이상: 정상관 / 역상관 섹션 분리 */
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <PosHeader />
-                      {posPairs.length > 0 && <BarView pairs={posPairs} />}
-                      {emptyBox(posPairs.length, true)}
-                      <NegHeader mt={10} />
-                      {negPairs.length > 0 && <BarView pairs={negPairs} />}
-                      {emptyBox(negPairs.length, false)}
+                    /* 5개 이상: TOP 5 split */
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                      {topSection}
+                      {divider}
+                      {bottomSection}
                     </div>
                   );
                 })()}

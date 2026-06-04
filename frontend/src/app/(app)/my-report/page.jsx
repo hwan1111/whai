@@ -42,6 +42,18 @@ const getFlag = id => FLAG_MAP[id] ? `/assets/flags/${FLAG_MAP[id]}.png` : null;
 const MAX_SNAPSHOTS = 10;
 
 const fmt = n => Math.round(n).toLocaleString('ko-KR');
+function parseNumberInput(value) {
+  return parseFloat(String(value).replace(/,/g, ''));
+}
+function formatNumberInput(value) {
+  const raw = String(value ?? '').replace(/,/g, '');
+  if (!raw) return '';
+  const [intPart, decPart] = raw.split('.');
+  const signed = intPart.startsWith('-');
+  const digits = signed ? intPart.slice(1) : intPart;
+  const formattedInt = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${signed ? '-' : ''}${formattedInt}${raw.includes('.') ? `.${decPart ?? ''}` : ''}`;
+}
 function fmtCompact(n) {
   return `${Math.round(n).toLocaleString('ko-KR')}원`;
 }
@@ -202,8 +214,8 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick, hoveredStock
           {[
             { label: '비중',   val: `${tooltip.pct}%`,  color: '#1e293b' },
             { label: '평가액', val: tooltip.val,         color: '#1e293b' },
-            { label: '손익',   val: `${tooltip.pnl >= 0 ? '+' : '-'}${fmtCompact(Math.abs(tooltip.pnl))}`, color: parseFloat(tooltip.retPct) >= 0 ? '#16a34a' : '#dc2626' },
-            { label: '수익률', val: `${parseFloat(tooltip.retPct) >= 0 ? '+' : ''}${tooltip.retPct}%`,     color: parseFloat(tooltip.retPct) >= 0 ? '#16a34a' : '#dc2626' },
+            { label: '손익',   val: `${tooltip.pnl >= 0 ? '+' : '-'}${fmtCompact(Math.abs(tooltip.pnl))}`, color: parseFloat(tooltip.retPct) >= 0 ? '#dc2626' : '#2563eb' },
+            { label: '수익률', val: `${parseFloat(tooltip.retPct) >= 0 ? '+' : ''}${tooltip.retPct}%`,     color: parseFloat(tooltip.retPct) >= 0 ? '#dc2626' : '#2563eb' },
           ].map(({ label, val, color }) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 15, marginBottom: 4 }}>
               <span style={{ color: '#94a3b8', fontWeight: 500 }}>{label}</span>
@@ -252,21 +264,21 @@ function buildAiHtml(sorted, totalVal, totalCost) {
 
   // 3. 수익/손실 종목
   if (gainers.length > 0 && losers.length > 0) {
-    lines.push(`<strong>📈 성과 상위</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#16a34a">+${gainers[0].pnlPct.toFixed(1)}%</span>로 가장 높은 수익을 기록 중입니다.`);
-    lines.push(`<strong>📉 손실 종목</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#dc2626">${losers[0].pnlPct.toFixed(1)}%</span> 손실 중입니다. 손절 기준 또는 추가 매수 여부를 점검해 보세요.`);
+    lines.push(`<strong>📈 성과 상위</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#dc2626">+${gainers[0].pnlPct.toFixed(1)}%</span>로 가장 높은 수익을 기록 중입니다.`);
+    lines.push(`<strong>📉 손실 종목</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#2563eb">${losers[0].pnlPct.toFixed(1)}%</span> 손실 중입니다. 손절 기준 또는 추가 매수 여부를 점검해 보세요.`);
   } else if (gainers.length > 0) {
-    lines.push(`<strong>📈 전 종목 수익</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#16a34a">+${gainers[0].pnlPct.toFixed(1)}%</span>로 최고 성과를 기록 중입니다.`);
+    lines.push(`<strong>📈 전 종목 수익</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#dc2626">+${gainers[0].pnlPct.toFixed(1)}%</span>로 최고 성과를 기록 중입니다.`);
   } else if (losers.length > 0) {
-    lines.push(`<strong>📉 전 종목 손실</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#dc2626">${losers[0].pnlPct.toFixed(1)}%</span>로 가장 큰 손실입니다. 시장 상황과 보유 근거를 재검토하세요.`);
+    lines.push(`<strong>📉 전 종목 손실</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#2563eb">${losers[0].pnlPct.toFixed(1)}%</span>로 가장 큰 손실입니다. 시장 상황과 보유 근거를 재검토하세요.`);
   }
 
   // 4. 종합 의견
   if (avgReturn > 15)
-    lines.push(`<strong>💡 종합 의견</strong>: 포트폴리오 전체 수익률이 <span style="color:#16a34a">+${avgReturn.toFixed(1)}%</span>로 우수한 성과를 기록 중입니다. 수익 실현 시점을 고려하거나 이익을 재투자하는 전략을 검토해 보세요.`);
+    lines.push(`<strong>💡 종합 의견</strong>: 포트폴리오 전체 수익률이 <span style="color:#dc2626">+${avgReturn.toFixed(1)}%</span>로 우수한 성과를 기록 중입니다. 수익 실현 시점을 고려하거나 이익을 재투자하는 전략을 검토해 보세요.`);
   else if (avgReturn > 0)
-    lines.push(`<strong>💡 종합 의견</strong>: <span style="color:#16a34a">+${avgReturn.toFixed(1)}%</span>의 플러스 수익률을 유지하고 있습니다. 분산 투자 원칙을 지키며 꾸준히 운용하고 있는 것으로 보입니다.`);
+    lines.push(`<strong>💡 종합 의견</strong>: <span style="color:#dc2626">+${avgReturn.toFixed(1)}%</span>의 플러스 수익률을 유지하고 있습니다. 분산 투자 원칙을 지키며 꾸준히 운용하고 있는 것으로 보입니다.`);
   else
-    lines.push(`<strong>💡 종합 의견</strong>: 현재 <span style="color:#dc2626">${avgReturn.toFixed(1)}%</span>의 손실 구간에 있습니다. 손실 원인을 분석하고 포트폴리오 재구성 여부를 검토해 보세요.`);
+    lines.push(`<strong>💡 종합 의견</strong>: 현재 <span style="color:#2563eb">${avgReturn.toFixed(1)}%</span>의 손실 구간에 있습니다. 손실 원인을 분석하고 포트폴리오 재구성 여부를 검토해 보세요.`);
 
   // 5. 메모
   lines.push(`<strong>📝 메모</strong>: 포트폴리오 AI는 대시보드 AI보다는 좀 더 포트폴리오 쪽에 치중하도록! 나이대, 성별, 투자성향은 여기에 반영하는게 맞을까?`);
@@ -292,10 +304,13 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
   });
 
   const allIds = [...new Set(snapshots.flatMap(s => s.holdings.map(h => h.id)))];
+  const rowCount = rows.length;
+  const rowGap = rowCount >= 9 ? 8 : 12;
+  const barHeight = rowCount >= 9 ? 'clamp(22px, 3.4vh, 34px)' : 'clamp(28px, 5vh, 48px)';
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', minHeight: 0, position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0 }}>
         {[{ key: 'value', label: '금액순' }, { key: 'name', label: '가나다순' }].map(({ key, label }) => (
           <button key={key} onClick={() => setSortMode(key)} style={{
             padding: '3px 9px', fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
@@ -304,6 +319,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
           }}>{label}</button>
         ))}
       </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))`, gap: rowGap }}>
       {rows.map(({ snap, sorted, totalVal }) => {
         const maxVal = Math.max(...rows.map(r => r.totalVal));
         const barWidthPct = maxVal > 0 ? totalVal / maxVal * 100 : 0;
@@ -313,12 +329,12 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
           ? [...sorted].sort((a, b) => (a.info.name || a.id).localeCompare(b.info.name || b.id, 'ko'))
           : sorted;
         return (
-          <div key={snap.id} onClick={() => onSnapClick?.(snap.id)} style={{ cursor: 'pointer', borderRadius: 7, padding: '4px 6px', margin: '0 -6px', background: selectedSnapId === snap.id ? '#eff6ff' : 'transparent', outline: selectedSnapId === snap.id ? '1.5px solid #bfdbfe' : '1.5px solid transparent', transition: 'background 0.15s' }}>
+          <div key={snap.id} onClick={() => onSnapClick?.(snap.id)} style={{ cursor: 'pointer', borderRadius: 7, padding: '4px 6px', margin: '0 -6px', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: selectedSnapId === snap.id ? '#eff6ff' : 'transparent', outline: selectedSnapId === snap.id ? '1.5px solid #bfdbfe' : '1.5px solid transparent', transition: 'background 0.15s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{label}</span>
               <span style={{ fontSize: 11, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
             </div>
-            <div style={{ height: 20, overflow: 'hidden', position: 'relative', borderRadius: 3 }}>
+            <div style={{ height: barHeight, overflow: 'hidden', position: 'relative', borderRadius: 3 }}>
               <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex' }}>
                 {displaySorted.filter(h => h.curVal > 0).map(h => {
                   const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
@@ -348,6 +364,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
           </div>
         );
       })}
+      </div>{/* end rows flex */}
 
       {tooltip && (
         <div style={{
@@ -382,7 +399,7 @@ function AssetDrawer({ holding, prices, onClose }) {
   const cost = holding.qty * holding.avgPrice;
   const pnl = curVal - cost;
   const retPct = cost > 0 ? pnl / cost * 100 : 0;
-  const pnlColor = pnl >= 0 ? '#16a34a' : '#dc2626';
+  const pnlColor = pnl >= 0 ? '#dc2626' : '#2563eb';
   const logo = getLogo(id);
   const flag = getFlag(id);
 
@@ -410,7 +427,7 @@ function AssetDrawer({ holding, prices, onClose }) {
             {flag && <img src={flag} alt={info.name} style={{ width: 34, height: 24, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />}
             <div>
               <div style={{ fontWeight: 700, fontSize: 17, color: '#1e293b' }}>{info.name || id}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{info.sector} · {id}</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{info.sector} · {id}</div>
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#94a3b8', padding: '0 4px', lineHeight: 1, flexShrink: 0 }}>×</button>
@@ -423,7 +440,7 @@ function AssetDrawer({ holding, prices, onClose }) {
             <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b' }}>{fmtCompact(cur)}</div>
             {stats?.change != null && (() => {
               const up = stats.change >= 0;
-              const color = up ? '#16a34a' : '#dc2626';
+              const color = up ? '#dc2626' : '#2563eb';
               const arrow = up ? '▲' : '▼';
               return (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, fontSize: 13, fontWeight: 600, color }}>
@@ -459,7 +476,12 @@ function AssetDrawer({ holding, prices, onClose }) {
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>종목 정보</div>
               {statsLoading ? (
-                <div style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', padding: '20px 0' }}>불러오는 중...</div>
+                ['52주 최고', '52주 최저', 'PER', 'PBR', '시가총액', '거래량'].map(label => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                    <span style={{ color: '#64748b' }}>{label}</span>
+                    <span className="skeleton" style={{ width: 80, height: 14 }} />
+                  </div>
+                ))
               ) : stats ? (
                 [
                   { label: '52주 최고', val: stats.high52 ? fmtCompact(stats.high52) : '-' },
@@ -490,7 +512,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
 
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
-  const pnlColor = totalPnl >= 0 ? '#16a34a' : '#dc2626';
+  const pnlColor = totalPnl >= 0 ? '#dc2626' : '#2563eb';
   const aiHtml = buildAiHtml(sorted, totalVal, totalCost);
 
   return (
@@ -532,7 +554,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
                   const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
                   const pnl = h.curVal - h.cost;
                   const pnlPct = h.cost > 0 ? pnl / h.cost * 100 : 0;
-                  const pc = pnl >= 0 ? '#16a34a' : '#dc2626';
+                  const pc = pnl >= 0 ? '#dc2626' : '#2563eb';
                   return (
                     <tr key={h.id}>
                       <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'left', whiteSpace: 'nowrap' }}>
@@ -650,7 +672,7 @@ export default function MyReportPage() {
   function addHolding() {
     const qty = parseFloat(addQty);
     if (!qty || qty <= 0) { alert('수량을 입력해주세요.'); return; }
-    const manualPrice = parseFloat(addPrice);
+    const manualPrice = parseNumberInput(addPrice);
     const fetchedPrice = getPrice(addAsset);
     if (!(manualPrice > 0) && !(fetchedPrice > 0)) {
       if (!pricesLoaded) alert('가격 데이터를 불러오는 중입니다. 잠시 후 다시 시도하거나 평균 매입가를 직접 입력해주세요.');
@@ -708,14 +730,35 @@ export default function MyReportPage() {
     setDeleteTarget(null);
   }
 
-  if (!snapshotsLoaded) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>불러오는 중...</div>;
+  if (!snapshotsLoaded) return (
+    <div style={{ display: 'flex', gap: 20, alignItems: 'stretch' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="sec-header">
+          <div>
+            <div className="sec-title">마이 포트폴리오</div>
+            <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관</div>
+          </div>
+          <span className="skeleton" style={{ width: 130, height: 34, borderRadius: 8 }} />
+        </div>
+        <div className="other-card">
+          <span className="skeleton" style={{ width: '100%', height: 220, display: 'block', borderRadius: 8 }} />
+        </div>
+      </div>
+      <div style={{ width: 280, flexShrink: 0 }}>
+        <div className="other-card" style={{ height: '100%', padding: '10px 12px', boxSizing: 'border-box' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8 }}>자산 비중 추이</div>
+          <span className="skeleton" style={{ width: '100%', height: 140, display: 'block', borderRadius: 6 }} />
+        </div>
+      </div>
+    </div>
+  );
 
   const totalCount = snapshots.length;
   const formTotalVal = holdings.reduce((s, h) => s + h.qty * getPrice(h.id), 0);
 
   return (
     <>
-    <div style={{ display: 'flex', gap: 20, alignItems: 'stretch' }}>
+    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
       {/* 메인 콘텐츠 */}
       <div style={{ flex: 1, minWidth: 0, overflowX: 'auto' }}>
       <div className="sec-header">
@@ -730,12 +773,14 @@ export default function MyReportPage() {
 
       {/* 새 스냅샷 입력 폼 */}
       {formOpen && (
-        <div className="other-card" style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>보유 자산 선택</div>
+        <div className="other-card" style={{ marginBottom: 16, height: 'calc(100vh - 110px)', display: 'flex', flexDirection: 'column' }}>
+          {/* 스크롤 가능한 컨텐츠 영역 */}
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>보유 자산 선택</div>
 
           {/* 주식 카드 그리드 */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 5 }}>주식</div>
-          <div className="asset-pick-grid" style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 3 }}>주식</div>
+          <div className="asset-pick-grid" style={{ marginBottom: 6 }}>
             {STOCK_IDS.map(id => {
               const info = ASSET_INFO[id];
               const logo = getLogo(id);
@@ -745,15 +790,15 @@ export default function MyReportPage() {
                   <div className="asset-pick-logo">
                     {logo && <img src={logo} alt={info.name} />}
                   </div>
-                  <div className="asset-pick-name">{info.name}</div>
+                  <span className="asset-pick-name">{info.name}<span className="asset-pick-label"> · {info.sector}</span></span>
                 </div>
               );
             })}
           </div>
 
           {/* 외화 카드 그리드 */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 5 }}>외화</div>
-          <div className="asset-pick-grid asset-pick-fx" style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 3 }}>외화</div>
+          <div className="asset-pick-grid asset-pick-fx" style={{ marginBottom: 8 }}>
             {FX_IDS.map(id => {
               const info = ASSET_INFO[id];
               const flag = getFlag(id);
@@ -762,8 +807,7 @@ export default function MyReportPage() {
               return (
                 <div key={id} className={`asset-pick-card${sel ? ' selected' : ''}`} onClick={() => { setAddAsset(id); setAddPrice(prices[id] ? String(prices[id]) : ''); }}>
                   {flag && <img className="asset-pick-flag" src={flag} alt={info.name} />}
-                  <div className="asset-pick-name">{code}</div>
-                  <div className="asset-pick-label">{rest.join(' ')}</div>
+                  <span className="asset-pick-name">{code}<span className="asset-pick-label"> · {rest.join(' ')}</span></span>
                 </div>
               );
             })}
@@ -798,18 +842,23 @@ export default function MyReportPage() {
 
             {/* 평균 매입가 */}
             <div className="add-holding-field">
-              <label className="add-holding-label">평균 매입가 <span style={{ fontWeight: 400, color: '#cbd5e1' }}>(현재가 자동 입력 · 수정 가능)</span></label>
-              <input className="form-input" type="number" min="0"
-                placeholder={!pricesLoaded ? '가격 불러오는 중...' : prices[addAsset] ? String(prices[addAsset]) : '직접 입력'}
-                value={addPrice} onChange={e => setAddPrice(e.target.value)} style={{ width: 220 }} />
+              <label className="add-holding-label">평균 매입가 <span style={{ fontWeight: 400, color: '#94a3b8' }}>(현재가 자동 입력 · 수정 가능)</span></label>
+              <div style={{ position: 'relative', width: 220 }}>
+                <input className="form-input" type="text" inputMode="decimal"
+                  placeholder={!pricesLoaded ? '가격 불러오는 중...' : prices[addAsset] ? formatNumberInput(prices[addAsset]) : '직접 입력'}
+                  value={formatNumberInput(addPrice)}
+                  onChange={e => setAddPrice(e.target.value.replace(/,/g, ''))}
+                  style={{ width: '100%', paddingRight: 34 }} />
+                <span style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: '#94a3b8', pointerEvents: 'none' }}>원</span>
+              </div>
             </div>
 
             <button className="btn btn-primary" style={{ alignSelf: 'flex-end', height: 36 }} onClick={addHolding}>＋ 추가</button>
           </div>
 
           {holdings.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 12 }}>
-              <thead>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 4 }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
                 <tr>
                   {['종목', '수량', '평균 매입가', '현재가', '평가액', '예상 비중', ''].map((h, i) => (
                     <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>{h}</th>
@@ -836,7 +885,7 @@ export default function MyReportPage() {
                       </td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>
                         {isEditing
-                          ? <input type="number" min="0" value={editPrice} onChange={e => setEditPrice(e.target.value)} className="form-input" style={{ width: 100, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
+                          ? <input type="text" inputMode="decimal" value={formatNumberInput(editPrice)} onChange={e => setEditPrice(e.target.value.replace(/,/g, ''))} className="form-input" style={{ width: 100, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
                           : <>{fmt(h.avgPrice)}원</>}
                       </td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(cur)}원</td>
@@ -846,7 +895,7 @@ export default function MyReportPage() {
                         {isEditing ? (
                           <>
                             <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontSize: 14, marginRight: 4 }} onClick={() => {
-                              const q = parseFloat(editQty), p = parseFloat(editPrice);
+                              const q = parseFloat(editQty), p = parseNumberInput(editPrice);
                               if (q > 0 && p > 0) setHoldings(prev => prev.map(item => item.id === h.id ? { ...item, qty: q, avgPrice: p } : item));
                               setEditingId(null);
                             }}>✓</button>
@@ -865,8 +914,9 @@ export default function MyReportPage() {
               </tbody>
             </table>
           )}
+          </div>{/* end 스크롤 영역 */}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, paddingTop: 10, borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
             <button className="btn btn-ghost" style={{ color: '#ef4444', borderColor: '#fca5a5' }} onClick={() => setHoldings([])}>전체 초기화</button>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost" onClick={() => { setFormOpen(false); setHoldings([]); }}>취소</button>
@@ -894,8 +944,8 @@ export default function MyReportPage() {
         </div>
       )}
 
-      {/* 스냅샷 뷰 */}
-      {snapshots.length === 0 ? (
+      {/* 스냅샷 뷰 — 폼이 열려 있을 때는 숨김 */}
+      {!formOpen && (snapshots.length === 0 ? (
         <div className="other-card" style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8', fontSize: 13 }}>
           📋 기록된 스냅샷이 없습니다.<br />
           <span style={{ fontSize: 12, marginTop: 6, display: 'block' }}>위의 버튼을 눌러 포트폴리오를 기록해보세요.</span>
@@ -905,16 +955,18 @@ export default function MyReportPage() {
         return selectedSnap ? (
           <SnapshotCard key={selectedSnap.id} snap={selectedSnap} prices={prices} onDelete={deleteSnapshot} hoveredStockId={hoveredStockId} onHoverStock={setHoveredStockId} />
         ) : null;
-      })()}
+      })())}
       </div>{/* end 메인 콘텐츠 */}
 
       {/* 오른쪽 고정 패널: 비중 추이 */}
-      <div style={{ width: 280, flexShrink: 0, position: 'relative' }}>
-        <div className="other-card" style={{ position: 'absolute', inset: 0, padding: '10px 12px', boxSizing: 'border-box' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8 }}>
+      <div style={{ width: 280, flexShrink: 0 }}>
+        <div className="other-card" style={{ position: 'sticky', top: 16, height: 'calc(100vh - 80px)', overflow: 'hidden', padding: '10px 12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8, flexShrink: 0 }}>
             자산 비중 추이
           </div>
-          <WeightHistoryChart snapshots={snapshots} prices={prices} onSnapClick={id => setSelectedSnapId(id)} selectedSnapId={selectedSnapId} />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <WeightHistoryChart snapshots={snapshots} prices={prices} onSnapClick={id => setSelectedSnapId(id)} selectedSnapId={selectedSnapId} />
+          </div>
         </div>
       </div>
     </div>{/* end 2열 wrapper */}
