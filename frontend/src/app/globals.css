@@ -145,7 +145,7 @@ html, body { height: 100%; overflow: hidden; }
 .news-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
 .ticker-tag { font-size: 10px; font-weight: 700; background: #eff6ff; color: #1d4ed8; padding: 2px 6px; border-radius: 4px; }
 .report-tag { font-size: 10px; font-weight: 700; background: #f3f0ff; color: #7c3aed; padding: 2px 6px; border-radius: 4px; }
-.news-date { font-size: 10px; color: var(--text-light); }
+.news-date { font-size: 10px; color: var(--text-secondary); font-weight: 600; }
 .news-source { font-size: 10px; color: var(--text-light); margin-left: auto; }
 .news-title { font-size: 13px; font-weight: 600; line-height: 1.4; margin-bottom: 4px; }
 .news-body { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
@@ -165,9 +165,9 @@ html, body { height: 100%; overflow: hidden; }
 .factor-val { font-size: 11px; font-weight: 600; width: 40px; text-align: right; flex-shrink: 0; }
 .factor-desc { font-size: 10px; color: #94a3b8; margin-bottom: 5px; margin-left: 117px; margin-top: -2px; }
 
-.matrix-table { border-collapse: separate; border-spacing: 3px; }
-.mh { width: 70px; height: 42px; font-size: 10px; font-weight: 600; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px; }
-.mc { width: 58px; height: 42px; border-radius: 6px; text-align: center; line-height: 42px; font-size: 12px; font-weight: 700; }
+.matrix-table { border-collapse: separate; border-spacing: 3px; table-layout: fixed; }
+.mh { width: 62px; height: 42px; font-size: 10px; font-weight: 600; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62px; }
+.mc { width: 62px; height: 42px; border-radius: 6px; text-align: center; line-height: 42px; font-size: 12px; font-weight: 700; }
 
 .ret-box { border-radius: 8px; padding: 9px; text-align: center; }
 .ret-label { font-size: 10px; color: var(--text-secondary); }
@@ -266,6 +266,8 @@ html, body { height: 100%; overflow: hidden; }
 /* ── 관심종목 뉴스 미리보기 카드 ── */
 .news-preview-card { background: linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%); border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; }
 .news-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.news-preview-body { flex: 1; overflow: hidden; position: relative; }
+.news-preview-body::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 56px; background: linear-gradient(to bottom, transparent, #eef2ff); pointer-events: none; border-radius: 0 0 8px 8px; }
 .news-preview-title { font-size: 11px; font-weight: 700; color: #4c1d95; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 7px; }
 .news-preview-more { background: none; border: none; font-size: 11px; font-weight: 600; color: #6d28d9; cursor: pointer; padding: 0; }
 .news-preview-more:hover { text-decoration: underline; }
@@ -304,8 +306,8 @@ html, body { height: 100%; overflow: hidden; }
 .tk-card-star { background: none; border: none; cursor: pointer; font-size: 11px; color: #d1d5db; padding: 0; line-height: 1; transition: color 0.15s; }
 .tk-card-star:hover { color: #fbbf24; }
 .tk-card-star.starred { color: #f59e0b; }
-.tk-card-det { background: none; border: none; cursor: pointer; font-size: 10px; color: #94a3b8; padding: 0 0 0 3px; line-height: 1; transition: color 0.15s; }
-.tk-card-det:hover { color: #2563eb; }
+.tk-card-det { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: 600; color: #64748b; padding: 1px 5px; line-height: 1.4; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.tk-card-det:hover { background: #dbeafe; border-color: #93c5fd; color: #2563eb; }
 .tk-card-bottom { display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; }
 .tk-card-price { font-size: 11px; font-weight: 700; color: #0f172a; }
 .tk-card .tk-chg { margin-top: 0; }
@@ -404,7 +406,7 @@ html, body { height: 100%; overflow: hidden; }
 .snapshot-delete-btn { background: none; border: none; cursor: pointer; font-size: 15px; color: #cbd5e1; padding: 2px 6px; border-radius: 5px; line-height: 1; transition: color 0.15s, background 0.15s; }
 .snapshot-delete-btn:hover { color: #dc2626; background: #fef2f2; }
 
-.snapshot-body { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: stretch; height: 470px; overflow: visible; }
+.snapshot-body { display: grid; grid-template-columns: 82fr 18fr; gap: 16px; align-items: stretch; height: 470px; overflow: visible; }
 
 .snapshot-legend { display: flex; flex-direction: column; gap: 0; width: 100%; max-height: 340px; overflow-y: auto; }
 .snapshot-legend-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid #f1f5f9; width: 100%; }

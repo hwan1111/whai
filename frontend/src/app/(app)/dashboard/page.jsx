@@ -288,10 +288,6 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
         let lastIdx = vals.length - 1;
         while (lastIdx >= 0 && vals[lastIdx] === null) lastIdx--;
         if (lastIdx < 0) return null;
-        const lv = vals[lastIdx];
-        const lx = toX(lastIdx, n), ly = toY(lv, minV, maxV);
-        const sign = lv >= 0 ? '+' : '';
-
         return (
           <g key={a} style={{ opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' }}>
             {segments.map((pts, si) => (
@@ -365,7 +361,24 @@ export default function DashboardPage() {
   const [favDetail, setFavDetail] = useState(null);
   const [favDetailLoading, setFavDetailLoading] = useState(false);
   const [favNewsExpanded, setFavNewsExpanded] = useState(null);
+  const [showMatrix, setShowMatrix] = useState(false);
+  const matrixColRef = useRef(null);
+  const [panelWidth, setPanelWidth] = useState(400);
   const PERIODS = ['1W', '1M', '3M', '6M', '1Y', '3Y', 'ALL'];
+
+  useEffect(() => {
+    const update = () => {
+      if (matrixColRef.current) {
+        const left = matrixColRef.current.getBoundingClientRect().left;
+        setPanelWidth(window.innerWidth - left);
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (matrixColRef.current) ro.observe(matrixColRef.current);
+    window.addEventListener('resize', update);
+    return () => { ro.disconnect(); window.removeEventListener('resize', update); };
+  }, []);
 
   useEffect(() => {
     const raw = sessionStorage.getItem('whai_prefetch');
@@ -487,13 +500,18 @@ export default function DashboardPage() {
 
   function corrStyle(v) {
     const t = Math.max(-1, Math.min(1, v));
-    const nr = 248, ng = 250, nb = 252;
+    const absT = Math.abs(t);
+    const sign = t >= 0 ? 1 : -1;
+    // 비-대각선 셀은 최소 13% 색 강도 보장 → 0.01도 연한 틴트로 표시
+    const intensity = absT > 0 ? Math.max(0.13, absT) : 0;
+    const sc = sign * intensity;
+    const nr = 245, ng = 247, nb = 250;
     let r, g, b;
-    if (t >= 0) {
-      r = Math.round(nr + (30 - nr) * t); g = Math.round(ng + (64 - ng) * t); b = Math.round(nb + (175 - nb) * t);
+    if (sc >= 0) {
+      r = Math.round(nr + (30 - nr) * sc); g = Math.round(ng + (64 - ng) * sc); b = Math.round(nb + (175 - nb) * sc);
     } else {
-      const s = -t;
-      r = Math.round(nr + (185 - nr) * s); g = Math.round(ng + (28 - ng) * s); b = Math.round(nb + (28 - nb) * s);
+      const u = -sc;
+      r = Math.round(nr + (185 - nr) * u); g = Math.round(ng + (28 - ng) * u); b = Math.round(nb + (28 - nb) * u);
     }
     const brightness = (r * 299 + g * 587 + b * 114) / 1000;
     return { background: `rgb(${r},${g},${b})`, color: brightness < 140 ? 'white' : (t < 0 ? '#7f1d1d' : '#1e3a8a') };
@@ -590,7 +608,7 @@ export default function DashboardPage() {
               className="tk-card-det"
               onClick={e => { e.stopPropagation(); setDetailStockId(id); }}
               title="자세히 보기"
-            >↗</button>
+            >상세</button>
           </div>
         </div>
         <div className="tk-card-bottom">
@@ -672,6 +690,93 @@ export default function DashboardPage() {
       <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} />
       {detailStockId && (
         <StockDetailModal stockId={detailStockId} onClose={() => setDetailStockId(null)} />
+      )}
+      {showMatrix && showComplex && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setShowMatrix(false)}
+        >
+          <div
+            style={{ background: 'white', borderRadius: 16, padding: '20px 24px 24px', boxShadow: '0 20px 60px rgba(15,23,42,0.3)', maxWidth: '92vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexShrink: 0 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>상관계수 히트맵</div>
+                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Pearson · {complexIds.length}개 종목</div>
+              </div>
+              <button
+                onClick={() => setShowMatrix(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', fontSize: 13, color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >✕</button>
+            </div>
+
+            {/* 테이블 */}
+            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              {(() => {
+                const n = complexIds.length;
+                const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+                const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+                // 모달 크롬 높이: 패딩(44) + 헤더(54) + thead행(25) + 컬러바(55) + 셀 간격(n*3) = 178 + n*3
+                const cellH = Math.max(22, Math.floor((vh * 0.90 - 178 - n * 3) / n));
+                const cellW = Math.max(44, Math.min(96, Math.floor((vw * 0.88 - 110 - n * 3) / n)));
+                const minDim = Math.min(cellW, cellH);
+                const fs = minDim >= 44 ? 13 : minDim >= 34 ? 12 : 11;
+                const lbl = id => { const l = shortLabel(id); return cellW < 54 ? l.slice(0, 3) : l; };
+                return (
+                  <table style={{ borderCollapse: 'separate', borderSpacing: 3 }}>
+                    <thead><tr>
+                      <th style={{ minWidth: 60 }} />
+                      {complexIds.map(id => (
+                        <th key={id} style={{ width: cellW, fontSize: fs - 1, fontWeight: 600, color: '#475569', textAlign: 'center', padding: '0 2px 8px', whiteSpace: 'nowrap' }}>
+                          {lbl(id)}
+                        </th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {complexIds.map(row => (
+                        <tr key={row}>
+                          <th style={{ fontSize: fs - 1, fontWeight: 600, color: '#475569', textAlign: 'right', paddingRight: 8, whiteSpace: 'nowrap' }}>
+                            {lbl(row)}
+                          </th>
+                          {complexIds.map(col => {
+                            if (row === col) return (
+                              <td key={col} style={{ width: cellW, height: cellH, background: '#f1f5f9', borderRadius: 6, textAlign: 'center', verticalAlign: 'middle' }}>
+                                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#cbd5e1', margin: '0 auto' }} />
+                              </td>
+                            );
+                            const v = calcPearson(complexData[row], complexData[col]);
+                            const { background, color } = corrStyle(v);
+                            return (
+                              <td key={col} style={{ width: cellW, height: cellH, background, borderRadius: 6, textAlign: 'center', verticalAlign: 'middle', color, fontWeight: 700, fontSize: fs }}>
+                                {v.toFixed(2)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+
+            {/* 컬러 스케일 (고정) */}
+            <div style={{ flexShrink: 0, marginTop: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#94a3b8' }}>
+                <span>-1.0</span>
+                <div style={{ flex: 1, height: 7, borderRadius: 4, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
+                <span>+1.0</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 600, color: '#475569', marginTop: 5, padding: '0 24px' }}>
+                <span>강한 음의 상관관계</span>
+                <span>무상관</span>
+                <span>강한 양의 상관관계</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       <div className={`dash-layout${rightOpen ? ' panel-open' : ''}`}>
 
@@ -789,14 +894,82 @@ export default function DashboardPage() {
             ) : !cfg ? (
               <div style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>관심종목을 선택해주세요</div>
             ) : (
-              <div className="grid g11" style={{ gap: 7 }}>
-                <div className="metric-box"><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
-                <div className="metric-box"><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
-                <div className="metric-box"><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
-                <div className="metric-box"><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
-                <div className="metric-box"><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
-                <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
-              </div>
+              <>
+                <div className="grid g11" style={{ gap: 7 }}>
+                  <div className="metric-box"><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
+                  <div className="metric-box"><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
+                  <div className="metric-box"><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
+                  <div className="metric-box"><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
+                  <div className="metric-box"><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
+                  <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
+                </div>
+
+                {/* 52주 가격 위치 바 */}
+                {s?.high52 && s?.low52 && favDetail?.price && (() => {
+                  const price = Number(favDetail.price);
+                  const range = s.high52 - s.low52;
+                  const pct = range > 0 ? Math.round(((price - s.low52) / range) * 100) : 50;
+                  const safePct = Math.max(0, Math.min(100, pct));
+                  return (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>52주 가격 위치</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', marginBottom: 4 }}>
+                        <span>최저 {fmt(s.low52)}원</span>
+                        <span>최고 {fmt(s.high52)}원</span>
+                      </div>
+                      <div style={{ position: 'relative', height: 6, borderRadius: 3, background: 'linear-gradient(to right, #2563eb, #dc2626)' }}>
+                        <div style={{ position: 'absolute', top: '50%', left: `${safePct}%`, transform: 'translate(-50%, -50%)', width: 11, height: 11, borderRadius: '50%', background: safePct >= 50 ? '#dc2626' : '#2563eb', border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
+                      </div>
+                      <div style={{ position: 'relative', marginTop: 4, height: 13 }}>
+                        <span style={{ position: 'absolute', left: `${Math.min(Math.max(safePct, 6), 94)}%`, transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: safePct >= 50 ? '#dc2626' : '#2563eb', whiteSpace: 'nowrap' }}>{safePct}%</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* PER 업종 평균 비교
+                    출처: KRX 업종별 PER (한국거래소 정보데이터시스템 · fnguide.com)
+                    기준: 2026년 1분기 (분기 실적 시즌마다 수동 업데이트)
+                    업데이트 방법: https://data.krx.co.kr → 주식 → 업종 → 업종PER/PBR
+                */}
+                {s?.per != null && cfg?.sector && (() => {
+                  const SECTOR_PER = {
+                    '반도체': 23,  // KRX IT지수 구성종목 평균, 2026 Q1
+                    '자동차': 7,   // KRX 자동차지수 구성종목 평균, 2026 Q1
+                    '방산':   28,  // KRX 방산지수 구성종목 평균, 2026 Q1
+                    '금융':   8,   // KRX 은행지수 구성종목 평균, 2026 Q1
+                    '화학':   16,  // KRX 화학지수 구성종목 평균, 2026 Q1
+                  };
+                  const avg = SECTOR_PER[cfg.sector];
+                  if (!avg) return null;
+                  const diff = s.per - avg;
+                  const isAbove = diff > 0;
+                  const diffColor = isAbove ? '#dc2626' : '#16a34a';
+                  return (
+                    <div style={{ marginTop: 12, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>PER 업종 평균 비교</span>
+                        <span style={{ fontSize: 8, color: '#cbd5e1' }}>KRX · 2026 Q1</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                        <div style={{ flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>현재 PER</div>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: diffColor, lineHeight: 1 }}>{s.per.toFixed(1)}<span style={{ fontSize: 10, fontWeight: 600 }}>배</span></div>
+                        </div>
+                        <div style={{ width: 1, height: 36, background: '#e2e8f0', flexShrink: 0 }} />
+                        <div style={{ flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>{cfg.sector} 업종 평균</div>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: '#334155', lineHeight: 1 }}>{avg}<span style={{ fontSize: 10, fontWeight: 600 }}>배</span></div>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: diffColor }}>{isAbove ? '▲' : '▼'} {isAbove ? '+' : ''}{diff.toFixed(1)}배</span>
+                        <span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>업종 평균 대비 {isAbove ? '높음' : '낮음'}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
             )}
           </div>
         </div>
@@ -819,72 +992,166 @@ export default function DashboardPage() {
         </div>
 
         {/* MATRIX column */}
-        <div className="matrix-col">
-          {showComplex ? (
-            <div className="matrix-side" style={{ flex: 1 }}>
-              <div className="matrix-side-title">
-                상관계수 매트릭스
-                <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400 }}>Pearson</span>
-              </div>
-              {(() => {
-                const n = complexIds.length;
-                const cellH = n <= 6 ? 36 : n <= 8 ? 30 : n <= 12 ? 25 : 22;
-                const cellStyle = { height: cellH, lineHeight: `${cellH}px` };
-                const lbl = id => { const l = shortLabel(id); return n >= 9 ? l.slice(0, 4) : l; };
-                return (
-                  <table className="matrix-table">
-                    <thead>
-                      <tr>
-                        <th className="mh" style={cellStyle} />
-                        {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
-                      </tr>
-                    </thead>
+        <div className="matrix-col" ref={matrixColRef}>
+          {showComplex ? (() => {
+            const allPairs = [];
+            for (let i = 0; i < complexIds.length; i++)
+              for (let j = i + 1; j < complexIds.length; j++) {
+                const v = calcPearson(complexData[complexIds[i]], complexData[complexIds[j]]);
+                allPairs.push({ a: complexIds[i], b: complexIds[j], v });
+              }
+            const byAbs = [...allPairs].sort((a, b) => b.v - a.v);
+
+            function corrColor(v) {
+              const a = Math.abs(v);
+              if (a >= 0.7) return v > 0 ? '#1e3a8a' : '#7f1d1d';
+              if (a >= 0.3) return v > 0 ? '#2563eb' : '#dc2626';
+              return '#94a3b8';
+            }
+            const CORR_THRESHOLD = 0.3;
+            const posPairs = byAbs.filter(p => p.v >= CORR_THRESHOLD).slice(0, 5);
+            const negPairs = byAbs.filter(p => p.v <= -CORR_THRESHOLD).reverse().slice(0, 5);
+            const allMeaningful = allPairs.filter(p => Math.abs(p.v) >= CORR_THRESHOLD).sort((a, b) => b.v - a.v);
+            function corrLabel(v) {
+              const a = Math.abs(v);
+              if (a >= 0.7) return v > 0 ? '강한 양의 상관 관계' : '강한 역의 상관 관계';
+              if (a >= 0.3) return v > 0 ? '중간 양의 상관 관계' : '중간 역의 상관 관계';
+              return '약한/무관계';
+            }
+
+            /* ── 히트맵 JSX ── */
+            const HeatmapView = () => {
+              const n = complexIds.length;
+              const CW = n <= 4 ? 62 : n <= 6 ? 52 : n <= 8 ? 44 : 38;
+              const SP = 3;
+              const tblW = (n + 1) * CW + n * SP;
+              const cellH = n <= 6 ? 36 : n <= 8 ? 30 : n <= 12 ? 25 : 22;
+              const mcFs = n <= 6 ? 12 : n <= 8 ? 11 : 10;
+              const cellStyle = { height: cellH, lineHeight: `${cellH}px`, width: CW, minWidth: CW, maxWidth: CW };
+              const lbl = id => { const l = shortLabel(id); return n >= 7 ? l.slice(0, 3) : n >= 5 ? l.slice(0, 4) : l; };
+              return (
+                <>
+                  <table className="matrix-table" style={{ width: tblW }}>
+                    <thead><tr>
+                      <th className="mh" style={cellStyle} />
+                      {complexIds.map(id => <th key={id} className="mh" style={cellStyle}>{lbl(id)}</th>)}
+                    </tr></thead>
                     <tbody>
                       {complexIds.map(row => (
                         <tr key={row}>
                           <th className="mh" style={{ ...cellStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
                           {complexIds.map(col => {
-                            if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
+                            if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
                             const v = calcPearson(complexData[row], complexData[col]);
                             const { background, color } = corrStyle(v);
-                            return <td key={col} className="mc" style={{ ...cellStyle, background, color }}>{v.toFixed(2)}</td>;
+                            return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background, color }}>{v.toFixed(2)}</td>;
                           })}
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                );
-              })()}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 10, color: '#94a3b8' }}>
-                <span>-1.0</span>
-                <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
-                <span>+1.0</span>
-              </div>
-              {(() => {
-                let maxV = -Infinity, minV = Infinity;
-                let maxPair = null, minPair = null;
-                for (let i = 0; i < complexIds.length; i++) {
-                  for (let j = i + 1; j < complexIds.length; j++) {
-                    const v = calcPearson(complexData[complexIds[i]], complexData[complexIds[j]]);
-                    if (v > maxV) { maxV = v; maxPair = [complexIds[i], complexIds[j]]; }
-                    if (v < minV) { minV = v; minPair = [complexIds[i], complexIds[j]]; }
-                  }
-                }
-                return (
-                  <div className="ai-box" style={{ marginTop: 8 }}>
-                    <div className="ai-header">
-                      <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 상관 분석</span>
-                    </div>
-                    <div className="ai-text" style={{ fontSize: 11 }}>
-                      {maxPair && <div>최강 연동 <b style={{ color: '#4338ca' }}>{shortLabel(maxPair[0])} · {shortLabel(maxPair[1])} ({maxV.toFixed(2)})</b></div>}
-                      {minV < 0 && minPair && <div>역상관 <b>{shortLabel(minPair[0])} · {shortLabel(minPair[1])} ({minV.toFixed(2)})</b></div>}
-                      <div style={{ marginTop: 4, fontSize: 10, color: '#6d28d9' }}>|r| ≥ 0.7 강함 · 0.3 ~ 0.7 보통 · 0 ~ 0.3 약함</div>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 10, color: '#94a3b8' }}>
+                    <span>-1.0</span>
+                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'linear-gradient(to right,rgb(30,64,175),rgb(248,250,252),rgb(185,28,28))' }} />
+                    <span>+1.0</span>
                   </div>
-                );
-              })()}
-            </div>
-          ) : (
+                  <div style={{ fontSize: 9, color: '#475569', marginTop: 4, lineHeight: 1.7 }}>
+                    <div>+1에 가까울수록 강한 선형 관계 &nbsp;·&nbsp; 0은 무관계 &nbsp;·&nbsp; −1에 가까울수록 강한 역선형 관계</div>
+                  </div>
+                </>
+              );
+            };
+
+            /* ── 바 차트 JSX ── */
+            const BarView = ({ pairs }) => {
+              const maxAbs = Math.max(...pairs.map(p => Math.abs(p.v)), 0.01);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pairs.map(({ a, b, v }, idx) => {
+                    const barW = Math.abs(v) / maxAbs * 100;
+                    const barCol = corrStyle(v).background;
+                    const textCol = corrColor(v);
+                    const abs = Math.abs(v);
+                    const desc = abs >= 0.7
+                      ? (v > 0 ? '강하게 함께 움직임' : '강하게 반대로 움직임')
+                      : abs >= 0.3
+                      ? (v > 0 ? '비슷한 방향으로 움직임' : '반대 방향으로 움직임')
+                      : '뚜렷한 선형 관계 없음';
+                    return (
+                      <div key={idx}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+                          <span style={{ fontSize: 10, color: '#312e81', fontWeight: 600 }}>{shortLabel(a)} · {shortLabel(b)}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: textCol }}>{v.toFixed(2)}</span>
+                            <span style={{ fontSize: 9, color: textCol, background: 'rgba(255,255,255,0.6)', padding: '1px 5px', borderRadius: 4, whiteSpace: 'nowrap' }}>{corrLabel(v)}</span>
+                          </div>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: 3 }}>
+                          <div style={{ width: `${barW}%`, height: '100%', borderRadius: 3, background: barCol, transition: 'width 0.3s' }} />
+                        </div>
+                        <div style={{ fontSize: 9, color: '#6d28d9', lineHeight: 1.4 }}>{desc}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            };
+
+            const isCompact = complexIds.length <= 4;
+
+            return (
+              <div className="matrix-side" style={{ flex: 1 }}>
+                <div className="matrix-side-title">
+                  상관계수 분석
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400 }}>Pearson</span>
+                    {/* 5개 이상일 때만 돋보기 노출 */}
+                    {!isCompact && (
+                      <button
+                        onClick={() => setShowMatrix(true)}
+                        title="전체 히트맵 팝업"
+                        style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 6px', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center' }}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isCompact ? (
+                  /* 4개 이하: 히트맵 + 의미 있는 쌍 바 차트 */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <HeatmapView />
+                    {allMeaningful.length > 0
+                      ? <BarView pairs={allMeaningful} />
+                      : <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', padding: '6px 0' }}>|r| ≥ 0.3인 쌍 없음</div>
+                    }
+                  </div>
+                ) : (
+                  /* 5개 이상: 정상관 / 역상관 섹션 분리 */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', marginBottom: 5 }}>강한 양의 상관 관계 TOP 5</div>
+                    {posPairs.length > 0 && <BarView pairs={posPairs} />}
+                    {posPairs.length < 5 && (
+                      <div style={{ fontSize: 9, color: '#94a3b8', marginTop: posPairs.length > 0 ? 6 : 0, padding: '5px 8px', background: '#f8fafc', borderRadius: 6, border: '1px dashed #e2e8f0', lineHeight: 1.6 }}>
+                        {posPairs.length === 0 ? '해당 쌍 없음 · ' : `${posPairs.length}개 표시 중 · `}선형 상관계수 r ≥ 0.3인 쌍만 표시됩니다
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', marginTop: 10, marginBottom: 5 }}>강한 역의 상관 관계 TOP 5</div>
+                    {negPairs.length > 0 && <BarView pairs={negPairs} />}
+                    {negPairs.length < 5 && (
+                      <div style={{ fontSize: 9, color: '#94a3b8', marginTop: negPairs.length > 0 ? 6 : 0, padding: '5px 8px', background: '#f8fafc', borderRadius: 6, border: '1px dashed #e2e8f0', lineHeight: 1.6 }}>
+                        {negPairs.length === 0 ? '해당 쌍 없음 · ' : `${negPairs.length}개 표시 중 · `}선형 상관계수 r ≤ −0.3인 쌍만 표시됩니다
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              </div>
+            );
+          })() : (
             <div style={{ flex: 1, background: 'white', border: '1px solid var(--border)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 11, textAlign: 'center', padding: 20 }}>
               종목 2개 이상<br/>선택 시 표시
             </div>
@@ -897,48 +1164,50 @@ export default function DashboardPage() {
             <div className="news-preview-header">
               <div className="news-preview-title">
                 <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-                관련 뉴스{selectedFavId && STOCK_CONFIG[selectedFavId] ? ` — ${STOCK_CONFIG[selectedFavId].name}` : ''}
+                관련 뉴스
               </div>
               <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
             </div>
-            {favDetailLoading ? (
-              [0, 1, 2].map(i => (
-                <div key={i} className="news-preview-item">
-                  <div className="news-meta" style={{ gap: 6 }}>
-                    <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
-                    <span className="skeleton" style={{ width: 56, height: 12 }} />
+            <div className="news-preview-body">
+              {favDetailLoading ? (
+                [0, 1, 2].map(i => (
+                  <div key={i} className="news-preview-item">
+                    <div className="news-meta" style={{ gap: 6 }}>
+                      <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
+                      <span className="skeleton" style={{ width: 56, height: 12 }} />
+                    </div>
+                    <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
                   </div>
-                  <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
+                ))
+              ) : !favDetail || favDetail.news.length === 0 ? (
+                <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
+                  {selectedFavId && STOCK_CONFIG[selectedFavId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
                 </div>
-              ))
-            ) : !favDetail || favDetail.news.length === 0 ? (
-              <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
-                {selectedFavId && STOCK_CONFIG[selectedFavId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
-              </div>
-            ) : favNewsExpanded !== null ? (
-              (() => { const n = favDetail.news[favNewsExpanded]; return (
-                <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
+              ) : favNewsExpanded !== null ? (
+                (() => { const n = favDetail.news[favNewsExpanded]; return (
+                  <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
+                    <div className="news-meta">
+                      <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                      <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                    </div>
+                    <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
+                    {n.vol_insight && (
+                      <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
+                      </div>
+                    )}
+                  </div>
+                ); })()
+              ) : favDetail.news.map((n, i) => (
+                <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
                   <div className="news-meta">
                     <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
                     <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
                   </div>
-                  <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
-                  {n.vol_insight && (
-                    <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
-                      <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
-                    </div>
-                  )}
+                  <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
                 </div>
-              ); })()
-            ) : favDetail.news.slice(0, 5).map((n, i) => (
-              <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
-                <div className="news-meta">
-                  <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                  <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
-                </div>
-                <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
@@ -947,12 +1216,13 @@ export default function DashboardPage() {
           className="sidebar-tab"
           onClick={() => setRightOpen(o => !o)}
           title={rightOpen ? '패널 닫기' : '패널 열기'}
+          style={rightOpen ? { right: panelWidth } : {}}
         >
           {rightOpen ? '‹' : '›'}
         </button>
 
         {/* RIGHT panel */}
-        <div className={`right-panel${rightOpen ? '' : ' right-panel-closed'}`}>
+        <div className={`right-panel${rightOpen ? '' : ' right-panel-closed'}`} style={{ width: panelWidth }}>
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <div className="panel-section-label">KOSPI 지수</div>
