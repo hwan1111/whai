@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { login, getUser, setProfileImage } from '@/lib/auth';
 
 const INVEST_OPTS = [
@@ -13,7 +13,9 @@ const INVEST_OPTS = [
 
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState('login');
+  const sessionExpired = searchParams.get('expired') === '1';
 
   const [loginId, setLoginId] = useState('');
   const [loginPw, setLoginPw] = useState('');
@@ -40,6 +42,22 @@ export default function AuthPage() {
     if (getUser()) router.replace('/dashboard');
   }, [router]);
 
+  async function prefetchDashboard(token) {
+    try {
+      const h = { Authorization: `Bearer ${token}` };
+      const [favsRes, pricesRes, ratesRes] = await Promise.allSettled([
+        fetch('/api/v1/favorites', { headers: h }),
+        fetch('/api/v1/prices/latest', { headers: h }),
+        fetch('/api/v1/exchange-rates/latest', { headers: h }),
+      ]);
+      const cache = {};
+      if (favsRes.status === 'fulfilled' && favsRes.value.ok) cache.favs = await favsRes.value.json();
+      if (pricesRes.status === 'fulfilled' && pricesRes.value.ok) cache.prices = await pricesRes.value.json();
+      if (ratesRes.status === 'fulfilled' && ratesRes.value.ok) cache.rates = await ratesRes.value.json();
+      if (Object.keys(cache).length) sessionStorage.setItem('whai_prefetch', JSON.stringify(cache));
+    } catch { /* silent */ }
+  }
+
   async function handleLogin(e) {
     e.preventDefault();
     setLoginError('');
@@ -55,8 +73,9 @@ export default function AuthPage() {
       if (!res.ok) {
         setLoginError(data.detail || '로그인에 실패했습니다.');
       } else {
-        login(data.name, data.user_id, data.access_token);
+        login(data.name, data.user_id, data.access_token, data.refresh_token);
         if (data.profile_image_url) setProfileImage(data.profile_image_url);
+        prefetchDashboard(data.access_token);
         router.replace('/dashboard');
       }
     } catch {
@@ -65,18 +84,22 @@ export default function AuthPage() {
     setLoginLoading(false);
   }
 
-  const ID_RE = /^[a-zA-Z0-9_]{4,20}$/;
+  const ID_RE = /^[a-zA-Z0-9]{5,20}$/;
 
   async function checkIdAvailability(id) {
     if (!id) { setRegIdHint({ text: '', type: '' }); return; }
     if (!ID_RE.test(id)) {
-      setRegIdHint({ text: '영문, 숫자, 밑줄(_) 4~20자로 입력해 주세요.', type: 'err' });
+      setRegIdHint({ text: '영문, 숫자만 5~20자로 입력해 주세요.', type: 'err' });
       return;
     }
     setRegIdHint({ text: '확인 중...', type: 'checking' });
     try {
       const res = await fetch(`/api/v1/auth/check-id?user_id=${encodeURIComponent(id)}`);
       const data = await res.json();
+      if (!res.ok) {
+        setRegIdHint({ text: '', type: '' });
+        return;
+      }
       if (data.available) {
         setRegIdHint({ text: '사용 가능한 아이디입니다.', type: 'ok' });
       } else {
@@ -133,9 +156,8 @@ export default function AuthPage() {
       if (!res.ok) {
         setRegError(data.detail || '회원가입에 실패했습니다.');
       } else {
-        login(data.name, data.user_id, data.access_token);
-        if (data.profile_image_url) setProfileImage(data.profile_image_url);
-        router.replace('/dashboard');
+        setLoginId(regId);
+        setTab('login');
       }
     } catch {
       setRegError('서버에 연결할 수 없습니다.');
@@ -151,6 +173,11 @@ export default function AuthPage() {
           <div className="auth-logo-sub">다중 자산 지표 통합 분석 AI</div>
         </div>
 
+        {sessionExpired && (
+          <div style={{ background: '#fef3cd', border: '1px solid #fbbf24', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#92400e', fontWeight: 500 }}>
+            세션이 만료되었습니다. 다시 로그인해 주세요.
+          </div>
+        )}
         <div className="auth-tabs">
           <div className={`auth-tab${tab === 'login' ? ' active' : ''}`} onClick={() => { setTab('login'); setLoginError(''); }}>로그인</div>
           <div className={`auth-tab${tab === 'register' ? ' active' : ''}`} onClick={() => { setTab('register'); setRegError(''); }}>회원가입</div>
@@ -204,7 +231,7 @@ export default function AuthPage() {
                 value={regId}
                 onChange={e => { setRegId(e.target.value); setRegIdHint({ text: '', type: '' }); }}
                 onBlur={e => checkIdAvailability(e.target.value)}
-                placeholder="영문/숫자/밑줄 4~20자"
+                placeholder="영문/숫자 5~20자"
                 maxLength={20}
                 autoComplete="username"
               />
@@ -255,7 +282,7 @@ export default function AuthPage() {
               <div style={{ flex: 1 }}>
                 <label className="form-label">성별</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                  {[{ val: 'M', label: '남성' }, { val: 'F', label: '여성' }, { val: 'OTHER', label: '기타' }].map(o => (
+                  {[{ val: 'M', label: '남성' }, { val: 'F', label: '여성' }].map(o => (
                     <div
                       key={o.val}
                       className={`invest-option${regGender === o.val ? ' selected' : ''}`}

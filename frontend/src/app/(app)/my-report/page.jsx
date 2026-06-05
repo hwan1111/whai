@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { getToken, handleUnauthorized } from '@/lib/auth';
+import { useState, useEffect, useRef } from 'react';
+import { handleUnauthorized, fetchWithAuth } from '@/lib/auth';
 import { ASSETS } from '@/lib/data';
 
 const ASSET_INFO = {
@@ -42,10 +42,26 @@ const getFlag = id => FLAG_MAP[id] ? `/assets/flags/${FLAG_MAP[id]}.png` : null;
 const MAX_SNAPSHOTS = 10;
 
 const fmt = n => Math.round(n).toLocaleString('ko-KR');
+function parseNumberInput(value) {
+  return parseFloat(String(value).replace(/,/g, ''));
+}
+function formatNumberInput(value) {
+  const raw = String(value ?? '').replace(/,/g, '');
+  if (!raw) return '';
+  const [intPart, decPart] = raw.split('.');
+  const signed = intPart.startsWith('-');
+  const digits = signed ? intPart.slice(1) : intPart;
+  const formattedInt = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${signed ? '-' : ''}${formattedInt}${raw.includes('.') ? `.${decPart ?? ''}` : ''}`;
+}
 function fmtCompact(n) {
-  if (n >= 1e8) return `${(n / 1e8).toFixed(1)}억원`;
-  if (n >= 1e4) return `${Math.round(n / 1e4).toLocaleString()}만원`;
-  return `${fmt(n)}원`;
+  return `${Math.round(n).toLocaleString('ko-KR')}원`;
+}
+function fmtShort(n) {
+  if (n >= 1e12) return `${(n / 1e12).toFixed(1)}조원`;
+  if (n >= 1e8)  return `${(n / 1e8).toFixed(1)}억원`;
+  if (n >= 1e4)  return `${Math.round(n / 1e4).toLocaleString()}만원`;
+  return `${Math.round(n).toLocaleString('ko-KR')}원`;
 }
 function fmtDatetime(iso) {
   const d = new Date(iso);
@@ -53,21 +69,19 @@ function fmtDatetime(iso) {
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}  ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-async function fetchSnapshots(token) {
+async function fetchSnapshots() {
   try {
-    const res = await fetch('/api/v1/report/snapshots', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const res = await fetchWithAuth('/api/v1/report/snapshots');
     if (!res.ok) return [];
     const data = await res.json();
     return data.snapshots || [];
   } catch { return []; }
 }
 
-async function postSnapshot(snap, token) {
-  const res = await fetch('/api/v1/report/snapshots', {
+async function postSnapshot(snap) {
+  const res = await fetchWithAuth('/api/v1/report/snapshots', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(snap),
   });
   if (res.status === 401) { handleUnauthorized(); return; }
@@ -77,12 +91,9 @@ async function postSnapshot(snap, token) {
   }
 }
 
-async function deleteSnapshotApi(id, token) {
+async function deleteSnapshotApi(id) {
   try {
-    await fetch(`/api/v1/report/snapshots/${id}`, {
-      method: 'DELETE',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    await fetchWithAuth(`/api/v1/report/snapshots/${id}`, { method: 'DELETE' });
   } catch { /* silent */ }
 }
 
@@ -99,27 +110,121 @@ function calcTotals(holdings, prices) {
   return { totalVal, totalCost, sorted };
 }
 
-function DonutChart({ sorted, totalVal, size = 180 }) {
+function darkenColor(hex, amount = 40) {
+  if (!hex || !hex.startsWith('#')) return hex;
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, (num >> 16) - amount);
+  const g = Math.max(0, ((num >> 8) & 0xff) - amount);
+  const b = Math.max(0, (num & 0xff) - amount);
+  return `rgb(${r},${g},${b})`;
+}
+
+function DonutChart({ sorted, totalVal, size = 180, onSegmentClick, hoveredStockId, onHoverStock }) {
+  const [tooltip, setTooltip] = useState(null);
+  const wrapRef = useRef(null);
+  const chartId = useRef(`dc-${Math.random().toString(36).slice(2)}`).current;
+
   const cx = size / 2, cy = size / 2;
   const r = size * 0.36, sw = size * 0.155;
-  const C = 2 * Math.PI * r;
-  const gap = 2;
-  let paths = '', cum = 0;
-  sorted.forEach(h => {
-    if (h.curVal <= 0) return;
-    const len = (h.curVal / totalVal) * C;
-    const segLen = Math.max(len - gap, 0.1);
-    paths += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${h.info.color || '#94a3b8'}" stroke-width="${sw}" stroke-dasharray="${segLen.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-cum).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
-    cum += len;
-  });
+  const gapAngle = 1.5 / r;
+
+  let cumAngle = 0;
+  const segments = sorted
+    .filter(h => h.curVal > 0)
+    .map(h => {
+      const angle = (h.curVal / totalVal) * 2 * Math.PI;
+      const half = angle > gapAngle ? gapAngle / 2 : 0;
+      const seg = { h, startAngle: cumAngle + half, endAngle: cumAngle + angle - half, w: h.curVal / totalVal * 100 };
+      cumAngle += angle;
+      return seg;
+    });
+
+  function arcPath(startAngle, endAngle) {
+    const outerR = r + sw / 2, innerR = r - sw / 2;
+    const s = startAngle - Math.PI / 2, e = endAngle - Math.PI / 2;
+    const large = endAngle - startAngle > Math.PI ? 1 : 0;
+    const [ox1, oy1] = [cx + outerR * Math.cos(s), cy + outerR * Math.sin(s)];
+    const [ox2, oy2] = [cx + outerR * Math.cos(e), cy + outerR * Math.sin(e)];
+    const [ix1, iy1] = [cx + innerR * Math.cos(e), cy + innerR * Math.sin(e)];
+    const [ix2, iy2] = [cx + innerR * Math.cos(s), cy + innerR * Math.sin(s)];
+    return `M${ox1} ${oy1} A${outerR} ${outerR} 0 ${large} 1 ${ox2} ${oy2} L${ix1} ${iy1} A${innerR} ${innerR} 0 ${large} 0 ${ix2} ${iy2}Z`;
+  }
+
   const fs1 = Math.round(size * 0.067), fs2 = Math.round(size * 0.078);
+
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, flexShrink: 0 }}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
-      <g dangerouslySetInnerHTML={{ __html: paths }} />
-      <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fill="#94a3b8">총 평가액</text>
-      <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="800" fill="#1e293b">{fmtCompact(totalVal)}</text>
-    </svg>
+    <div ref={wrapRef} style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, display: 'block' }}
+        onMouseLeave={() => setTooltip(null)}>
+        <defs>
+          {segments.map((seg, i) => {
+            const base = seg.h.info.color || '#94a3b8';
+            return (
+              <linearGradient key={i} id={`${chartId}-${i}`} x1="0" y1="0" x2="0" y2={size} gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor={base} />
+                <stop offset="100%" stopColor={darkenColor(base, 35)} />
+              </linearGradient>
+            );
+          })}
+        </defs>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={sw} />
+        {segments.map((seg, i) => (
+          <path
+            key={i}
+            d={arcPath(seg.startAngle, seg.endAngle)}
+            fill={`url(#${chartId}-${i})`}
+            style={{ cursor: 'pointer', transition: 'opacity 0.2s, filter 0.2s', opacity: hoveredStockId !== null && hoveredStockId !== seg.h.id ? 0.55 : 1, filter: hoveredStockId === seg.h.id ? 'brightness(1.12)' : 'none' }}
+            onMouseEnter={e => {
+              onHoverStock?.(seg.h.id);
+              const pnl = seg.h.curVal - seg.h.cost;
+              const retPct = seg.h.cost > 0 ? pnl / seg.h.cost * 100 : 0;
+              setTooltip({ name: seg.h.info.name || seg.h.id, pct: seg.w.toFixed(1), val: fmtCompact(seg.h.curVal), pnl, retPct: retPct.toFixed(2), color: seg.h.info.color || '#94a3b8', x: e.clientX, y: e.clientY });
+            }}
+            onMouseMove={e => {
+              setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+            }}
+            onMouseLeave={() => { onHoverStock?.(null); }}
+            onClick={() => { setTooltip(null); onSegmentClick && onSegmentClick(seg.h); }}
+          />
+        ))}
+        <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fontWeight="600" fill="#64748b" pointerEvents="none">총 평가액</text>
+        <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="900" fill="#1e293b" pointerEvents="none">{fmtShort(totalVal)}</text>
+      </svg>
+      {tooltip && (
+        <div style={{
+          position: 'fixed',
+          left: Math.min(tooltip.x + 14, window.innerWidth - 210),
+          top: tooltip.y - 14,
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          padding: '7px 14px',
+          fontSize: 15,
+          fontWeight: 600,
+          color: '#1e293b',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          zIndex: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: tooltip.color, flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontSize: 17 }}>{tooltip.name}</span>
+          </div>
+          {[
+            { label: '비중',   val: `${tooltip.pct}%`,  color: '#1e293b' },
+            { label: '평가액', val: tooltip.val,         color: '#1e293b' },
+            { label: '손익',   val: `${tooltip.pnl >= 0 ? '+' : '-'}${fmtCompact(Math.abs(tooltip.pnl))}`, color: parseFloat(tooltip.retPct) >= 0 ? '#dc2626' : '#2563eb' },
+            { label: '수익률', val: `${parseFloat(tooltip.retPct) >= 0 ? '+' : ''}${tooltip.retPct}%`,     color: parseFloat(tooltip.retPct) >= 0 ? '#dc2626' : '#2563eb' },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 15, marginBottom: 4 }}>
+              <span style={{ color: '#94a3b8', fontWeight: 500 }}>{label}</span>
+              <span style={{ color, fontWeight: 600 }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -159,26 +264,34 @@ function buildAiHtml(sorted, totalVal, totalCost) {
 
   // 3. 수익/손실 종목
   if (gainers.length > 0 && losers.length > 0) {
-    lines.push(`<strong>📈 성과 상위</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#16a34a">+${gainers[0].pnlPct.toFixed(1)}%</span>로 가장 높은 수익을 기록 중입니다.`);
-    lines.push(`<strong>📉 손실 종목</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#dc2626">${losers[0].pnlPct.toFixed(1)}%</span> 손실 중입니다. 손절 기준 또는 추가 매수 여부를 점검해 보세요.`);
+    lines.push(`<strong>📈 성과 상위</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#dc2626">+${gainers[0].pnlPct.toFixed(1)}%</span>로 가장 높은 수익을 기록 중입니다.`);
+    lines.push(`<strong>📉 손실 종목</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#2563eb">${losers[0].pnlPct.toFixed(1)}%</span> 손실 중입니다. 손절 기준 또는 추가 매수 여부를 점검해 보세요.`);
   } else if (gainers.length > 0) {
-    lines.push(`<strong>📈 전 종목 수익</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#16a34a">+${gainers[0].pnlPct.toFixed(1)}%</span>로 최고 성과를 기록 중입니다.`);
+    lines.push(`<strong>📈 전 종목 수익</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#dc2626">+${gainers[0].pnlPct.toFixed(1)}%</span>로 최고 성과를 기록 중입니다.`);
   } else if (losers.length > 0) {
-    lines.push(`<strong>📉 전 종목 손실</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#dc2626">${losers[0].pnlPct.toFixed(1)}%</span>로 가장 큰 손실입니다. 시장 상황과 보유 근거를 재검토하세요.`);
+    lines.push(`<strong>📉 전 종목 손실</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#2563eb">${losers[0].pnlPct.toFixed(1)}%</span>로 가장 큰 손실입니다. 시장 상황과 보유 근거를 재검토하세요.`);
   }
 
   // 4. 종합 의견
   if (avgReturn > 15)
-    lines.push(`<strong>💡 종합 의견</strong>: 포트폴리오 전체 수익률이 <span style="color:#16a34a">+${avgReturn.toFixed(1)}%</span>로 우수한 성과를 기록 중입니다. 수익 실현 시점을 고려하거나 이익을 재투자하는 전략을 검토해 보세요.`);
+    lines.push(`<strong>💡 종합 의견</strong>: 포트폴리오 전체 수익률이 <span style="color:#dc2626">+${avgReturn.toFixed(1)}%</span>로 우수한 성과를 기록 중입니다. 수익 실현 시점을 고려하거나 이익을 재투자하는 전략을 검토해 보세요.`);
   else if (avgReturn > 0)
-    lines.push(`<strong>💡 종합 의견</strong>: <span style="color:#16a34a">+${avgReturn.toFixed(1)}%</span>의 플러스 수익률을 유지하고 있습니다. 분산 투자 원칙을 지키며 꾸준히 운용하고 있는 것으로 보입니다.`);
+    lines.push(`<strong>💡 종합 의견</strong>: <span style="color:#dc2626">+${avgReturn.toFixed(1)}%</span>의 플러스 수익률을 유지하고 있습니다. 분산 투자 원칙을 지키며 꾸준히 운용하고 있는 것으로 보입니다.`);
   else
-    lines.push(`<strong>💡 종합 의견</strong>: 현재 <span style="color:#dc2626">${avgReturn.toFixed(1)}%</span>의 손실 구간에 있습니다. 손실 원인을 분석하고 포트폴리오 재구성 여부를 검토해 보세요.`);
+    lines.push(`<strong>💡 종합 의견</strong>: 현재 <span style="color:#2563eb">${avgReturn.toFixed(1)}%</span>의 손실 구간에 있습니다. 손실 원인을 분석하고 포트폴리오 재구성 여부를 검토해 보세요.`);
 
-  return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:14px;color:#312e81">${l}</p>`).join('');
+  // 5. 메모
+  lines.push(`<strong>📝 메모</strong>: 포트폴리오 AI는 대시보드 AI보다는 좀 더 포트폴리오 쪽에 치중하도록! 나이대, 성별, 투자성향은 여기에 반영하는게 맞을까?`);
+
+  return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:16px;color:#312e81">${l}</p>`).join('');
 }
 
-function WeightHistoryChart({ snapshots, prices }) {
+function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) {
+  const [tooltip, setTooltip] = useState(null);
+  const [sortMode, setSortMode] = useState('value');
+  const [hoveredId, setHoveredId] = useState(null);
+  const containerRef = useRef(null);
+
   if (snapshots.length === 0) return (
     <div style={{ padding: '40px 16px', textAlign: 'center', color: '#cbd5e1', fontSize: 12 }}>
       스냅샷을 기록하면<br />비중 추이가 표시됩니다.
@@ -191,26 +304,52 @@ function WeightHistoryChart({ snapshots, prices }) {
   });
 
   const allIds = [...new Set(snapshots.flatMap(s => s.holdings.map(h => h.id)))];
+  const rowCount = rows.length;
+  const rowGap = rowCount >= 9 ? 8 : 12;
+  const barHeight = rowCount >= 9 ? 'clamp(22px, 3.4vh, 34px)' : 'clamp(28px, 5vh, 48px)';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', minHeight: 0, position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0 }}>
+        {[{ key: 'value', label: '금액순' }, { key: 'name', label: '가나다순' }].map(({ key, label }) => (
+          <button key={key} onClick={() => setSortMode(key)} style={{
+            padding: '3px 9px', fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+            background: sortMode === key ? '#2563eb' : '#f1f5f9',
+            color: sortMode === key ? 'white' : '#64748b',
+          }}>{label}</button>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))`, gap: rowGap }}>
       {rows.map(({ snap, sorted, totalVal }) => {
         const maxVal = Math.max(...rows.map(r => r.totalVal));
         const barWidthPct = maxVal > 0 ? totalVal / maxVal * 100 : 0;
         const d = new Date(snap.datetime);
-        const label = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const label = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const displaySorted = sortMode === 'name'
+          ? [...sorted].sort((a, b) => (a.info.name || a.id).localeCompare(b.info.name || b.id, 'ko'))
+          : sorted;
         return (
-          <div key={snap.id}>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, fontWeight: 500 }}>{label}</div>
-            <div style={{ height: 20, overflow: 'hidden', position: 'relative' }}>
+          <div key={snap.id} onClick={() => onSnapClick?.(snap.id)} style={{ cursor: 'pointer', borderRadius: 7, padding: '4px 6px', margin: '0 -6px', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: selectedSnapId === snap.id ? '#eff6ff' : 'transparent', outline: selectedSnapId === snap.id ? '1.5px solid #bfdbfe' : '1.5px solid transparent', transition: 'background 0.15s' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{label}</span>
+              <span style={{ fontSize: 11, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
+            </div>
+            <div style={{ height: barHeight, overflow: 'hidden', position: 'relative', borderRadius: 3 }}>
               <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex' }}>
-                {sorted.filter(h => h.curVal > 0).map(h => {
+                {displaySorted.filter(h => h.curVal > 0).map(h => {
                   const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
                   return (
                     <div
                       key={h.id}
-                      title={`${h.info.name || h.id}: ${fmtCompact(h.curVal)} (${w.toFixed(1)}%)`}
-                      style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}
+                      style={{ width: `${w}%`, background: h.info.color || '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'default', transition: 'opacity 0.2s, filter 0.2s', opacity: hoveredId !== null && hoveredId !== h.id ? 0.35 : 1, filter: hoveredId === h.id ? 'brightness(1.12)' : 'none' }}
+                      onMouseEnter={e => {
+                        setHoveredId(h.id);
+                        setTooltip({ name: h.info.name || h.id, val: fmtCompact(h.curVal), pct: w.toFixed(1), color: h.info.color || '#94a3b8', x: e.clientX, y: e.clientY });
+                      }}
+                      onMouseMove={e => {
+                        setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+                      }}
+                      onMouseLeave={() => { setHoveredId(null); setTooltip(null); }}
                     >
                       {w >= 10 && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.9)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
@@ -222,82 +361,259 @@ function WeightHistoryChart({ snapshots, prices }) {
                 })}
               </div>
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', textAlign: 'right', marginTop: 3, fontWeight: 600 }}>{fmtCompact(totalVal)}</div>
           </div>
         );
       })}
+      </div>{/* end rows flex */}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-        {allIds.map(id => {
-          const info = ASSET_INFO[id] || {};
-          return (
-            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: info.color || '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
-              <span style={{ fontSize: 12, color: '#475569' }}>{info.name || id}</span>
-            </div>
-          );
-        })}
-      </div>
+      {tooltip && (
+        <div style={{
+          position: 'fixed',
+          left: Math.min(tooltip.x + 12, window.innerWidth - 160),
+          top: tooltip.y - 52,
+          background: 'white',
+          borderRadius: 8,
+          padding: '7px 11px',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          zIndex: 10,
+          boxShadow: '0 4px 14px rgba(0,0,0,0.13)',
+          border: `1.5px solid ${tooltip.color}`,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>{tooltip.name}</div>
+          <div style={{ fontSize: 11, color: '#64748b' }}>{tooltip.val} <span style={{ color: tooltip.color, fontWeight: 600 }}>({tooltip.pct}%)</span></div>
+        </div>
+      )}
     </div>
   );
 }
 
-function SnapshotCard({ snap, prices, onDelete }) {
+function AssetDrawer({ holding, prices, onClose }) {
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const id = holding.id;
+  const info = ASSET_INFO[id] || {};
+  const isStock = !id.startsWith('KRW/');
+  const cur = prices[id] ?? holding.snapshotPrice ?? 0;
+  const curVal = holding.qty * cur;
+  const cost = holding.qty * holding.avgPrice;
+  const pnl = curVal - cost;
+  const retPct = cost > 0 ? pnl / cost * 100 : 0;
+  const pnlColor = pnl >= 0 ? '#dc2626' : '#2563eb';
+  const logo = getLogo(id);
+  const flag = getFlag(id);
+
+  useEffect(() => {
+    if (!isStock) return;
+    setStatsLoading(true);
+    fetch(`/api/v1/prices/${id}/stats`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setStats(d); setStatsLoading(false); })
+      .catch(() => setStatsLoading(false));
+  }, [id]);
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 299, background: 'rgba(15,23,42,0.35)' }} />
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+        width: 600, background: 'white', borderRadius: 16,
+        boxShadow: '0 8px 40px rgba(15,23,42,0.18)', zIndex: 300, padding: '24px 28px',
+      }}>
+        {/* 헤더 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {logo && <div style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e8ecf0', overflow: 'hidden', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><img src={logo} alt={info.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>}
+            {flag && <img src={flag} alt={info.name} style={{ width: 34, height: 24, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />}
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: '#1e293b' }}>{info.name || id}</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{info.sector} · {id}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#94a3b8', padding: '0 4px', lineHeight: 1, flexShrink: 0 }}>×</button>
+        </div>
+
+        {/* 현재가 */}
+        <div style={{ background: '#f8fafc', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>현재가</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b' }}>{fmtCompact(cur)}</div>
+            {stats?.change != null && (() => {
+              const up = stats.change >= 0;
+              const color = up ? '#dc2626' : '#2563eb';
+              const arrow = up ? '▲' : '▼';
+              return (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, fontSize: 13, fontWeight: 600, color }}>
+                  <span>{arrow} {fmtCompact(Math.abs(stats.change))}</span>
+                  <span style={{ fontSize: 12 }}>({up ? '+' : ''}{stats.change_pct}%)</span>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* 2열 레이아웃 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 56px' }}>
+          {/* 보유 정보 */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>보유 정보</div>
+            {[
+              { label: '수량',        val: `${fmt(holding.qty)}${info.unit || ''}` },
+              { label: '평균 매입가', val: fmtCompact(holding.avgPrice) },
+              { label: '평가액',      val: fmtCompact(curVal) },
+              { label: '손익',        val: `${pnl >= 0 ? '+' : '-'}${fmtCompact(Math.abs(pnl))}`, color: pnlColor },
+              { label: '수익률',      val: `${retPct >= 0 ? '+' : ''}${retPct.toFixed(2)}%`, color: pnlColor },
+            ].map(({ label, val, color }) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                <span style={{ color: '#64748b' }}>{label}</span>
+                <span style={{ fontWeight: 600, color: color || '#1e293b' }}>{val}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 종목 정보 (주식만) */}
+          {isStock && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>종목 정보</div>
+              {statsLoading ? (
+                ['52주 최고', '52주 최저', 'PER', 'PBR', '시가총액', '거래량'].map(label => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                    <span style={{ color: '#64748b' }}>{label}</span>
+                    <span className="skeleton" style={{ width: 80, height: 14 }} />
+                  </div>
+                ))
+              ) : stats ? (
+                [
+                  { label: '52주 최고', val: stats.high52 ? fmtCompact(stats.high52) : '-' },
+                  { label: '52주 최저', val: stats.low52  ? fmtCompact(stats.low52)  : '-' },
+                  { label: 'PER',       val: stats.per != null ? `${stats.per}` : '적자' },
+                  { label: 'PBR',       val: stats.pbr != null ? `${stats.pbr}` : '-' },
+                  { label: '시가총액',  val: stats.market_cap ? fmtShort(stats.market_cap) : '-' },
+                  { label: '거래량',    val: stats.volume  ? `${fmt(stats.volume)}주`  : '-' },
+                ].map(({ label, val }) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                    <span style={{ color: '#64748b' }}>{label}</span>
+                    <span style={{ fontWeight: 600, color: '#1e293b' }}>{val}</span>
+                  </div>
+                ))
+              ) : null}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) {
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [drawerHolding, setDrawerHolding] = useState(null);
   const { totalVal, totalCost, sorted } = calcTotals(snap.holdings, prices);
+
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
-  const pnlColor = totalPnl >= 0 ? '#16a34a' : '#dc2626';
+  const pnlColor = totalPnl >= 0 ? '#dc2626' : '#2563eb';
   const aiHtml = buildAiHtml(sorted, totalVal, totalCost);
 
   return (
+    <>
+    {drawerHolding && (
+      <AssetDrawer holding={drawerHolding} prices={prices} onClose={() => setDrawerHolding(null)} />
+    )}
     <div className="snapshot-card">
       <div className="snapshot-card-header">
         <span className="snapshot-datetime">{fmtDatetime(snap.datetime)}</span>
-        <button className="snapshot-delete-btn" onClick={() => onDelete(snap.id)} title="삭제">✕</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 10px', fontSize: 11, color: '#64748b', cursor: 'pointer' }}
+            onClick={() => setDetailOpen(true)}
+          >
+            자세히 보기
+          </button>
+          <button className="snapshot-delete-btn" onClick={() => onDelete(snap.id)} title="삭제">✕</button>
+        </div>
       </div>
+
+      {detailOpen && (
+        <div className="modal-overlay" onClick={() => setDetailOpen(false)}>
+          <div className="modal-box" style={{ width: 780, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div className="modal-title" style={{ fontSize: 14, marginBottom: 0 }}>📋 {fmtDatetime(snap.datetime)} 종목 상세</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>현재가·평가액·손익은 스냅샷 저장 시점의 시장 가격을 기준으로 산출됩니다.</div>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 4 }}>
+              <thead>
+                <tr>
+                  {['종목', '수량', '평균 매입가', '현재가', '매입 원가', '평가액', '손익', '수익률'].map((label, i) => (
+                    <th key={label} style={{ padding: '5px 7px', fontSize: 10, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', textAlign: i === 0 ? 'left' : 'right', whiteSpace: 'nowrap' }}>{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(h => {
+                  const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
+                  const pnl = h.curVal - h.cost;
+                  const pnlPct = h.cost > 0 ? pnl / h.cost * 100 : 0;
+                  const pc = pnl >= 0 ? '#dc2626' : '#2563eb';
+                  return (
+                    <tr key={h.id}>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 5, background: h.info.color || '#94a3b8', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{h.info.name || h.id}</span>
+                        <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 5 }}>{w.toFixed(1)}%</span>
+                      </td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmt(h.qty)}{h.info.unit || ''}</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmt(h.avgPrice)}원</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmt(h.curPrice)}원</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmtCompact(h.cost)}</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#1e293b', fontWeight: 600 }}>{fmtCompact(h.curVal)}</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: pc, fontWeight: 600 }}>{pnl >= 0 ? '+' : ''}{fmtCompact(Math.abs(pnl))}</td>
+                      <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: pc, fontWeight: 700 }}>{pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              {[
+                { label: '총 매입 원가', val: fmtCompact(totalCost) },
+                { label: '총 평가액',   val: fmtCompact(totalVal) },
+                { label: '총 손익',     val: (totalPnl >= 0 ? '+' : '-') + fmtCompact(Math.abs(totalPnl)), color: pnlColor },
+                { label: '수익률',      val: (totalPnlPct >= 0 ? '+' : '') + totalPnlPct.toFixed(2) + '%', color: pnlColor },
+              ].map(({ label, val, color }) => (
+                <div key={label} className="snapshot-summary-item">
+                  <div className="snapshot-summary-label">{label}</div>
+                  <div className="snapshot-summary-val" style={{ color: color || 'inherit', fontSize: 16 }}>{val}</div>
+                </div>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setDetailOpen(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="snapshot-body">
         {/* 1열: AI 분석 */}
         <div className="snapshot-ai">
           <div className="snapshot-ai-header">
-            <span className="ai-badge" style={{ fontSize: 11 }}>AI 분석</span>
+            <span className="ai-badge" style={{ fontSize: 11 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
             <span style={{ fontSize: 13, color: '#6d28d9', fontWeight: 600 }}>포트폴리오 분석</span>
           </div>
           <div dangerouslySetInnerHTML={{ __html: aiHtml }} />
         </div>
 
-        {/* 2열: 도넛 차트 */}
-        <div className="snapshot-chart-center">
-          <DonutChart sorted={sorted} totalVal={totalVal} size={380} />
-        </div>
-
-        {/* 3열: 레전드 + 요약 */}
-        <div className="snapshot-right">
-          <div className="snapshot-legend">
-            {sorted.map(h => {
-              const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
-              const pnl = h.curVal - h.cost;
-              const pnlPct = h.cost > 0 ? pnl / h.cost * 100 : 0;
-              const pc = pnl >= 0 ? '#16a34a' : '#dc2626';
-              return (
-                <div key={h.id} className="snapshot-legend-row">
-                  <span className="snapshot-legend-dot" style={{ background: h.info.color || '#94a3b8' }} />
-                  <span className="snapshot-legend-name">{h.info.name || h.id}</span>
-                  <span className="snapshot-legend-pct">{w.toFixed(1)}%</span>
-                  <span className="snapshot-legend-val">{fmtCompact(h.curVal)}</span>
-                  <span className="snapshot-legend-pnl" style={{ color: pc }}>
-                    {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
-                  </span>
-                </div>
-              );
-            })}
+        {/* 2열: 도넛 차트 (상단) + 1행 4열 요약 (하단) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', alignItems: 'center' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
+            <DonutChart sorted={sorted} totalVal={totalVal} size={220} onSegmentClick={setDrawerHolding} hoveredStockId={hoveredStockId} onHoverStock={onHoverStock} />
           </div>
-
           <div className="snapshot-summary">
             {[
               { label: '총 매입 원가', val: fmtCompact(totalCost) },
               { label: '총 평가액',   val: fmtCompact(totalVal) },
-              { label: '총 손익',     val: (totalPnl >= 0 ? '+' : '') + fmtCompact(Math.abs(totalPnl)), color: pnlColor },
+              { label: '총 손익',     val: (totalPnl >= 0 ? '+' : '-') + fmtCompact(Math.abs(totalPnl)), color: pnlColor },
               { label: '수익률',      val: (totalPnlPct >= 0 ? '+' : '') + totalPnlPct.toFixed(2) + '%', color: pnlColor },
             ].map(({ label, val, color }) => (
               <div key={label} className="snapshot-summary-item">
@@ -309,6 +625,7 @@ function SnapshotCard({ snap, prices, onDelete }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -324,20 +641,22 @@ export default function MyReportPage() {
   const [addPrice, setAddPrice] = useState('');
   const [generating, setGenerating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedSnapId, setSelectedSnapId] = useState(null);
+  const [hoveredStockId, setHoveredStockId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editQty, setEditQty] = useState('');
+  const [editPrice, setEditPrice] = useState('');
 
   useEffect(() => {
-    const token = getToken();
-    fetchSnapshots(token).then(s => { setSnapshots(s); setSnapshotsLoaded(true); });
+    fetchSnapshots().then(s => { setSnapshots(s); setSnapshotsLoaded(true); setSelectedSnapId(s[0]?.id ?? null); });
     loadPrices();
   }, []);
 
   async function loadPrices() {
     try {
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const [pr, fr] = await Promise.all([
-        fetch('/api/v1/prices/latest', { headers }),
-        fetch('/api/v1/exchange-rates/latest', { headers }),
+        fetchWithAuth('/api/v1/prices/latest'),
+        fetchWithAuth('/api/v1/exchange-rates/latest'),
       ]);
       const next = {};
       if (pr.ok) { const d = await pr.json(); d.forEach(({ ticker, close }) => { next[ticker] = close; }); }
@@ -353,7 +672,7 @@ export default function MyReportPage() {
   function addHolding() {
     const qty = parseFloat(addQty);
     if (!qty || qty <= 0) { alert('수량을 입력해주세요.'); return; }
-    const manualPrice = parseFloat(addPrice);
+    const manualPrice = parseNumberInput(addPrice);
     const fetchedPrice = getPrice(addAsset);
     if (!(manualPrice > 0) && !(fetchedPrice > 0)) {
       if (!pricesLoaded) alert('가격 데이터를 불러오는 중입니다. 잠시 후 다시 시도하거나 평균 매입가를 직접 입력해주세요.');
@@ -379,18 +698,18 @@ export default function MyReportPage() {
     if (holdings.length === 0) { alert('자산을 1개 이상 추가해주세요.'); return; }
     setGenerating(true);
     setTimeout(async () => {
-      const token = getToken();
       const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h, snapshotPrice: getPrice(h.id) })) };
       try {
-        await postSnapshot(snap, token);
+        await postSnapshot(snap);
       } catch (e) {
         console.error(e);
         alert(`스냅샷 저장 실패: ${e.message}`);
         setGenerating(false);
         return;
       }
-      const next = await fetchSnapshots(token);
+      const next = await fetchSnapshots();
       setSnapshots(next);
+      setSelectedSnapId(next[0]?.id ?? null);
       setHoldings([]);
       setAddQty('1'); setAddPrice(prices[addAsset] ? String(prices[addAsset]) : '');
       setFormOpen(false);
@@ -401,12 +720,38 @@ export default function MyReportPage() {
   function deleteSnapshot(id) { setDeleteTarget(id); }
 
   async function confirmDelete() {
-    await deleteSnapshotApi(deleteTarget, getToken());
-    setSnapshots(prev => prev.filter(s => s.id !== deleteTarget));
+    const deletedId = deleteTarget;
+    await deleteSnapshotApi(deletedId);
+    setSnapshots(prev => {
+      const next = prev.filter(s => s.id !== deletedId);
+      if (selectedSnapId === deletedId) setSelectedSnapId(next[0]?.id ?? null);
+      return next;
+    });
     setDeleteTarget(null);
   }
 
-  if (!snapshotsLoaded) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>불러오는 중...</div>;
+  if (!snapshotsLoaded) return (
+    <div style={{ display: 'flex', gap: 20, alignItems: 'stretch' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="sec-header">
+          <div>
+            <div className="sec-title">마이 포트폴리오</div>
+            <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관</div>
+          </div>
+          <span className="skeleton" style={{ width: 130, height: 34, borderRadius: 8 }} />
+        </div>
+        <div className="other-card">
+          <span className="skeleton" style={{ width: '100%', height: 220, display: 'block', borderRadius: 8 }} />
+        </div>
+      </div>
+      <div style={{ width: 280, flexShrink: 0 }}>
+        <div className="other-card" style={{ height: '100%', padding: '10px 12px', boxSizing: 'border-box' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8 }}>자산 비중 추이</div>
+          <span className="skeleton" style={{ width: '100%', height: 140, display: 'block', borderRadius: 6 }} />
+        </div>
+      </div>
+    </div>
+  );
 
   const totalCount = snapshots.length;
   const formTotalVal = holdings.reduce((s, h) => s + h.qty * getPrice(h.id), 0);
@@ -415,25 +760,27 @@ export default function MyReportPage() {
     <>
     <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
       {/* 메인 콘텐츠 */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, overflowX: 'auto' }}>
       <div className="sec-header">
         <div>
-          <div className="sec-title">마이 리포트</div>
+          <div className="sec-title">마이 포트폴리오</div>
           <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관 {totalCount > 0 ? `· 현재 ${totalCount}개` : ''}</div>
         </div>
-        <button className="btn btn-primary" onClick={() => { setFormOpen(o => !o); setHoldings([]); }}>
+        <button className="btn btn-primary" onClick={() => { setFormOpen(o => !o); if (!formOpen) setHoldings((snapshots[0]?.holdings || []).map(({ id, qty, avgPrice }) => ({ id, qty, avgPrice }))); }}>
           {formOpen ? '✕ 취소' : '＋ 새 스냅샷 기록'}
         </button>
       </div>
 
       {/* 새 스냅샷 입력 폼 */}
       {formOpen && (
-        <div className="other-card" style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>보유 자산 선택</div>
+        <div className="other-card" style={{ marginBottom: 16, height: 'calc(100vh - 110px)', display: 'flex', flexDirection: 'column' }}>
+          {/* 스크롤 가능한 컨텐츠 영역 */}
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>보유 자산 선택</div>
 
           {/* 주식 카드 그리드 */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 5 }}>주식</div>
-          <div className="asset-pick-grid" style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 3 }}>주식</div>
+          <div className="asset-pick-grid" style={{ marginBottom: 6 }}>
             {STOCK_IDS.map(id => {
               const info = ASSET_INFO[id];
               const logo = getLogo(id);
@@ -443,15 +790,15 @@ export default function MyReportPage() {
                   <div className="asset-pick-logo">
                     {logo && <img src={logo} alt={info.name} />}
                   </div>
-                  <div className="asset-pick-name">{info.name}</div>
+                  <span className="asset-pick-name">{info.name}<span className="asset-pick-label"> · {info.sector}</span></span>
                 </div>
               );
             })}
           </div>
 
           {/* 외화 카드 그리드 */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 5 }}>외화</div>
-          <div className="asset-pick-grid asset-pick-fx" style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 3 }}>외화</div>
+          <div className="asset-pick-grid asset-pick-fx" style={{ marginBottom: 8 }}>
             {FX_IDS.map(id => {
               const info = ASSET_INFO[id];
               const flag = getFlag(id);
@@ -460,8 +807,7 @@ export default function MyReportPage() {
               return (
                 <div key={id} className={`asset-pick-card${sel ? ' selected' : ''}`} onClick={() => { setAddAsset(id); setAddPrice(prices[id] ? String(prices[id]) : ''); }}>
                   {flag && <img className="asset-pick-flag" src={flag} alt={info.name} />}
-                  <div className="asset-pick-name">{code}</div>
-                  <div className="asset-pick-label">{rest.join(' ')}</div>
+                  <span className="asset-pick-name">{code}<span className="asset-pick-label"> · {rest.join(' ')}</span></span>
                 </div>
               );
             })}
@@ -496,20 +842,25 @@ export default function MyReportPage() {
 
             {/* 평균 매입가 */}
             <div className="add-holding-field">
-              <label className="add-holding-label">평균 매입가 <span style={{ fontWeight: 400, color: '#cbd5e1' }}>(종가 자동 입력 · 수정 가능)</span></label>
-              <input className="form-input" type="number" min="0"
-                placeholder={!pricesLoaded ? '가격 불러오는 중...' : prices[addAsset] ? String(prices[addAsset]) : '직접 입력'}
-                value={addPrice} onChange={e => setAddPrice(e.target.value)} style={{ width: 220 }} />
+              <label className="add-holding-label">평균 매입가 <span style={{ fontWeight: 400, color: '#94a3b8' }}>(현재가 자동 입력 · 수정 가능)</span></label>
+              <div style={{ position: 'relative', width: 220 }}>
+                <input className="form-input" type="text" inputMode="decimal"
+                  placeholder={!pricesLoaded ? '가격 불러오는 중...' : prices[addAsset] ? formatNumberInput(prices[addAsset]) : '직접 입력'}
+                  value={formatNumberInput(addPrice)}
+                  onChange={e => setAddPrice(e.target.value.replace(/,/g, ''))}
+                  style={{ width: '100%', paddingRight: 34 }} />
+                <span style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: '#94a3b8', pointerEvents: 'none' }}>원</span>
+              </div>
             </div>
 
             <button className="btn btn-primary" style={{ alignSelf: 'flex-end', height: 36 }} onClick={addHolding}>＋ 추가</button>
           </div>
 
           {holdings.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 12 }}>
-              <thead>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 4 }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
                 <tr>
-                  {['종목', '수량', '평균 매입가', '종가', '평가액', '예상 비중', ''].map((h, i) => (
+                  {['종목', '수량', '평균 매입가', '현재가', '평가액', '예상 비중', ''].map((h, i) => (
                     <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>{h}</th>
                   ))}
                 </tr>
@@ -520,19 +871,42 @@ export default function MyReportPage() {
                   const cur = getPrice(h.id);
                   const curVal = h.qty * cur;
                   const w = formTotalVal > 0 ? curVal / formTotalVal * 100 : 0;
+                  const isEditing = editingId === h.id;
                   return (
                     <tr key={h.id}>
                       <td style={{ padding: '7px 8px', borderBottom: '1px solid #f8fafc', textAlign: 'left' }}>
                         <span style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 5, background: info.color || '#94a3b8' }} />
                         {info.name || h.id}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(h.qty)}{info.unit || ''}</td>
-                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(h.avgPrice)}원</td>
+                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>
+                        {isEditing
+                          ? <input type="number" min="1" value={editQty} onChange={e => setEditQty(e.target.value)} className="form-input" style={{ width: 70, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
+                          : <>{fmt(h.qty)}{info.unit || ''}</>}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>
+                        {isEditing
+                          ? <input type="text" inputMode="decimal" value={formatNumberInput(editPrice)} onChange={e => setEditPrice(e.target.value.replace(/,/g, ''))} className="form-input" style={{ width: 100, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
+                          : <>{fmt(h.avgPrice)}원</>}
+                      </td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(cur)}원</td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(curVal)}원</td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{w.toFixed(1)}%</td>
-                      <td style={{ padding: '7px 8px', borderBottom: '1px solid #f8fafc', textAlign: 'center' }}>
-                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 15 }} onClick={() => removeHolding(h.id)}>×</button>
+                      <td style={{ padding: '7px 8px', borderBottom: '1px solid #f8fafc', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {isEditing ? (
+                          <>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontSize: 14, marginRight: 4 }} onClick={() => {
+                              const q = parseFloat(editQty), p = parseNumberInput(editPrice);
+                              if (q > 0 && p > 0) setHoldings(prev => prev.map(item => item.id === h.id ? { ...item, qty: q, avgPrice: p } : item));
+                              setEditingId(null);
+                            }}>✓</button>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 14 }} onClick={() => setEditingId(null)}>✕</button>
+                          </>
+                        ) : (
+                          <>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 12, marginRight: 4 }} onClick={() => { setEditingId(h.id); setEditQty(String(h.qty)); setEditPrice(String(h.avgPrice)); }}>✎</button>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 15 }} onClick={() => removeHolding(h.id)}>×</button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );
@@ -540,12 +914,16 @@ export default function MyReportPage() {
               </tbody>
             </table>
           )}
+          </div>{/* end 스크롤 영역 */}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => { setFormOpen(false); setHoldings([]); }}>취소</button>
-            <button className="btn btn-primary" onClick={saveSnapshot} disabled={generating || holdings.length === 0} style={{ minWidth: 140 }}>
-              {generating ? '⟳ 분석 중...' : '▶ 스냅샷 저장'}
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, paddingTop: 10, borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
+            <button className="btn btn-ghost" style={{ color: '#ef4444', borderColor: '#fca5a5' }} onClick={() => setHoldings([])}>전체 초기화</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => { setFormOpen(false); setHoldings([]); }}>취소</button>
+              <button className="btn btn-primary" onClick={saveSnapshot} disabled={generating || holdings.length === 0} style={{ minWidth: 140 }}>
+                {generating ? '⟳ 분석 중...' : '▶ 스냅샷 저장'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -566,33 +944,29 @@ export default function MyReportPage() {
         </div>
       )}
 
-      {/* 스냅샷 타임라인 */}
-      {snapshots.length === 0 ? (
+      {/* 스냅샷 뷰 — 폼이 열려 있을 때는 숨김 */}
+      {!formOpen && (snapshots.length === 0 ? (
         <div className="other-card" style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8', fontSize: 13 }}>
           📋 기록된 스냅샷이 없습니다.<br />
           <span style={{ fontSize: 12, marginTop: 6, display: 'block' }}>위의 버튼을 눌러 포트폴리오를 기록해보세요.</span>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {snapshots.map(snap => (
-            <SnapshotCard key={snap.id} snap={snap} prices={prices} onDelete={deleteSnapshot} />
-          ))}
-          {snapshots.length >= MAX_SNAPSHOTS && (
-            <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '4px 0 8px' }}>
-              최대 {MAX_SNAPSHOTS}개 보관 — 새 스냅샷 추가 시 가장 오래된 기록이 자동 삭제됩니다.
-            </div>
-          )}
-        </div>
-      )}
+      ) : (() => {
+        const selectedSnap = snapshots.find(s => s.id === selectedSnapId) ?? snapshots[0];
+        return selectedSnap ? (
+          <SnapshotCard key={selectedSnap.id} snap={selectedSnap} prices={prices} onDelete={deleteSnapshot} hoveredStockId={hoveredStockId} onHoverStock={setHoveredStockId} />
+        ) : null;
+      })())}
       </div>{/* end 메인 콘텐츠 */}
 
       {/* 오른쪽 고정 패널: 비중 추이 */}
-      <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 16, alignSelf: 'flex-start' }}>
-        <div className="other-card" style={{ padding: '16px 16px 14px' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 16 }}>
+      <div style={{ width: 280, flexShrink: 0 }}>
+        <div className="other-card" style={{ position: 'sticky', top: 16, height: 'calc(100vh - 80px)', overflow: 'hidden', padding: '10px 12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8, flexShrink: 0 }}>
             자산 비중 추이
           </div>
-          <WeightHistoryChart snapshots={snapshots} prices={prices} />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <WeightHistoryChart snapshots={snapshots} prices={prices} onSnapClick={id => setSelectedSnapId(id)} selectedSnapId={selectedSnapId} />
+          </div>
         </div>
       </div>
     </div>{/* end 2열 wrapper */}

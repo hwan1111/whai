@@ -3,15 +3,15 @@ import { getToken } from './auth';
 export const ASSETS = {
   '000000':  { label: 'KOSPI 지수', color: '#94A3B8' },
   '005930':  { label: '삼성전자',   color: '#034EA2' },
-  '000660':  { label: 'SK하이닉스', color: '#E31837' },
+  '000660':  { label: 'SK하이닉스', color: '#E8400A' },
   '005380':  { label: '현대차',     color: '#002C5F' },
   '000270':  { label: '기아',       color: '#C8102E' },
   '079550':  { label: 'LIG디펜스',  color: '#0077C8' },
-  '012450':  { label: '한화에어로', color: '#ED7100' },
+  '012450':  { label: '한화에어로', color: '#FF9200' },
   '105560':  { label: 'KB금융',     color: '#FFB500' },
   '055550':  { label: '신한지주',   color: '#5BADD1' },
   '051910':  { label: 'LG화학',     color: '#A50034' },
-  '096770':  { label: 'SK이노베',   color: '#F46F19' },
+  '096770':  { label: 'SK이노베',   color: '#E86500' },
   'KRW/USD': { label: 'KRW/USD',   color: '#3C3B6E' },
   'KRW/JPY': { label: 'KRW/JPY',   color: '#BC002D' },
   'KRW/EUR': { label: 'KRW/EUR',   color: '#003399' },
@@ -64,19 +64,26 @@ export function buildPeriodData(period, ids) {
   });
 
   const d = {};
+  const closes = {};
   for (const id of ids) {
     const rows = cache[id];
     if (!rows?.length) continue;
     const byDate = Object.fromEntries(rows.map(r => [r.date, r.return_pct]));
+    const byClose = Object.fromEntries(rows.map(r => [r.date, r.close ?? r.rate ?? null]));
     const firstDate = rows[0].date;
     const lastDate = rows[rows.length - 1].date;
-    let last = 0;
+    let last = 0, lastClose = null;
     d[id] = sortedDates.map(date => {
       if (date < firstDate || date > lastDate) return null;
       if (byDate[date] !== undefined) last = byDate[date];
       return last;
     });
+    closes[id] = sortedDates.map(date => {
+      if (date < firstDate || date > lastDate) return null;
+      if (byClose[date] !== undefined) lastClose = byClose[date];
+      return lastClose;
+    });
   }
 
-  return { labels, d };
+  return { labels, d, closes };
 }

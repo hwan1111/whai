@@ -6,13 +6,14 @@ from pathlib import Path
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
+from backend.limiter import limiter
 import bcrypt
 from jose import jwt
 from sqlalchemy.orm import Session
 
 from backend.db import get_db
 from backend.models.user import User
-from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RegisterRequest, TokenResponse, UpdateProfileRequest
+from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UpdateProfileRequest
 
 _S3_BUCKET = os.getenv("AWS_S3_BUCKET", "whai-profile-images")
 _S3_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
@@ -33,6 +34,7 @@ def _verify(password: str, hashed: str) -> bool:
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-env-local")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60
+REFRESH_EXPIRE_DAYS = 3
 
 
 def _make_token(user_id: str) -> str:
@@ -42,6 +44,18 @@ def _make_token(user_id: str) -> str:
         "iss": "whai",
         "iat": now,
         "exp": now + timedelta(minutes=JWT_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def _make_refresh_token(user_id: str) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "iss": "whai",
+        "type": "refresh",
+        "iat": now,
+        "exp": now + timedelta(days=REFRESH_EXPIRE_DAYS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -61,7 +75,8 @@ def check_id(user_id: str, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(body: RegisterRequest, db: Session = Depends(get_db)) -> dict:
+@limiter.limit("3/minute")
+def register(request: Request, body: RegisterRequest, db: Session = Depends(get_db)) -> dict:
     if db.get(User, body.user_id):
         raise HTTPException(status_code=409, detail="이미 사용 중인 아이디입니다.")
 
@@ -97,7 +112,7 @@ def me(user_id: str = Depends(_get_user_id), db: Session = Depends(get_db)) -> d
         "user_id": user.user_id,
         "name": user.name,
         "birth_year": user.birth_year,
-        "gender": user.gender,
+        "gender": user.gender.value if user.gender else None,
         "invest_type": user.invest_type,
         "created_at": user.created_at.strftime("%Y-%m-%d") if user.created_at else None,
         "profile_image_url": user.profile_image_url,
@@ -221,14 +236,30 @@ def delete_account(
     db.commit()
 
 
+@router.post("/refresh")
+def refresh(body: RefreshRequest) -> dict:
+    try:
+        payload = jwt.decode(body.refresh_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+        user_id = payload["sub"]
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="만료되거나 유효하지 않은 토큰입니다.")
+    return {"access_token": _make_token(user_id), "token_type": "bearer"}
+
+
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+@limiter.limit("5/minute")
+def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.get(User, body.user_id)
     if not user or not _verify(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
     return TokenResponse(
         access_token=_make_token(user.user_id),
+        refresh_token=_make_refresh_token(user.user_id),
         name=user.name,
         user_id=user.user_id,
         profile_image_url=user.profile_image_url,

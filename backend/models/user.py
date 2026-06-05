@@ -7,7 +7,6 @@ from backend.db import Base
 class GenderEnum(str, enum.Enum):
     M = "M"
     F = "F"
-    OTHER = "OTHER"
 
 
 class User(Base):

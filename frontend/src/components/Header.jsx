@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { getUser, getToken, getProfileImage, setProfileImage, logout, updateUserName } from '@/lib/auth';
+import { getUser, getProfileImage, setProfileImage, logout, updateUserName, fetchWithAuth } from '@/lib/auth';
 
 const INVEST_MAP = {
   SAFE: '안정형', STAB: '안정추구형', NEUT: '위험중립형', GROW: '적극투자형', AGGR: '공격투자형',
@@ -64,7 +64,8 @@ export default function Header({ updateTime }) {
     setProfileMsg({ text: '', type: '' });
     setProfileLoading(true);
     try {
-      const res = await fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${getToken()}` } });
+      const res = await fetchWithAuth('/api/v1/auth/me');
+      if (!res.ok) throw new Error();
       const d = await res.json();
       setProfileData(d);
       setProfileName(d.name || '');
@@ -80,9 +81,9 @@ export default function Header({ updateTime }) {
     setSaving(true);
     setProfileMsg({ text: '', type: '' });
     try {
-      const res = await fetch('/api/v1/auth/me', {
+      const res = await fetchWithAuth('/api/v1/auth/me', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: profileName.trim(), invest_type: profileInvest || null }),
       });
       const data = await res.json();
@@ -112,9 +113,9 @@ export default function Header({ updateTime }) {
     setSaving(true);
     setPwMsg({ text: '', type: '' });
     try {
-      const res = await fetch('/api/v1/auth/change-password', {
+      const res = await fetchWithAuth('/api/v1/auth/change-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ current_password: pwCurrent, new_password: pwNew }),
       });
       const data = await res.json();
@@ -150,9 +151,8 @@ export default function Header({ updateTime }) {
     const formData = new FormData();
     formData.append('file', imgFile);
     try {
-      const res = await fetch('/api/v1/auth/me/profile-image', {
+      const res = await fetchWithAuth('/api/v1/auth/me/profile-image', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
         body: formData,
       });
       const data = await res.json();
@@ -174,10 +174,7 @@ export default function Header({ updateTime }) {
     setSaving(true);
     setImgMsg({ text: '', type: '' });
     try {
-      const res = await fetch('/api/v1/auth/me/profile-image', {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+      const res = await fetchWithAuth('/api/v1/auth/me/profile-image', { method: 'DELETE' });
       if (!res.ok) {
         setImgMsg({ text: '삭제에 실패했습니다.', type: 'err' });
       } else {
@@ -205,9 +202,9 @@ export default function Header({ updateTime }) {
     setSaving(true);
     setWithdrawMsg({ text: '', type: '' });
     try {
-      const res = await fetch('/api/v1/auth/me', {
+      const res = await fetchWithAuth('/api/v1/auth/me', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: withdrawPw }),
       });
       if (!res.ok) {
@@ -245,9 +242,15 @@ export default function Header({ updateTime }) {
         </div>
         <div className="header-right">
           {updateTime && <span style={{ fontSize: 11, color: '#94a3b8' }}>{updateTime}</span>}
-          <Link href="/my-report" className={`header-report-btn${pathname?.startsWith('/my-report') ? ' active' : ''}`}>
-            📄 마이 리포트
-          </Link>
+          {pathname?.startsWith('/my-report') ? (
+            <Link href="/dashboard" className="header-report-btn">
+              🏠 대시보드
+            </Link>
+          ) : (
+            <Link href="/my-report" className="header-report-btn">
+              📄 마이 포트폴리오
+            </Link>
+          )}
           <div className="user-menu-wrap" ref={menuRef}>
             <div
               className="avatar"
@@ -291,7 +294,7 @@ export default function Header({ updateTime }) {
                   <span className="modal-label">이름</span>
                   <input
                     className="modal-input"
-                    style={{ width: 140, textAlign: 'right' }}
+                    style={{ width: 140, textAlign: 'right', color: '#94a3b8' }}
                     value={profileName}
                     onChange={e => setProfileName(e.target.value)}
                     maxLength={20}

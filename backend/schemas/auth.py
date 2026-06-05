@@ -43,7 +43,7 @@ class RegisterRequest(BaseModel):
     @field_validator("gender")
     @classmethod
     def validate_gender(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in ("M", "F", "OTHER"):
+        if v is not None and v not in ("M", "F"):
             raise ValueError("gender는 M, F, OTHER 중 하나여야 합니다.")
         return v
 
@@ -65,8 +65,13 @@ class ChangePasswordRequest(BaseModel):
         return v
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     name: str
     user_id: str

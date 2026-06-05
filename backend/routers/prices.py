@@ -1,12 +1,19 @@
+import re
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from backend.db import get_db
 
 router = APIRouter(prefix="/prices", tags=["prices"])
+
+_TICKER_RE = re.compile(r'^[0-9]{6}$')
+
+def _validate_ticker(ticker: str) -> None:
+    if not _TICKER_RE.match(ticker):
+        raise HTTPException(status_code=400, detail="유효하지 않은 ticker 형식입니다.")
 
 PERIOD_DAYS = {
     "1W": 7, "1M": 30, "3M": 90, "6M": 180,
@@ -17,14 +24,17 @@ PERIOD_DAYS = {
 @router.get("/latest")
 def get_latest_prices(db: Session = Depends(get_db)) -> list[dict]:
     rows = db.execute(text("""
-        SELECT p1.ticker, p1.close, p1.date, c.name, c.sector,
-               (SELECT close FROM price p2
-                WHERE p2.ticker = p1.ticker AND p2.date < p1.date
-                ORDER BY p2.date DESC LIMIT 1) AS prev_close
-        FROM price p1
-        JOIN company c ON p1.ticker = c.ticker
-        WHERE p1.date = (SELECT MAX(date) FROM price p3 WHERE p3.ticker = p1.ticker)
-        ORDER BY c.sector, p1.ticker
+        WITH ranked AS (
+            SELECT ticker, close, date,
+                   LAG(close) OVER (PARTITION BY ticker ORDER BY date) AS prev_close,
+                   ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
+            FROM price
+        )
+        SELECT r.ticker, r.close, r.date, c.name, c.sector, r.prev_close
+        FROM ranked r
+        JOIN company c ON r.ticker = c.ticker
+        WHERE r.rn = 1
+        ORDER BY c.sector, r.ticker
     """)).fetchall()
 
     result = []
@@ -49,6 +59,7 @@ def get_price_history(
     period: str = Query(default="3M"),
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    _validate_ticker(ticker)
     days = PERIOD_DAYS.get(period, 90)
     cutoff = date.today() - timedelta(days=days)
     rows = db.execute(text("""
@@ -76,6 +87,7 @@ def get_price_stats(
     ticker: str,
     db: Session = Depends(get_db),
 ) -> dict:
+    _validate_ticker(ticker)
     cutoff = date.today() - timedelta(days=365)
     row = db.execute(text("""
         SELECT MAX(close) AS high52, MIN(close) AS low52
@@ -87,15 +99,28 @@ def get_price_stats(
         WHERE ticker = :ticker ORDER BY date DESC LIMIT 1
     """), {"ticker": ticker}).fetchone()
 
-    fund = db.execute(text("""
-        SELECT per, pbr, market_cap FROM fundamental WHERE ticker = :ticker
+    prev_row = db.execute(text("""
+        SELECT close FROM price
+        WHERE ticker = :ticker ORDER BY date DESC LIMIT 1 OFFSET 1
     """), {"ticker": ticker}).fetchone()
+
+    fund = db.execute(text("""
+        SELECT per, pbr, market_cap FROM fundamental
+        WHERE ticker = :ticker ORDER BY date DESC LIMIT 1
+    """), {"ticker": ticker}).fetchone()
+
+    close = int(latest.close) if latest and latest.close else None
+    prev = int(prev_row.close) if prev_row and prev_row.close else close
+    change = round(close - prev, 2) if close and prev else None
+    change_pct = round((close - prev) / prev * 100, 2) if close and prev else None
 
     return {
         "high52": int(row.high52) if row and row.high52 else None,
         "low52": int(row.low52) if row and row.low52 else None,
         "volume": int(latest.volume) if latest and latest.volume else None,
-        "per": round(float(fund.per), 2) if fund and fund.per else None,
-        "pbr": round(float(fund.pbr), 2) if fund and fund.pbr else None,
+        "per": round(float(fund.per), 2) if fund and fund.per is not None and float(fund.per) > 0 else None,
+        "pbr": round(float(fund.pbr), 2) if fund and fund.pbr is not None and float(fund.pbr) > 0 else None,
         "market_cap": int(fund.market_cap) if fund and fund.market_cap else None,
+        "change": change,
+        "change_pct": change_pct,
     }
