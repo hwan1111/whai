@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { login, getUser, setProfileImage } from '@/lib/auth';
 
@@ -11,7 +11,7 @@ const INVEST_OPTS = [
   { val: 'AGGR', label: '공격투자형' },
 ];
 
-export default function AuthPage() {
+function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState('login');
@@ -315,5 +315,13 @@ export default function AuthPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<div className="auth-body"><div className="auth-card">로딩 중...</div></div>}>
+      <AuthPageContent />
+    </Suspense>
   );
 }

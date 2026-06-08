@@ -1,0 +1,33 @@
+# =================================================================
+# 백엔드 Docker Compose
+# 경로: whai/backend/docker-compose.yaml
+# =================================================================
+
+networks:
+  whai-network:
+    external: true
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.backend
+    container_name: whai_backend
+    restart: always
+    env_file:
+      - ../.env
+    ports:
+      - "8000:8000"
+    environment:
+      SERVICE_DATABASE_URL: ${SERVICE_DATABASE_URL}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://localhost:5001}
+    volumes:
+      - ../config/backend/certs/ca.pem:/app/config/certs/ca.pem:ro
+    networks:
+      - whai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

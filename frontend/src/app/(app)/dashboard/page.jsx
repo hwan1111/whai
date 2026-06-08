@@ -708,7 +708,7 @@ export default function DashboardPage() {
     return (
       <div className={`tk-card${inChart ? ' in-chart' : ''}`} onClick={() => toggleAsset(id)} title={name}>
         <div className="tk-card-head">
-          <div className="tk-card-logo">
+          <div className="tk-card-logo" style={{ width: 24, height: 24 }}>
             <img src={LOGO(id)} alt={name} />
           </div>
           <div className="tk-card-name">{name}</div>
@@ -749,7 +749,7 @@ export default function DashboardPage() {
     return (
       <div className={`fx-card${inChart ? ' in-chart' : ''}`} onClick={() => toggleAsset(id)}>
         <div className="fx-card-head">
-          <img src={info.flag} alt={currency} className="fx-card-flag" />
+          <img src={info.flag} alt={currency} className="fx-card-flag" style={{ width: 24, height: 16 }} />
           <span className="fx-card-code">{currency}</span>
           <div className="tk-card-acts">
             <button
@@ -900,7 +900,7 @@ export default function DashboardPage() {
         <div className="left-wrapper">
           <div className="chart-controls">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginRight: 4 }}>기간</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginRight: 4 }}>기간</div>
               <div className="period-sel">
                 {PERIODS.map(p => (
                   <button
@@ -913,8 +913,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px' }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기</span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
                 {[...favs].filter(id => ASSETS[id]).map(id => {
                   const isSelected = id === selectedStockId;
@@ -1175,7 +1175,63 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* MATRIX column */}
+        {/* RIGHT WRAPPER: News + Matrix */}
+        <div className="right-wrapper">
+
+        {/* NEWS column - moved to top */}
+        <div className="news-col">
+          <div className="news-preview-card" style={{ flex: 1, overflow: 'hidden' }}>
+            <div className="news-preview-header">
+              <div className="news-preview-title">
+                <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+                관련 뉴스
+              </div>
+              <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
+            </div>
+            <div className="news-preview-body">
+              {favDetailLoading ? (
+                [0, 1, 2].map(i => (
+                  <div key={i} className="news-preview-item">
+                    <div className="news-meta" style={{ gap: 6 }}>
+                      <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
+                      <span className="skeleton" style={{ width: 56, height: 12 }} />
+                    </div>
+                    <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
+                  </div>
+                ))
+              ) : !favDetail || favDetail.news.length === 0 ? (
+                <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
+                  {selectedStockId && STOCK_CONFIG[selectedStockId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
+                </div>
+              ) : favNewsExpanded !== null ? (
+                (() => { const n = favDetail.news[favNewsExpanded]; return (
+                  <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
+                    <div className="news-meta">
+                      <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                      <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                    </div>
+                    <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
+                    {n.vol_insight && (
+                      <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
+                      </div>
+                    )}
+                  </div>
+                ); })()
+              ) : favDetail.news.map((n, i) => (
+                <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
+                  <div className="news-meta">
+                    <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                    <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                  </div>
+                  <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* MATRIX column - moved to bottom */}
         <div className="matrix-col" ref={matrixColRef}>
           {showComplex ? (() => {
             const allPairs = [];
@@ -1388,58 +1444,8 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* NEWS column */}
-        <div className="news-col">
-          <div className="news-preview-card" style={{ flex: 1, overflow: 'hidden' }}>
-            <div className="news-preview-header">
-              <div className="news-preview-title">
-                <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-                관련 뉴스
-              </div>
-              <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
-            </div>
-            <div className="news-preview-body">
-              {favDetailLoading ? (
-                [0, 1, 2].map(i => (
-                  <div key={i} className="news-preview-item">
-                    <div className="news-meta" style={{ gap: 6 }}>
-                      <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
-                      <span className="skeleton" style={{ width: 56, height: 12 }} />
-                    </div>
-                    <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
-                  </div>
-                ))
-              ) : !favDetail || favDetail.news.length === 0 ? (
-                <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
-                  {selectedStockId && STOCK_CONFIG[selectedStockId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
-                </div>
-              ) : favNewsExpanded !== null ? (
-                (() => { const n = favDetail.news[favNewsExpanded]; return (
-                  <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
-                    <div className="news-meta">
-                      <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                      <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
-                    </div>
-                    <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
-                    {n.vol_insight && (
-                      <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
-                      </div>
-                    )}
-                  </div>
-                ); })()
-              ) : favDetail.news.map((n, i) => (
-                <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
-                  <div className="news-meta">
-                    <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                    <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
-                  </div>
-                  <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
+        {/* END OF right-wrapper */}
 
         {/* Sidebar toggle tab */}
         <button

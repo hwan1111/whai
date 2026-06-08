@@ -40,7 +40,7 @@ dag = DAG(
     "finance_news_sync_daily",
     default_args=default_args,
     description="Daily sync of news data to S3",
-    schedule_interval="0 2 * * *",  # 02:00 UTC = 11:00 KST
+    schedule="0 2 * * *",  # 02:00 UTC = 11:00 KST
     catchup=False,
     tags=["finance", "news", "data-pipeline"],
 )
@@ -206,7 +206,6 @@ task_validate = PythonOperator(
 task_fetch = PythonOperator(
     task_id="fetch_news_data",
     python_callable=fetch_news_data,
-    provide_context=True,
     dag=dag,
 )
 
@@ -231,7 +230,7 @@ def dynamic_upload_tasks(**context):
             task_id=task_id,
             python_callable=upload_ticker_news,
             op_kwargs={"ticker_info": ticker_info},
-            provide_context=True,
+    
             dag=dag,
         )
         task_ids.append(task_id)
@@ -242,7 +241,6 @@ def dynamic_upload_tasks(**context):
 task_upload_dynamic = PythonOperator(
     task_id="prepare_upload_tasks",
     python_callable=lambda **ctx: dynamic_upload_tasks(**ctx),
-    provide_context=True,
     dag=dag,
 )
 
@@ -259,7 +257,6 @@ def final_summary(**context):
 task_summary = PythonOperator(
     task_id="final_summary",
     python_callable=final_summary,
-    provide_context=True,
     dag=dag,
 )
 

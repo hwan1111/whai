@@ -27,8 +27,8 @@ default_args = {
 dag = DAG(
     "finance_market_data_daily",
     default_args=default_args,
-    description="KOSPI, 주식 10종, 환율(KRW/USD), 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
-    schedule_interval="0 15 * * 1-5",  # 00:00 KST 평일
+    description="KOSPI, 주식 10종, 환율 6쌍, 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
+    schedule="0 15 * * 1-5",  # 00:00 KST 평일
     catchup=False,
     tags=["finance", "market-data", "price"],
 )

@@ -1,0 +1,29 @@
+# Dockerfile.mlflow
+FROM ghcr.io/mlflow/mlflow:v3.12.0-full
+
+# curl is needed for the container healthcheck in docker-compose
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# 필수 패키지 설치
+RUN pip install --no-cache-dir psycopg2-binary bert-score rouge-score sentence-transformers mlflow[auth]
+
+# BERT 모델 사전 다운로드 (한국어 멀티링걸)
+RUN python3 << 'EOF'
+import os
+os.environ['HF_HOME'] = '/root/.cache/huggingface'
+
+print("🔄 BERT 모델 다운로드 중...")
+from bert_score import score
+
+# 모델 캐시에 저장됨
+score(
+    ["테스트"],
+    ["테스트"],
+    model_type="bert-base-multilingual-cased",
+    lang="ko",
+    batch_size=1,
+)
+print("✅ BERT 모델 다운로드 완료!")
+EOF
+
+WORKDIR /app

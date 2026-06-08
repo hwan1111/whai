@@ -1,41 +1,196 @@
+# ============================================
+# 환경 & 설정 (민감한 정보)
+# ============================================
+
+# 환경 변수
 .env
 .env.local
-.env.example
-.vscode
-CLAUDE.md
-.claude
+.env.*.local
+.env.production.local
 
-# Python
+# 인증 & 인증서
+config/airflow/simple_auth_manager_passwords.json*
+config/airflow/simple_auth_manager_passwords.json.generated
+config/mlflow/mlflow_auth.ini
+config/mlflow_auth.ini
+config/backend/certs/
+config/certs/
+config/mlflow/certs/
+*.pem
+*.key
+*.crt
+*.cer
+
+# Docker override
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yaml
+
+# ============================================
+# Python 의존성 & 빌드
+# ============================================
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
-.venv/
-.venv
-.python-version
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ============================================
+# Node.js / Frontend 의존성 & 빌드
+# ============================================
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+
+# Next.js
+whai/frontend/.next/
+whai/frontend/out/
+whai/frontend/dist/
+whai/frontend/.vercel/
+
+# Build outputs
+whai/frontend/build/
+whai/frontend/.turbo/
+
+# ============================================
+# MLflow & 실험 결과 (매우 큼)
+# ============================================
+
+mlruns/
+mlflow-runs/
+.mlflow/
+**/mlruns/
+**/artifacts/
+
+# ============================================
+# Airflow 로그 (매우 큼)
+# ============================================
+
+whai-airflow/logs/
+whai-airflow/plugins/
+airflow.db
+
+# ============================================
+# 데이터 파일 (매우 큼)
+# ============================================
+
+# 뉴스 데이터
+whai/script/news_data/*.csv
+whai/script/news_data/*.json
+whai/script/news_data/*.parquet
+whai/script/news_data/cache/
+
+# 데이터베이스
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# 대용량 데이터
 data/
-!src/data/
-*.zip
-*.log
-docs/
-config/certs/
-mlruns
+datasets/
+*.h5
+*.pkl
+*.pickle
 
-# 로컬 분석/테스트 파일
-test.py
-test2.py
-test3.py
-tt.py
-test_date.parquet
-test_date2.parquet
+# ============================================
+# IDE & 에디터
+# ============================================
 
-# 로컬 임시 파일
-dart_noise_reduction.md
-docs_cache/
-mockup.html
-mockup_preview.html
-
-*.sql
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
-uploads/
-basic_auth.ini
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# ============================================
+# OS 파일
+# ============================================
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ============================================
+# 로컬 개발 파일
+# ============================================
+
+.local/
+.tmp/
+tmp/
+temp/
+
+# IDE 캐시
+.cache/
+.vscode-test/
+
+# ============================================
+# 기타
+# ============================================
+
+*.png
+*.svg
+*.jpg
+*.jpeg
+*.gif
+*.log
+*.zip
+*.tar.gz
 *.bak
+*.sql
+*.csv
+*.json
+*.parquet
+*.h5
+*.pkl
+*.pickle
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# 로컬 테스트 결과
+test-results/
+coverage/
+.nyc_output/
+
+# 시스템 파일
+.env.vault
+.direnv/
+
+# 마운트 테스트용 로컬 파일
+.sshfs-test/
