@@ -45,15 +45,13 @@ export default function AuthPage() {
   async function prefetchDashboard(token) {
     try {
       const h = { Authorization: `Bearer ${token}` };
-      const [favsRes, pricesRes, ratesRes] = await Promise.allSettled([
+      const [favsRes, pricesRes] = await Promise.allSettled([
         fetch('/api/v1/favorites', { headers: h }),
         fetch('/api/v1/prices/latest', { headers: h }),
-        fetch('/api/v1/exchange-rates/latest', { headers: h }),
       ]);
       const cache = {};
       if (favsRes.status === 'fulfilled' && favsRes.value.ok) cache.favs = await favsRes.value.json();
       if (pricesRes.status === 'fulfilled' && pricesRes.value.ok) cache.prices = await pricesRes.value.json();
-      if (ratesRes.status === 'fulfilled' && ratesRes.value.ok) cache.rates = await ratesRes.value.json();
       if (Object.keys(cache).length) sessionStorage.setItem('whai_prefetch', JSON.stringify(cache));
     } catch { /* silent */ }
   }

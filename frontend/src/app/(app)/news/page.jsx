@@ -47,12 +47,7 @@ export default function NewsPage() {
               <option value="055550">신한지주 (055550)</option>
               <option value="051910">LG화학 (051910)</option>
               <option value="096770">SK이노베이션 (096770)</option>
-              <option value="KRW/USD">KRW/USD</option>
-              <option value="KRW/EUR">KRW/EUR</option>
-              <option value="KRW/JPY">KRW/JPY</option>
-              <option value="KRW/CNY">KRW/CNY</option>
-              <option value="KRW/CHF">KRW/CHF</option>
-              <option value="KRW/GBP">KRW/GBP</option>
+              <option value="USD">USD</option>
             </select>
           </div>
           <div>

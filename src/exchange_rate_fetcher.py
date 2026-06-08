@@ -1,7 +1,7 @@
 """BOK ECOS API를 통한 KRW 환율 데이터 조회.
 
 통계표: 731Y001 (주요국통화의대원화환율)
-저장 형식: KRW/USD, KRW/JPY(100엔 기준), KRW/EUR, KRW/GBP, KRW/CHF, KRW/CNY
+저장 형식: KRW/USD
 """
 
 import os
@@ -14,11 +14,6 @@ BASE_CURRENCY = "KRW"
 # BOK ECOS 통계항목코드 → 통화코드
 BOK_ITEMS: dict[str, str] = {
     "0000001": "USD",   # 미국 달러 (1달러)
-    "0000002": "JPY",   # 일본 엔 (100엔 기준)
-    "0000003": "EUR",   # 유로
-    "0000012": "GBP",   # 영국 파운드
-    "0000014": "CHF",   # 스위스 프랑
-    "0000053": "CNY",   # 중국 위안 (기준환율)
 }
 
 _BOK_STAT = "731Y001"
