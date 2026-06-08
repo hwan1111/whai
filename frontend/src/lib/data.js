@@ -12,17 +12,8 @@ export const ASSETS = {
   '055550':  { label: '신한지주',   color: '#5BADD1' },
   '051910':  { label: 'LG화학',     color: '#A50034' },
   '096770':  { label: 'SK이노베',   color: '#E86500' },
-  'KRW/USD': { label: 'KRW/USD',   color: '#3C3B6E' },
-  'KRW/JPY': { label: 'KRW/JPY',   color: '#BC002D' },
-  'KRW/EUR': { label: 'KRW/EUR',   color: '#003399' },
-  'KRW/CNY': { label: 'KRW/CNY',   color: '#FFDE00' },
-  'KRW/CHF': { label: 'KRW/CHF',   color: '#FF0000' },
-  'KRW/GBP': { label: 'KRW/GBP',   color: '#012169' },
+  'USD': { label: 'USD',   color: '#3C3B6E' },
 };
-
-export const EXCHANGE_PAIRS = new Set([
-  'KRW/USD', 'KRW/JPY', 'KRW/EUR', 'KRW/CNY', 'KRW/CHF', 'KRW/GBP',
-]);
 
 const _cache = {};
 
@@ -33,10 +24,7 @@ export async function fetchAssetData(id, period) {
   try {
     const token = getToken();
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const url = EXCHANGE_PAIRS.has(id)
-      ? `/api/v1/exchange-rates/history?pair=${encodeURIComponent(id)}&period=${period}`
-      : `/api/v1/prices/${id}/history?period=${period}`;
-    const res = await fetch(url, { headers });
+    const res = await fetch(`/api/v1/prices/${encodeURIComponent(id)}/history?period=${period}`, { headers });
     const data = res.ok ? await res.json() : [];
     _cache[period][id] = data;
     return data;

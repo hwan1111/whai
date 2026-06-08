@@ -1,5 +1,5 @@
 """
-Daily market data sync: KOSPI (1), stocks (10), exchange rates (6), fundamentals (10).
+Daily market data sync: KOSPI (1), stocks (10), exchange rates (1, KRW/USD), fundamentals (10).
 
 Schedule: 15:00 UTC (00:00 KST) every weekday.
 The 4 load tasks run in parallel, each doing incremental inserts.
