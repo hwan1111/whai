@@ -14,16 +14,11 @@ const ASSET_INFO = {
   '055550': { name: '신한지주',      color: ASSETS['055550'].color,  sector: '금융',   unit: '주' },
   '051910': { name: 'LG화학',        color: ASSETS['051910'].color,  sector: '화학',   unit: '주' },
   '096770': { name: 'SK이노베이션', color: ASSETS['096770'].color,  sector: '화학',   unit: '주' },
-  'KRW/USD': { name: 'USD 달러',    color: ASSETS['KRW/USD'].color, sector: '외화', unit: '달러' },
-  'KRW/JPY': { name: 'JPY 엔',      color: ASSETS['KRW/JPY'].color, sector: '외화', unit: '엔' },
-  'KRW/EUR': { name: 'EUR 유로',    color: ASSETS['KRW/EUR'].color, sector: '외화', unit: '유로' },
-  'KRW/CNY': { name: 'CNY 위안',    color: ASSETS['KRW/CNY'].color, sector: '외화', unit: '위안' },
-  'KRW/CHF': { name: 'CHF 프랑',    color: ASSETS['KRW/CHF'].color, sector: '외화', unit: '프랑' },
-  'KRW/GBP': { name: 'GBP 파운드', color: ASSETS['KRW/GBP'].color, sector: '외화', unit: '파운드' },
+  'USD': { name: 'USD 달러',    color: ASSETS['USD'].color, sector: '외화', unit: '달러' },
 };
 
 const STOCK_IDS = ['005930','000660','005380','000270','079550','012450','105560','055550','051910','096770'];
-const FX_IDS    = ['KRW/USD','KRW/JPY','KRW/EUR','KRW/CNY','KRW/CHF','KRW/GBP'];
+const FX_IDS    = ['USD'];
 
 const LOGO_MAP = {
   '005930': 'samsung.svg', '000660': 'skhynix.svg',
@@ -33,8 +28,7 @@ const LOGO_MAP = {
   '051910': 'lgchem.svg',  '096770': 'skinnovation.svg',
 };
 const FLAG_MAP = {
-  'KRW/USD': 'us', 'KRW/JPY': 'jp', 'KRW/EUR': 'eu',
-  'KRW/CNY': 'cn', 'KRW/CHF': 'ch', 'KRW/GBP': 'gb',
+  'USD': 'us',
 };
 const getLogo = id => LOGO_MAP[id] ? `/assets/logos/${LOGO_MAP[id]}` : null;
 const getFlag = id => FLAG_MAP[id] ? `/assets/flags/${FLAG_MAP[id]}.png` : null;
@@ -393,7 +387,7 @@ function AssetDrawer({ holding, prices, onClose }) {
   const [statsLoading, setStatsLoading] = useState(false);
   const id = holding.id;
   const info = ASSET_INFO[id] || {};
-  const isStock = !id.startsWith('KRW/');
+  const isStock = id !== 'USD';
   const cur = prices[id] ?? holding.snapshotPrice ?? 0;
   const curVal = holding.qty * cur;
   const cost = holding.qty * holding.avgPrice;
@@ -654,13 +648,9 @@ export default function MyReportPage() {
 
   async function loadPrices() {
     try {
-      const [pr, fr] = await Promise.all([
-        fetchWithAuth('/api/v1/prices/latest'),
-        fetchWithAuth('/api/v1/exchange-rates/latest'),
-      ]);
+      const pr = await fetchWithAuth('/api/v1/prices/latest');
       const next = {};
       if (pr.ok) { const d = await pr.json(); d.forEach(({ ticker, close }) => { next[ticker] = close; }); }
-      if (fr.ok) { const d = await fr.json(); d.forEach(({ pair, rate }) => { next[pair] = rate; }); }
       setPrices(next);
       if (next['005930']) setAddPrice(String(next['005930']));
     } catch { /* silent */ }

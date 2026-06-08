@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.db import engine, Base
 from backend.limiter import limiter
-from backend.routers import auth, news, prices, exchange_rates, report, favorites
+from backend.routers import auth, news, prices, report, favorites
 import backend.models.user         # noqa: F401 — Base에 모델 등록
 import backend.models.news         # noqa: F401
 import backend.models.user_portfolio  # noqa: F401
@@ -37,7 +37,6 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(news.router, prefix="/api/v1")
 app.include_router(prices.router, prefix="/api/v1")
-app.include_router(exchange_rates.router, prefix="/api/v1")
 app.include_router(report.router, prefix="/api/v1")
 app.include_router(favorites.router, prefix="/api/v1")
 

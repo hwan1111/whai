@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from backend.db import get_db
-from backend.models.company import Company
+from backend.models.asset import Asset
 from backend.models.regime import Regime, RegimeSummary
 
 router = APIRouter(prefix="/news", tags=["news"])
@@ -19,9 +19,9 @@ def get_news(
     cutoff = date.today() - timedelta(days=days)
 
     query = (
-        db.query(Regime, RegimeSummary, Company.name)
+        db.query(Regime, RegimeSummary, Asset.name)
         .outerjoin(RegimeSummary, RegimeSummary.regime_pk == Regime.id)
-        .outerjoin(Company, Company.ticker == Regime.ticker)
+        .outerjoin(Asset, Asset.ticker == Regime.ticker)
         .filter(Regime.end_date >= cutoff)
     )
     if ticker:

@@ -51,7 +51,7 @@ END_DATE    = "2026-05-12"
 OUTPUT_PATH = Path(f"data/regime_news_summary_{TICKER_CODE}.json")
 
 S3_BUCKET = "fisa-news-archive"
-S3_PREFIX = "raw"
+S3_PREFIX = "preprocessed"
 
 MAX_NEWS_CHARS  = 1_300
 MAX_NEWS_COUNT  = 20   # 장기 구간 토큰 폭증 방지: 구간 내 최대 기사 수

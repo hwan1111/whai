@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
-import { ASSETS, EXCHANGE_PAIRS, fetchAssetData, buildPeriodData } from '@/lib/data';
+import { ASSETS, fetchAssetData, buildPeriodData } from '@/lib/data';
 import { STOCK_CONFIG } from '@/components/StockDetailModal';
 
 const SW = 860, SH = 300, ML = 52, MR = 16, MT = 22, MB = 38;
@@ -24,12 +24,7 @@ const STOCK_NAMES = {
 };
 
 const FX_INFO = {
-  'KRW/USD': { flag: '/assets/flags/us.png', desc: '미국 달러' },
-  'KRW/EUR': { flag: '/assets/flags/eu.png', desc: '유럽연합 유로' },
-  'KRW/JPY': { flag: '/assets/flags/jp.png', desc: '일본 엔 (100엔)' },
-  'KRW/CNY': { flag: '/assets/flags/cn.png', desc: '중국 위안' },
-  'KRW/CHF': { flag: '/assets/flags/ch.png', desc: '스위스 프랑' },
-  'KRW/GBP': { flag: '/assets/flags/gb.png', desc: '영국 파운드' },
+  'USD': { flag: '/assets/flags/us.png', desc: '미국 달러' },
 };
 
 const LOGO = id => `/assets/logos/${({
@@ -46,9 +41,7 @@ const NEWS_TICKER_OPTIONS = [
   { value: '079550', label: 'LIG디펜스앤에어로스페이스' }, { value: '012450', label: '한화에어로스페이스' },
   { value: '105560', label: 'KB금융' },   { value: '055550', label: '신한지주' },
   { value: '051910', label: 'LG화학' },   { value: '096770', label: 'SK이노베이션' },
-  { value: 'KRW/USD', label: 'KRW/USD' }, { value: 'KRW/EUR', label: 'KRW/EUR' },
-  { value: 'KRW/JPY', label: 'KRW/JPY' }, { value: 'KRW/CNY', label: 'KRW/CNY' },
-  { value: 'KRW/CHF', label: 'KRW/CHF' }, { value: 'KRW/GBP', label: 'KRW/GBP' },
+  { value: 'USD', label: 'USD' },
 ];
 
 function NewsDrawer({ open, onClose }) {
@@ -174,7 +167,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
       color: ASSETS[a].color,
       date: pd.labels[idx],
       close,
-      isFx: EXCHANGE_PAIRS.has(a),
+      isFx: a === 'USD',
       periodVal: pd.d[a]?.[idx] ?? 0,
       dailyChgPct,
     };
@@ -265,7 +258,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
         const vals = pd.d[a];
         if (!vals) return null;
         const col = ASSETS[a].color;
-        const isFx = a.startsWith('KRW/');
+        const isFx = a === 'USD';
         const isKospi = a === '000000';
         const isDimmed = hoveredAsset !== null && hoveredAsset !== a;
 
@@ -400,26 +393,6 @@ const CORR_PAIR_DESCRIPTIONS = {
     pos: '경기 민감 업종 동반 강세 장세에서 화학·금융주가 함께 상승',
     neg: '유가 상승 시 화학 원가 압박 우려 vs 은행 NIM 개선 기대로 방향이 엇갈림',
   },
-  'eur:semiconductor': {
-    pos: '글로벌 경기 회복 기대에 유로 강세와 반도체 수출 수요 증가가 동반 반영',
-    neg: '유로 약세(유럽 경기 부진)가 반도체 유럽향 수요에 부정적으로 작용',
-  },
-  'auto:eur': {
-    pos: '유로 강세가 유럽 수출 차량의 원화 환산 이익을 높여 동반 상승',
-    neg: '유로 약세(유럽 소비 둔화)와 국내 완성차 유럽 판매 감소가 동반',
-  },
-  'eur:finance': {
-    pos: '유럽 금리 인상 사이클이 국내 채권 금리 상승을 유도하며 동반 강세',
-    neg: '유로존 불안 시 금융 리스크 프리미엄이 높아지며 국내 은행주 약세',
-  },
-  'defense:eur': {
-    pos: '유럽 방위비 증액 기대와 K-방산 수출 호조가 동반 강세로 반영',
-    neg: '유로 약세(유럽 재정 우려)로 방산 수출 원화 환산 수익이 감소',
-  },
-  'chemical:eur': {
-    pos: '유럽 제조업 회복과 국내 화학 수출 수요 증가가 동반 반영',
-    neg: '유로 약세가 화학 수출 마진을 압박하며 동반 약세',
-  },
   'semiconductor:usd': {
     pos: '달러 강세로 반도체 수출 원화 환산 실적이 개선되며 동반 상승',
     neg: '달러 약세(글로벌 위험선호)와 반도체 수요 기대가 상충하는 구간',
@@ -439,22 +412,6 @@ const CORR_PAIR_DESCRIPTIONS = {
   'chemical:usd': {
     pos: '달러 강세 시 수출 화학 제품의 원화 환산 수익이 개선되어 동반',
     neg: '달러 강세로 납사·원자재 달러 비용이 늘어나 화학 마진 압박',
-  },
-  'jpy:semiconductor': {
-    pos: '엔화 약세로 일본 반도체 경쟁사의 가격 경쟁력이 약화되어 국내 반사 수혜',
-    neg: '엔화 강세(안전자산 선호)와 반도체 업황 위축이 동시에 나타남',
-  },
-  'auto:jpy': {
-    pos: '엔화 약세로 일본 완성차의 수출 경쟁력이 약화되어 현대·기아 반사 수혜',
-    neg: '엔화 강세(글로벌 리스크 오프)와 자동차 수요 위축이 동반',
-  },
-  'cny:semiconductor': {
-    pos: '위안화 강세(중국 경기 회복)가 반도체 최대 수출국 수요 개선과 동반',
-    neg: '위안화 약세(중국 경기 부진)와 반도체 대중 수출 감소가 동반',
-  },
-  'auto:cny': {
-    pos: '위안화 강세(중국 소비 회복)가 국내 완성차 중국 판매 수요 개선과 동반',
-    neg: '위안화 약세와 중국 내수 부진으로 완성차 중국 판매 감소가 동반',
   },
   'index:semiconductor': {
     pos: 'KOSPI 시총 1·2위 반도체 대형주가 지수 방향을 주도하며 함께 상승',
@@ -478,9 +435,7 @@ function getPairDesc(idA, idB, isPos, absR) {
     '105560': 'finance',       '055550': 'finance',
     '051910': 'chemical',      '096770': 'chemical',
     '000000': 'index',
-    'KRW/USD': 'usd', 'KRW/EUR': 'eur',
-    'KRW/JPY': 'jpy', 'KRW/CNY': 'cny',
-    'KRW/CHF': 'chf', 'KRW/GBP': 'gbp',
+    'USD': 'usd',
   };
   const typeA = SECTOR[idA] ?? 'other';
   const typeB = SECTOR[idB] ?? 'other';
@@ -551,13 +506,6 @@ export default function DashboardPage() {
           });
           return next;
         });
-        if (cache.rates) setPrices(prev => {
-          const next = { ...prev };
-          cache.rates.forEach(({ pair, rate, change_pct, change }) => {
-            next[pair] = { price: rate, change_pct, change, isRate: true };
-          });
-          return next;
-        });
       } catch { /* silent */ }
     }
     fetchFavs().then(favSet => {
@@ -568,7 +516,6 @@ export default function DashboardPage() {
       if (firstStock) setSelectedStockId(firstStock);
     });
     loadLatestPrices();
-    loadLatestRates();
   }, []);
 
   useEffect(() => {
@@ -615,24 +562,10 @@ export default function DashboardPage() {
     setFavDetailLoading(false);
   }
 
-  async function loadLatestRates() {
-    try {
-      const res = await fetchWithAuth('/api/v1/exchange-rates/latest');
-      if (!res.ok) return;
-      const data = await res.json();
-      setPrices(prev => {
-        const next = { ...prev };
-        data.forEach(({ pair, rate, change_pct, change }) => {
-          next[pair] = { price: rate, change_pct, change, isRate: true };
-        });
-        return next;
-      });
-    } catch { /* silent */ }
-  }
 
   function shortLabel(id) {
     if (id === '000000') return 'KOSPI';
-    if (id.startsWith('KRW/')) return id.split('/')[1];
+    if (id === 'USD') return 'USD';
     return ASSETS[id]?.label || id;
   }
 
@@ -681,8 +614,7 @@ export default function DashboardPage() {
     ids.forEach((id, i) => {
       const rows = results[i];
       if (!rows || rows.length < 2) return;
-      const isFx = EXCHANGE_PAIRS.has(id);
-      const closes = rows.map(r => Number(isFx ? r.rate : r.close));
+      const closes = rows.map(r => Number(r.close));
       const dr = [], dates = [];
       for (let j = 1; j < closes.length; j++) {
         dr.push((closes[j] - closes[j - 1]) / closes[j - 1]);
@@ -812,7 +744,7 @@ export default function DashboardPage() {
   function FxCard({ id }) {
     const info = FX_INFO[id];
     const inChart = activeAssets.includes(id);
-    const currency = id.split('/')[1];
+    const currency = id;
     const starred = favs.has(id);
     return (
       <div className={`fx-card${inChart ? ' in-chart' : ''}`} onClick={() => toggleAsset(id)}>
@@ -1059,7 +991,7 @@ export default function DashboardPage() {
               const fxChgAmt = fxPrice?.change;
               const fxChgColor = (fxChgPct ?? 0) >= 0 ? '#dc2626' : '#2563eb';
               const fxChgArrow = (fxChgPct ?? 0) >= 0 ? '▲' : '▼';
-              const currency = selectedFxId.split('/')[1];
+              const currency = selectedFxId;
               return (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>

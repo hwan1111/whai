@@ -3,7 +3,7 @@
 
 S3 또는 로컬 JSON 파일에서 뉴스 데이터를 로드하고 필터링합니다.
 
-S3 구조  : s3://{bucket}/raw/{ticker}/{yyyy}/{mm}/{yyyy-mm-dd}.json
+S3 구조  : s3://{bucket}/preprocessed/{ticker}/{yyyy}/{mm}/{yyyy-mm-dd}.json
 로컬 구조 : data/News_{company_name}_{ticker}/YYYY-MM-DD.json
 """
 
@@ -16,7 +16,7 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 S3_BUCKET_DEFAULT = "fisa-news-archive"
-S3_PREFIX_DEFAULT = "raw"
+S3_PREFIX_DEFAULT = "preprocessed"
 
 
 class NewsDataLoader:

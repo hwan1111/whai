@@ -9,7 +9,7 @@ from backend.db import get_db
 
 router = APIRouter(prefix="/prices", tags=["prices"])
 
-_TICKER_RE = re.compile(r'^[0-9]{6}$')
+_TICKER_RE = re.compile(r'^([0-9]{6}|[A-Z]{3})$')
 
 def _validate_ticker(ticker: str) -> None:
     if not _TICKER_RE.match(ticker):
@@ -32,7 +32,7 @@ def get_latest_prices(db: Session = Depends(get_db)) -> list[dict]:
         )
         SELECT r.ticker, r.close, r.date, c.name, c.sector, r.prev_close
         FROM ranked r
-        JOIN company c ON r.ticker = c.ticker
+        JOIN asset c ON r.ticker = c.ticker
         WHERE r.rn = 1
         ORDER BY c.sector, r.ticker
     """)).fetchall()
