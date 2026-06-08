@@ -1,0 +1,54 @@
+# =================================================================
+# Backend (FastAPI API 서버) 전용 의존성 - lean
+# 경로: whai/backend/requirements.txt
+#
+# 평가/딥러닝 스택(torch, bert-score, rouge-score)은 backend가
+# 사용하지 않으므로 제외. 해당 패키지는 mlflow 컨테이너
+# (Dockerfile.mlflow)에 설치되어 있음.
+# 스크래핑(playwright, beautifulsoup4), 태스크 큐(celery, redis),
+# 개발/테스트 도구(pytest, black, flake8, mypy)도 런타임 불필요로 제외.
+# =================================================================
+
+# FastAPI & Web
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+slowapi
+
+# Authentication & Security
+bcrypt==4.1.2
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+cryptography>=42.0.0
+
+# Database - Aiven MySQL
+sqlalchemy==2.0.25
+pymysql==1.1.0
+
+# Search - Aiven OpenSearch
+opensearch-py>=2.0.0,<3.0.0
+
+# Data Validation & Configuration
+pydantic==2.6.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HTTP & Async
+requests==2.31.0
+aiohttp==3.9.1
+httpx>=0.28.1,<1.0.0
+
+# Cloud & Storage
+boto3==1.43.6
+
+# LLM
+openai>2.0
+
+# Monitoring & Tracking (mlflow 클라이언트 - 로깅용)
+mlflow==3.12.0
+protobuf>=5.26.1,<6.0.0
+python-logging-loki==0.3.1

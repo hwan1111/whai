@@ -1,78 +1,27 @@
-services:
-  # 1. PostgreSQL 데이터베이스 서비스
-  postgres-db:
-    image: postgres:15-alpine
-    container_name: whai_mlflow_postgres
-    restart: always
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-mlflow_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow_password}
-      POSTGRES_DB: ${POSTGRES_DB:-mlflow_db}
-    ports:
-      - "5432:5432"
-    volumes:
-      - whai_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      # 환경 변수 유실 가능성을 방지하기 위해 기본값(mlflow_user / mlflow_db) 백업 적용
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-mlflow_user} -d $${POSTGRES_DB:-mlflow_db}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+# =================================================================
+# 최상위 통합 Docker Compose
+# 경로: whai/docker-compose.yaml
+#
+# 단일 whai/.env 를 모든 서비스의 변수 치환(${VAR}) 및
+# 컨테이너 환경변수로 사용합니다.
+#
+# 사용법 (whai/ 디렉토리에서):
+#   docker network create whai-network   # 최초 1회
+#   docker compose up -d                  # 전체 기동
+#   docker compose up -d backend          # 개별 서비스 기동
+#
+# 개별 compose 파일을 직접 실행할 경우 공통 .env 를 명시하세요:
+#   docker compose --env-file ../.env -f backend/docker-compose.yaml up -d
+# =================================================================
 
-  # 2. MLflow 서버 서비스
-  mlflow-server:
-    image: ghcr.io/mlflow/mlflow:latest
-    container_name: whai_mlflow_server
-    restart: always
-    env_file:
-      - .env
-    ports:
-      - "5001:5000"  # 외부 포트 충돌 방지를 위해 5001 사용
-    volumes:
-      - .:/app
-      - ./config/certs:/app/config/certs:ro
-    environment:
-      # 호스트 유효성 검사 및 타임아웃
-      - MLFLOW_SERVER_DISABLE_HOST_VALIDATION=true
-      - MLFLOW_SERVER_CORS_ALLOWED_ORIGINS=*
-      - MLFLOW_HTTP_REQUEST_TIMEOUT=600
-      
-      # 인증 및 Flask 세션 보안 설정 (env_file에서 로드)
-      - MLFLOW_AUTH_CONFIG_PATH=${MLFLOW_AUTH_CONFIG_PATH}
-      - MLFLOW_FLASK_SERVER_SECRET_KEY=${MLFLOW_FLASK_SERVER_SECRET_KEY}
-
-      # DB 연결 및 아티팩트 루트 설정
-      - MLFLOW_BACKEND_STORE_URI=${MLFLOW_DATABASE_URI}
-      - MLFLOW_DEFAULT_ARTIFACT_ROOT=${MLFLOW_ARTIFACTS_BUCKET}
-      
-      # AWS S3 인증 정보 전달 (env_file에 정의된 값 주입)
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-
-      # OpenRouter API
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-    working_dir: /app
-    # DB가 정상적으로 부팅되어 헬스체크를 통과(healthy)할 때까지 대기
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-    command: >
-      bash -c "
-      pip install --no-cache-dir 'mlflow[auth]'>=2.0 psycopg2-binary && 
-      
-      mlflow deployments start --config-path /app/gateway_config.yaml --host 0.0.0.0 --port 5002 &
-      
-      mlflow server
-      --backend-store-uri $${MLFLOW_DATABASE_URI}
-      --default-artifact-root $${MLFLOW_ARTIFACTS_BUCKET}
-      --allowed-hosts '*'
-      --host 0.0.0.0
-      --port 5000
-      --serve-artifacts
-      --app-name basic-auth"
-
-volumes:
-  whai_postgres_data:
+include:
+  - path: postgres/docker-compose.yaml
+    env_file: .env
+  - path: airflow/docker-compose.yaml
+    env_file: .env
+  - path: mlflow/docker-compose.yaml
+    env_file: .env
+  - path: backend/docker-compose.yaml
+    env_file: .env
+  - path: frontend/docker-compose.yaml
+    env_file: .env

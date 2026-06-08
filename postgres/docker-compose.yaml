@@ -1,0 +1,41 @@
+# =================================================================
+# PostgreSQL 전용 Docker Compose
+# 경로: whai/postgres/docker-compose.yaml
+# =================================================================
+
+networks:
+  whai-network:
+    driver: bridge
+    external: true
+
+services:
+  whai_postgres:
+    image: postgres:15-alpine
+    container_name: whai_postgres
+    restart: always
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_USER: ${POSTGRES_ROOT_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD:-postgres}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      MLFLOW_DB_USER: ${MLFLOW_DB_USER}
+      MLFLOW_DB_PASSWORD: ${MLFLOW_DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - whai_postgres_data:/var/lib/postgresql/data
+      - ./init-multi-db.sh:/docker-entrypoint-initdb.d/init-multi-db.sh
+    networks:
+      - whai-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres && psql -U postgres -tc \"SELECT 1 FROM pg_database WHERE datname = 'mlflow_db'\" | grep -q 1 && psql -U postgres -tc \"SELECT 1 FROM pg_database WHERE datname = 'airflow_db'\" | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  whai_postgres_data:
+    driver: local

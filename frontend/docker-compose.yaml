@@ -1,0 +1,24 @@
+# =================================================================
+# 프론트엔드 Docker Compose
+# 경로: whai/frontend/docker-compose.yaml
+# =================================================================
+
+networks:
+  whai-network:
+    external: true
+
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile.frontend
+    container_name: whai_frontend
+    restart: always
+    env_file:
+      - ../.env
+    ports:
+      - "80:3000"
+    environment:
+      NEXT_PUBLIC_API_HOST: http://whai_backend:8000
+    networks:
+      - whai-network
