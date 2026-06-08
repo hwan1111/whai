@@ -1050,7 +1050,7 @@ export default function DashboardPage() {
 
         {/* 종목/환율 상세 패널 */}
         <div className="ai-main-panel">
-          <div className="ai-main-card" style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="ai-main-card" style={{ flex: 1, overflowY: 'hidden' }}>
             {/* ── 환율 상세 ── */}
             {selectedFxId ? (() => {
               const fxInfo = FX_INFO[selectedFxId];
@@ -1110,8 +1110,8 @@ export default function DashboardPage() {
                   <div style={{ width: 32, height: 32, borderRadius: 7, background: '#fff', border: '1px solid #e8ecf0', padding: 3, overflow: 'hidden', flexShrink: 0 }}>
                     <img src={cfg.logoSrc ?? `/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedStockId}</span></div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: cfg.name.length > 8 ? 11 : 14, fontWeight: 800, color: '#1e293b', wordBreak: 'keep-all', overflowWrap: 'break-word' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedStockId}</span></div>
                     <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
                   </div>
                   {favDetailLoading ? (
@@ -1120,7 +1120,7 @@ export default function DashboardPage() {
                       <span className="skeleton" style={{ width: 70, height: 13, display: 'block' }} />
                     </div>
                   ) : favDetail?.price ? (
-                    <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                    <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
                       <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span></div>
                       {chgPct != null && (
                         <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
