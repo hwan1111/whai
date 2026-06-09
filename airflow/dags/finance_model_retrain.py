@@ -159,7 +159,9 @@ def finance_model_retrain():
         from sqlalchemy import create_engine, text
 
         warnings.filterwarnings("ignore")
-        load_dotenv(PROJECT_ROOT / ".env.local", override=True)
+        load_dotenv(PROJECT_ROOT / ".env", override=True)
+        os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "admin")
+        os.environ.setdefault("MLFLOW_TRACKING_PASSWORD", "Woorifisateam4")
         mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://52.78.237.104:5001"))
 
         ticker = context["dag_run"].conf.get("ticker", "")
@@ -393,7 +395,7 @@ def finance_model_retrain():
         from dotenv import load_dotenv
         from sqlalchemy import create_engine, text
 
-        load_dotenv(PROJECT_ROOT / ".env.local", override=True)
+        load_dotenv(PROJECT_ROOT / ".env", override=True)
 
         def _get_engine():
             raw = os.environ["SERVICE_DATABASE_URL"]

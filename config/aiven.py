@@ -5,7 +5,7 @@ from dotenv import dotenv_values
 
 class AivenConfig:
     def __init__(self) -> None:
-        env = dotenv_values(Path(__file__).resolve().parents[1] / ".env.local")
+        env = dotenv_values(Path(__file__).resolve().parents[1] / ".env")
         self.service_db: str = env.get("SERVICE_DATABASE_URL", "")
         self.admin_db: str = env.get("MLFLOW_DATABASE_URL", "")
         self._parsed = urlparse(self.service_db)

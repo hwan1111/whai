@@ -7,10 +7,10 @@ import pymysql
 from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[1]
-env = dotenv_values(ROOT / ".env.local")
+env = dotenv_values(ROOT / ".env")
 db_url = env.get("SERVICE_DATABASE_URL")
 if not db_url:
-    raise SystemExit("SERVICE_DATABASE_URL이 .env.local에 없습니다.")
+    raise SystemExit("SERVICE_DATABASE_URL이 .env에 없습니다.")
 
 match = re.match(r"mysql\+pymysql://([^:]+):([^@]+)@([^:]+):(\d+)/([^/?]+)", db_url)
 if not match:

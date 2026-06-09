@@ -5,8 +5,8 @@ import boto3
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# 1. 환경변수 로드 (.env.local)
-load_dotenv('.env.local')
+# 1. 환경변수 로드 (.env)
+load_dotenv('.env')
 
 # 2. S3 클라이언트 및 버킷 설정
 s3 = boto3.client('s3')

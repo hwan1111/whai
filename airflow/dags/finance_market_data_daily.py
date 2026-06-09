@@ -40,7 +40,7 @@ def _setup():
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(ROOT / "src"))
     from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env.local", override=True)
+    load_dotenv(ROOT / ".env", override=True)
     from script.others.load_market_data import get_engine
     return get_engine()
 

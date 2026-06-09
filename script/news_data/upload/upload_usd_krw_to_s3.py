@@ -5,7 +5,7 @@ import boto3
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-load_dotenv('.env.local')
+load_dotenv('.env')
 
 s3 = boto3.client('s3')
 BUCKET_NAME = 'fisa-news-archive'

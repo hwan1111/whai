@@ -30,11 +30,8 @@ try:
 except Exception as e:
     logger.debug(f"MLflow OpenAI autolog 활성화 실패: {str(e)}")
 
-# .env.local 파일 로드 (프로젝트 루트 기준)
 _project_root = Path(__file__).parent.parent.parent
-_env_file = _project_root / ".env.local"
-if _env_file.exists():
-    load_dotenv(_env_file, override=True)
+load_dotenv(_project_root / ".env", override=True)
 
 # 프록시 무시 (환경변수 제거)
 os.environ.pop("HTTP_PROXY", None)
@@ -82,7 +79,7 @@ class GatewayClient:
         if not (self.MLFLOW_TRACKING_USERNAME and self.MLFLOW_TRACKING_PASSWORD):
             raise RuntimeError(
                 "❌ MLflow 인증 정보가 설정되지 않았습니다. "
-                ".env.local 파일에 다음을 확인하세요:\n"
+                ".env 파일에 다음을 확인하세요:\n"
                 "  - MLFLOW_TRACKING_USERNAME\n"
                 "  - MLFLOW_TRACKING_PASSWORD"
             )

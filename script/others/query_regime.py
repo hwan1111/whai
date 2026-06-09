@@ -18,7 +18,7 @@ import pymysql
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).parent.parent
-load_dotenv(ROOT / ".env.local", override=True)
+load_dotenv(ROOT / ".env", override=True)
 
 CA_PATH = str(ROOT / "config" / "certs" / "ca.pem")
 

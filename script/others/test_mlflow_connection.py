@@ -34,7 +34,7 @@ def main():
     if not MLflowConfig.validate():
         logger.error("❌ 설정 검증 실패")
         logger.error("\n다음을 확인하세요:")
-        logger.error("1. .env.local 파일이 프로젝트 루트에 있는지 확인")
+        logger.error("1. .env 파일이 프로젝트 루트에 있는지 확인")
         logger.error("2. 다음 환경변수가 설정되어 있는지 확인:")
         logger.error("   - MLFLOW_TRACKING_URI (예: http://your-domain.com:5001)")
         logger.error("   - MLFLOW_TRACKING_USERNAME")
