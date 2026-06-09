@@ -18,10 +18,10 @@ drift_detected / retrain_needed 는 DB에만 기록.
 의존:
   finance_market_data_daily.py → price 테이블 (드리프트 MAPE JOIN)
 
-모델 경로 기준점: <project_root>/model/주가예측모델/
-  SU sklearn pkl : su/data/saved_models/{ticker}.pkl
-  SU PatchTST pkl: su/model/patchtst_v18_model.pkl  (키별 state_dict)
-  Choi           : 매일 yfinance 재학습 (pkl 없음)
+SU pkl: S3 버킷 whai-stock-models 에서 런타임 다운로드 → /tmp/su_models/ 캐시
+  su/saved_models/{ticker}.pkl   ← sklearn 7종목
+  su/patchtst_v18_model.pkl      ← PatchTST 3종목 공용
+  Choi: 매일 yfinance 재학습 (pkl 없음)
 """
 
 from __future__ import annotations
@@ -36,7 +36,8 @@ from airflow.decorators import dag, task
 log = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MODEL_ROOT   = PROJECT_ROOT / "model" / "주가예측모델"
+S3_BUCKET    = "whai-stock-models"
+S3_PKL_DIR   = "/tmp/su_models"   # Airflow worker 임시 캐시
 
 # ── 상수 ──────────────────────────────────────────────────────────────────
 CI_Z              = 1.28   # 80% 신뢰구간 (norm.ppf(0.9))
@@ -70,7 +71,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'LGBMRegressor', 'source': 'SU', 'mape': 7.07,
             'config': {
                 'features': 9,
-                'pkl': 'su/data/saved_models/105560.pkl',
+                's3_key': 'su/saved_models/105560.pkl',
             },
         },
     },
@@ -86,7 +87,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'XGBRegressor', 'source': 'SU', 'mape': 2.08,
             'config': {
                 'features': 12,
-                'pkl': 'su/data/saved_models/055550.pkl',
+                's3_key': 'su/saved_models/055550.pkl',
             },
         },
     },
@@ -102,7 +103,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'LGBMRegressor', 'source': 'SU', 'mape': 11.94,
             'config': {
                 'features': 12,
-                'pkl': 'su/data/saved_models/012450.pkl',
+                's3_key': 'su/saved_models/012450.pkl',
             },
         },
     },
@@ -118,7 +119,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'ElasticNet', 'source': 'SU', 'mape': 7.44,
             'config': {
                 'features': 12,
-                'pkl': 'su/data/saved_models/000270.pkl',
+                's3_key': 'su/saved_models/000270.pkl',
             },
         },
     },
@@ -134,7 +135,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'PatchTST', 'source': 'SU', 'mape': 8.08,
             'config': {
                 'features': 9,
-                'pkl': 'su/model/patchtst_v18_model.pkl',
+                's3_key': 'su/patchtst_v18_model.pkl',
                 'state_dict_key': 'LG Chem',
             },
         },
@@ -145,7 +146,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'LGBMRegressor', 'source': 'SU', 'mape': 5.21,
             'config': {
                 'features': 11,
-                'pkl': 'su/data/saved_models/096770.pkl',
+                's3_key': 'su/saved_models/096770.pkl',
             },
         },
         'priority_2': {
@@ -162,7 +163,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'HuberRegressor', 'source': 'SU', 'mape': 5.68,
             'config': {
                 'features': 12,
-                'pkl': 'su/data/saved_models/079550.pkl',
+                's3_key': 'su/saved_models/079550.pkl',
             },
         },
         'priority_2': {
@@ -188,7 +189,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'PatchTST', 'source': 'SU', 'mape': 9.87,
             'config': {
                 'features': 9,
-                'pkl': 'su/model/patchtst_v18_model.pkl',
+                's3_key': 'su/patchtst_v18_model.pkl',
                 'state_dict_key': 'Hyundai Motor',
             },
         },
@@ -199,7 +200,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'ExtraTreesRegressor', 'source': 'SU', 'mape': 5.09,
             'config': {
                 'features': 12,
-                'pkl': 'su/data/saved_models/005930.pkl',
+                's3_key': 'su/saved_models/005930.pkl',
             },
         },
         'priority_2': {
@@ -215,7 +216,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'PatchTST', 'source': 'SU', 'mape': 10.84,
             'config': {
                 'features': 9,
-                'pkl': 'su/model/patchtst_v18_model.pkl',
+                's3_key': 'su/patchtst_v18_model.pkl',
                 'state_dict_key': 'SK Hynix',
             },
         },
@@ -633,16 +634,21 @@ def finance_stock_predict_daily():
             return df
 
         def _load_su_model(cfg: dict) -> tuple:
-            """(model, is_patchtst) 반환."""
-            pkl_path = MODEL_ROOT / "su" / cfg["pkl"].split("su/", 1)[-1]
+            """S3에서 pkl 다운로드 후 로드. (model, is_patchtst) 반환."""
+            import boto3
+            s3_key     = cfg["s3_key"]
+            local_path = Path(S3_PKL_DIR) / Path(s3_key).name
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            if not local_path.exists():
+                boto3.client("s3").download_file(S3_BUCKET, s3_key, str(local_path))
             if "state_dict_key" in cfg:
-                with open(pkl_path, "rb") as f:
+                with open(local_path, "rb") as f:
                     state_dicts = pickle.load(f)
                 m = _AdvancedPatchTST()
                 m.load_state_dict(state_dicts[cfg["state_dict_key"]], strict=False)
                 m.eval()
                 return m, True
-            with open(pkl_path, "rb") as f:
+            with open(local_path, "rb") as f:
                 return pickle.load(f), False
 
         def _su_single_pred(model, df: pd.DataFrame, feat_cols: list[str],
@@ -723,36 +729,70 @@ def finance_stock_predict_daily():
         try:
             p1        = info["priority_1"]
             p2        = info["priority_2"]
-            threshold = round(p1["mape"] * DRIFT_MULTIPLIER, 4)
             target_dt = (today + BDay(HORIZON)).date()
 
             choi_data: dict | None = None
             su_df:     pd.DataFrame | None = None
 
-            # Step 1: 1순위 예측 ─────────────────────────────────────────
-            if p1["source"] == "Choi":
+            # Step 0: model_config 읽기 (강제 2순위 전환 여부) ────────────
+            def _check_model_config() -> str | None:
+                with engine.connect() as conn:
+                    row = conn.execute(
+                        text("SELECT force_priority FROM model_config WHERE ticker = :t"),
+                        {"t": ticker},
+                    ).fetchone()
+                return row[0] if row else None
+
+            force_priority = _check_model_config()
+
+            # Step 1: 예측 실행 ───────────────────────────────────────────
+            if force_priority == "priority_2":
+                # model_config에 의한 강제 2순위 전환
+                log.info(
+                    f"[{ticker}/{name}] model_config 강제 전환 "
+                    f"→ {p2['model']}({p2['source']}) 사용"
+                )
+                threshold = round(p2["mape"] * DRIFT_MULTIPLIER, 4)
+                if p2["source"] == "Choi":
+                    choi_data = _fetch_choi()
+                    d5, vol, prices = _run_choi(p2, choi_data)
+                    base_price    = float(choi_data["close"].iloc[-1])
+                    forecast_json = _build_choi_forecast(prices, base_price, vol)
+                else:
+                    su_df = _fetch_su()
+                    d5, vol, forecast_json = _run_su(p2, su_df)
+                    base_price = float(su_df["close"].iloc[-1])
+                model_used   = "priority_2"
+                model_name   = p2["model"]
+                model_source = p2["source"]
+            elif p1["source"] == "Choi":
+                threshold = round(p1["mape"] * DRIFT_MULTIPLIER, 4)
                 choi_data = _fetch_choi()
                 d5, vol, prices = _run_choi(p1, choi_data)
-                base_price   = float(choi_data["close"].iloc[-1])
+                base_price    = float(choi_data["close"].iloc[-1])
                 forecast_json = _build_choi_forecast(prices, base_price, vol)
+                model_used   = "priority_1"
+                model_name   = p1["model"]
+                model_source = p1["source"]
             else:
+                threshold = round(p1["mape"] * DRIFT_MULTIPLIER, 4)
                 su_df = _fetch_su()
                 d5, vol, forecast_json = _run_su(p1, su_df)
                 base_price = float(su_df["close"].iloc[-1])
+                model_used   = "priority_1"
+                model_name   = p1["model"]
+                model_source = p1["source"]
 
-            lr_d5   = float(np.log(d5 / base_price)) if base_price > 0 else 0.0
+            lr_d5      = float(np.log(d5 / base_price)) if base_price > 0 else 0.0
             ci_u, ci_l = _ci(base_price, lr_d5, vol, HORIZON)
-            model_used   = "priority_1"
-            model_name   = p1["model"]
-            model_source = p1["source"]
 
             # Step 2: 드리프트 감지 ───────────────────────────────────────
             rolling_mape, n_samples = _rolling_mape()
-            drift = rolling_mape is not None and rolling_mape > threshold
+            drift   = rolling_mape is not None and rolling_mape > threshold
             retrain = False
 
-            # Step 3: 드리프트 시 2순위 실행 ─────────────────────────────
-            if drift:
+            # Step 3: 드리프트 시 2순위 실행 (force_priority 없을 때만) ──
+            if drift and force_priority != "priority_2":
                 log.info(
                     f"[{ticker}/{name}] 드리프트 감지 — "
                     f"MAPE {rolling_mape:.2f}% > threshold {threshold:.2f}%"
@@ -840,6 +880,20 @@ def finance_stock_predict_daily():
                     """),
                     record,
                 )
+
+            # Step 5: retrain_needed 시 재학습 DAG 트리거 ──────────────
+            if retrain:
+                try:
+                    from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+                    TriggerDagRunOperator(
+                        task_id=f"trigger_retrain_{ticker}",
+                        trigger_dag_id="finance_model_retrain",
+                        conf={"ticker": ticker},
+                        wait_for_completion=False,
+                    ).execute(context={})
+                    log.info(f"[{ticker}/{name}] 재학습 DAG 트리거 완료")
+                except Exception as te:
+                    log.error(f"[{ticker}/{name}] 재학습 DAG 트리거 실패: {te}")
 
             log.info(
                 f"[{ticker}/{name}] 완료 — {model_name}({model_source}) "
