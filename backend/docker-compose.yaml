@@ -9,6 +9,7 @@ networks:
 
 services:
   backend:
+    image: ${BACKEND_IMAGE:-whai-backend:latest}
     build:
       context: ..
       dockerfile: backend/Dockerfile.backend

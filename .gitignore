@@ -50,6 +50,8 @@ dist/
 build/
 *.egg
 .eggs/
+.venv-model/
+.venv-model
 
 # pytest
 .pytest_cache/
@@ -196,3 +198,5 @@ coverage/
 
 # 마운트 테스트용 로컬 파일
 .sshfs-test/
+
+model/
