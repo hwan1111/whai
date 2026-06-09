@@ -34,8 +34,18 @@ sudo apt-get install -y \
   python3.12-venv \
   python3-pip \
   nodejs \
-  npm \
-  awscli
+  npm
+
+# AWS CLI 설치 (pipx 또는 pip로 설치)
+echo "2-1. AWS CLI 설치..."
+if ! command -v aws &> /dev/null; then
+  if command -v pipx &> /dev/null; then
+    sudo pipx install awscli
+    sudo pipx ensurepath
+  else
+    sudo pip3 install --break-system-packages awscli
+  fi
+fi
 
 # 3. Docker 권한 설정
 echo "3. Docker 권한 설정..."
