@@ -13,8 +13,10 @@ import sys
 from pathlib import Path
 
 import boto3
+from dotenv import load_dotenv
 
-ROOT       = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(ROOT / ".env.local", override=True)
 MODEL_ROOT = ROOT / "model" / "주가예측모델"
 S3_BUCKET  = "whai-stock-models"
 
