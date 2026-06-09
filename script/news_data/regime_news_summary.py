@@ -51,7 +51,7 @@ END_DATE    = "2026-05-12"
 OUTPUT_PATH = Path(f"data/regime_news_summary_{TICKER_CODE}.json")
 
 S3_BUCKET = "fisa-news-archive"
-S3_PREFIX = "raw"
+S3_PREFIX = "preprocessed"
 
 MAX_NEWS_CHARS  = 1_300
 MAX_NEWS_COUNT  = 20   # 장기 구간 토큰 폭증 방지: 구간 내 최대 기사 수
@@ -330,10 +330,16 @@ def _call_with_retry(provider: str, client, model: str,
 def run(provider: str = "groq", model: str | None = None,
         start: str = START_DATE, end: str = END_DATE,
         dry_run: bool = False,
-        rerun_ids: set[int] | None = None) -> None:
-    rerun_ids = rerun_ids or set()
-    model     = model or DEFAULT_MODEL[provider]
-    sleep_sec = SLEEP_SEC[provider]
+        rerun_ids: set[int] | None = None,
+        ticker_code: str = TICKER_CODE,
+        ticker_name: str = TICKER_NAME,
+        sector: str = SECTOR,
+        s3_ticker: str | None = None) -> None:
+    rerun_ids  = rerun_ids or set()
+    model      = model or DEFAULT_MODEL[provider]
+    sleep_sec  = SLEEP_SEC[provider]
+    s3_ticker  = s3_ticker or ticker_code
+    output_path = Path(f"data/{ticker_code}/regime_news_summary_{ticker_code}.json")
 
     llm_client = None
     if not dry_run:
@@ -345,9 +351,9 @@ def run(provider: str = "groq", model: str | None = None,
             llm_client = groq_lib.Groq(api_key=api_key)
         elif provider == "openrouter":
             from openai import OpenAI
-            api_key = os.getenv("GPT_API_KEY", "")
+            api_key = os.getenv("OPENROUTER_API_KEY", "")
             if not api_key:
-                raise EnvironmentError(".env에 GPT_API_KEY 없음")
+                raise EnvironmentError(".env에 OPENROUTER_API_KEY 없음")
             llm_client = OpenAI(api_key=api_key, base_url=OPENROUTER_BASE_URL)
         else:
             from google import genai
@@ -403,7 +409,7 @@ def run(provider: str = "groq", model: str | None = None,
         vol_trend  = _vol_trend(volume, reg["dates"])
         dir_str    = DIR_STR.get(reg["direction"], reg["direction"])
 
-        news_articles = _fetch_regime_news(s3_client, TICKER_CODE,
+        news_articles = _fetch_regime_news(s3_client, s3_ticker,
                                            reg["start"], reg["end"],
                                            NEWS_PRE, NEWS_POST)
 
@@ -484,14 +490,20 @@ def run(provider: str = "groq", model: str | None = None,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="가격 국면별 뉴스 LLM 요약")
-    parser.add_argument("--provider", choices=["groq", "gemini", "openrouter"], default="groq")
-    parser.add_argument("--model",    default=None)
-    parser.add_argument("--start",    default=START_DATE)
-    parser.add_argument("--end",      default=END_DATE)
-    parser.add_argument("--dry-run",   action="store_true")
-    parser.add_argument("--rerun-ids", nargs="+", type=int, default=[],
+    parser.add_argument("--provider",     choices=["groq", "gemini", "openrouter"], default="groq")
+    parser.add_argument("--model",        default=None)
+    parser.add_argument("--start",        default=START_DATE)
+    parser.add_argument("--end",          default=END_DATE)
+    parser.add_argument("--ticker-code",  default=TICKER_CODE, help="종목 코드 (예: 105560)")
+    parser.add_argument("--ticker-name",  default=TICKER_NAME, help="종목명 (예: KB금융)")
+    parser.add_argument("--sector",       default=SECTOR,       help="섹터 (예: 금융)")
+    parser.add_argument("--s3-ticker",    default=None,          help="S3 폴더 티커명이 DB 티커와 다를 때 (예: usd_krx)")
+    parser.add_argument("--dry-run",      action="store_true")
+    parser.add_argument("--rerun-ids",    nargs="+", type=int, default=[],
                         metavar="ID", help="강제 재처리할 regime_id (예: --rerun-ids 21 22)")
     args = parser.parse_args()
     run(provider=args.provider, model=args.model,
         start=args.start, end=args.end,
-        dry_run=args.dry_run, rerun_ids=set(args.rerun_ids))
+        dry_run=args.dry_run, rerun_ids=set(args.rerun_ids),
+        ticker_code=args.ticker_code, ticker_name=args.ticker_name, sector=args.sector,
+        s3_ticker=args.s3_ticker)

@@ -387,11 +387,13 @@ def date_range(start: date, end: date):
 # 메인 수집 루프
 # ─────────────────────────────────────────────
 
-def collect_all():
+def collect_all(start: date | None = None, end: date | None = None) -> None:
+    start = start or START_DATE
+    end   = end   or END_DATE
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     total_stocks = len(STOCKS)
-    total_days   = (END_DATE - START_DATE).days + 1
-    logger.info(f"수집 시작: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
+    total_days   = (end - start).days + 1
+    logger.info(f"수집 시작: {start} ~ {end} ({total_days}일) × {total_stocks}종목")
     provider_order = " → ".join(name.upper() for name, _ in PROVIDERS)
     logger.info(f"프로바이더 순서: {provider_order}")
 
@@ -402,7 +404,7 @@ def collect_all():
         skipped          = 0
         consecutive_block = 0  # 연속 전체차단일 카운터
 
-        for target_date in date_range(START_DATE, END_DATE):
+        for target_date in date_range(start, end):
             filepath = DATA_DIR / f"{company_name}_{ticker}" / f"{target_date.isoformat()}.json"
 
             # 이미 수집된 날짜 스킵
@@ -460,4 +462,12 @@ def collect_all():
 
 
 if __name__ == "__main__":
-    collect_all()
+    import argparse
+    parser = argparse.ArgumentParser(description="뉴스 수집기")
+    parser.add_argument("--start", default=None, help="수집 시작일 YYYY-MM-DD (기본: 2020-01-01)")
+    parser.add_argument("--end",   default=None, help="수집 종료일 YYYY-MM-DD (기본: 오늘)")
+    args = parser.parse_args()
+    collect_all(
+        start=date.fromisoformat(args.start) if args.start else None,
+        end=date.fromisoformat(args.end)     if args.end   else None,
+    )
