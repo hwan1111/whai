@@ -1498,6 +1498,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        </div>
         {/* END OF right-wrapper */}
 
         {/* Sidebar toggle tab */}
