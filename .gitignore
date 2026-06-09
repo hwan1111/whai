@@ -115,6 +115,7 @@ whai/script/news_data/cache/
 # 대용량 데이터
 data/
 datasets/
+docs/
 *.h5
 *.pkl
 *.pickle

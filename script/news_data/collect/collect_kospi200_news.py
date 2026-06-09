@@ -1,4 +1,4 @@
-"""
+﻿"""
 script/collect_kospi200_news.py
 코스피 200 뉴스 수집기 - 멀티 프로바이더 폴백 지원
 
@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 # ─────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────
-BASE_DIR  = Path(__file__).resolve().parent.parent.parent
+BASE_DIR  = Path(__file__).resolve().parent.parent.parent.parent
 DATA_DIR  = BASE_DIR / "data" / "news"
 LOG_PATH  = BASE_DIR / "data" / "kospi200_news_collect.log"
 

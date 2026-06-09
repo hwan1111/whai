@@ -1,9 +1,10 @@
-"""
-script/news_collector.py
-뉴스 수집기 - 멀티 프로바이더 폴백 지원
+﻿"""
+script/collect_top10_stocks_news.py
+대표 10개 종목 뉴스 수집기 (Requests + Playwright 통합 버전)
 
-수집 순서: 네이버 → 구글 → 다음
-각 프로바이더가 403이면 자동으로 다음 프로바이더로 전환
+수집 순서: 
+- 1단계 (Requests): Naver → Google 고속 크롤링
+- 2단계 (Playwright): 크롤링 실패 및 차단으로 누락된 날짜에 대해 Chrome 브라우저 기반 우회 보완 수집
 """
 
 import re
@@ -15,13 +16,14 @@ import requests
 from datetime import date, timedelta
 from pathlib import Path
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 # ─────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────
-BASE_DIR  = Path(__file__).resolve().parent.parent.parent
+BASE_DIR  = Path(__file__).resolve().parent.parent.parent.parent
 DATA_DIR  = BASE_DIR / "data" / "news"
-LOG_PATH  = BASE_DIR / "data" / "news_collect.log"
+LOG_PATH  = BASE_DIR / "data" / "collect_top10_stocks.log"
 
 START_DATE = date(2020, 1, 1)
 END_DATE   = date.today()
@@ -30,6 +32,10 @@ REQUEST_DELAY_MIN     = 2.0
 REQUEST_DELAY_MAX     = 4.0
 CONSECUTIVE_403_LIMIT = 5      # 프로바이더당 연속 403 허용 횟수
 COOLDOWN_SECONDS      = 600    # 전체 프로바이더 차단 시 대기(10분)
+
+# Playwright 보완 수집 설정
+PW_DELAY_MIN = 2.5
+PW_DELAY_MAX = 5.0
 
 # ─────────────────────────────────────────────
 # User-Agent 풀 (랜덤 선택으로 봇 감지 회피)
@@ -51,7 +57,6 @@ def _get_headers(referer: str = "https://www.naver.com/") -> dict:
 
 # ─────────────────────────────────────────────
 # 수집 대상 종목 (10개)
-# 반도체 / 자동차 / 방산 / 금융 / 화학
 # ─────────────────────────────────────────────
 STOCKS = [
     # 반도체
@@ -72,28 +77,22 @@ STOCKS = [
 ]
 
 # ─────────────────────────────────────────────
-# 사명 변경 이력 (날짜 이전엔 구 이름으로 검색)
+# 사명 변경 이력
 # ─────────────────────────────────────────────
 NAME_ALIASES: dict[str, list[tuple]] = {
-    # LIG넥스원 → LIG디펜스앤에어로스페이스 (2026-03-31 사명 변경)
     "LIG디펜스앤에어로스페이스": [
         (date(2026, 3, 31), "LIG넥스원"),
     ],
 }
 
 def get_search_names(company_name: str, target_date: date) -> list[str]:
-    """사명 변경 이력을 반영한 검색어 목록 반환 (우선순위 순)
-    - 1순위: 해당 날짜의 구 사명
-    - 마지막: 현재 사명 (폴백)
-    """
     names = []
     for change_date, old_name in NAME_ALIASES.get(company_name, []):
         if target_date < change_date:
             names.append(old_name)
     if company_name not in names:
-        names.append(company_name)  # 현재 사명을 항상 마지막에 폴백으로 추가
+        names.append(company_name)
     return names
-
 
 # ─────────────────────────────────────────────
 # 로깅
@@ -110,17 +109,10 @@ logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────
-# 검색 프로바이더
+# 1단계 (Requests 방식) 검색 함수들
 # ─────────────────────────────────────────────
 
 def search_naver(company_name: str, target_date: date) -> dict | str | None:
-    """
-    네이버 뉴스 검색 페이지 크롤링
-    - 사명 변경 이력을 반영하여 구 사명부터 시도
-    - BLOCKED 시 즉시 반환 (다른 이름으로도 IP 차단은 해결안 됨)
-    - 결과없음(None) 시만 다음 사명으로 폴백
-    반환: dict(기사정보) | "BLOCKED"(403) | None(결과없음)
-    """
     search_names = get_search_names(company_name, target_date)
     date_str = target_date.strftime("%Y%m%d")
 
@@ -138,21 +130,19 @@ def search_naver(company_name: str, target_date: date) -> dict | str | None:
             if result is not None:
                 if search_name != company_name:
                     logger.info(f"  [{search_name}] 이름으로 수집")
-                return result  # 결과 있으면 바로 반환
-            # 결과없으면 다음 사명으로 시도
+                return result
             logger.info(f"  [{search_name}] 결과없음 → 다음 이름 시도")
         except requests.exceptions.HTTPError as e:
             if e.response is not None and e.response.status_code == 403:
                 logger.warning(f"[NAVER 403] {company_name} {target_date}")
-                return "BLOCKED"  # IP 차단 → 이름 바꿔도 소용없음
+                return "BLOCKED"
             logger.warning(f"[NAVER ERR] {company_name} {target_date}: {e}")
             return None
         except Exception as e:
             logger.warning(f"[NAVER ERR] {company_name} {target_date}: {e}")
             return None
 
-    return None  # 모든 이름 시도했는데 결과 없음
-
+    return None
 
 def _parse_naver_result(html: str, target_date: date) -> dict | None:
     soup = BeautifulSoup(html, "html.parser")
@@ -172,12 +162,7 @@ def _parse_naver_result(html: str, target_date: date) -> dict | None:
             container = container.parent
     return None
 
-
 def search_daum(company_name: str, target_date: date) -> dict | str | None:
-    """
-    다음 뉴스 검색 페이지 크롤링
-    반환: dict | "BLOCKED" | None
-    """
     date_str = target_date.strftime("%Y%m%d")
     query    = f"{company_name} 주가"
     url = (
@@ -199,10 +184,8 @@ def search_daum(company_name: str, target_date: date) -> dict | str | None:
         logger.warning(f"[DAUM ERR] {company_name} {target_date}: {e}")
         return None
 
-
 def _parse_daum_result(html: str, target_date: date) -> dict | None:
     soup = BeautifulSoup(html, "html.parser")
-    # 다음 뉴스 검색 결과 구조
     for sel in ["a.tit-g", "a.fn-tit", ".item-title a", ".news-item a", "a[href*='news']"]:
         tags = soup.select(sel)
         for a in tags:
@@ -212,12 +195,7 @@ def _parse_daum_result(html: str, target_date: date) -> dict | None:
                 return {"title": title, "link": href, "pub_date": target_date.isoformat(), "source": "daum"}
     return None
 
-
 def search_google(company_name: str, target_date: date) -> dict | str | None:
-    """
-    구글 뉴스 검색 크롤링
-    반환: dict | "BLOCKED" | None
-    """
     d = target_date
     query    = f"{company_name} 주가"
     date_min = f"{d.month}/{d.day}/{d.year}"
@@ -241,73 +219,49 @@ def search_google(company_name: str, target_date: date) -> dict | str | None:
         logger.warning(f"[GOOGLE ERR] {company_name} {target_date}: {e}")
         return None
 
-
 def _parse_google_result(html: str, target_date: date) -> dict | None:
     soup = BeautifulSoup(html, "html.parser")
-    # 구글 뉴스 결과 구조
     for sel in ["div.SoaBEf a", "a.WlydOe", "div.dbsr a", "h3 > a", "a[data-ved]"]:
         for a in soup.select(sel):
             href  = a.get("href", "")
             title = a.get_text(strip=True)
-            # 구글 리다이렉트 URL 정리
             if href.startswith("/url?q="):
                 href = href.split("/url?q=")[1].split("&")[0]
             if href and title and len(title) > 5 and href.startswith("http"):
                 return {"title": title, "link": href, "pub_date": target_date.isoformat(), "source": "google"}
     return None
 
-
 # ─────────────────────────────────────────────
-# 폴백 검색 (Naver → Daum → Google)
+# Requests 폴백 및 본문 파서
 # ─────────────────────────────────────────────
-
 PROVIDERS = [
     ("naver",  search_naver),
-    ("google", search_google),  # 네이버 차단 시 폴백
+    ("google", search_google),
 ]
 
 def search_with_fallback(company_name: str, target_date: date) -> dict | str | None:
-    """
-    프로바이더 순서대로 시도.
-    - BLOCKED(403): 다음 프로바이더로 전환
-    - None(결과없음): 해당 날짜 기사 없음으로 처리 → 폴백 안 함
-    - dict: 성공
-    - "ALL_BLOCKED": 모든 프로바이더가 차단됨 → 쿨다운 카운트
-    """
-    all_blocked = True  # 모든 프로바이더가 BLOCKED인지 추적
-
+    all_blocked = True
     for provider_name, provider_fn in PROVIDERS:
         result = provider_fn(company_name, target_date)
-
         if result == "BLOCKED":
             logger.info(f"  [{provider_name.upper()} 차단] → 다음 프로바이더 시도...")
             time.sleep(random.uniform(2.0, 3.0))
             continue
-
-        # None(결과없음) 또는 dict(성공) → 차단이 아님
         all_blocked = False
         return result
 
     if all_blocked:
-        return "ALL_BLOCKED"  # 네이버 + 구글 모두 차단
-    return None  # 전체 프로바이더 차단 시
+        return "ALL_BLOCKED"
+    return None
 
-
-
-# ─────────────────────────────────────────────
-# 전문 크롤링
-# ─────────────────────────────────────────────
-
-def fetch_fulltext(link: str) -> str | None:
-    """URL에 따라 네이버 뉴스 파서 또는 범용 파서 사용"""
+def fetch_fulltext_requests(link: str) -> str | None:
     if not link:
         return None
     if "n.news.naver.com" in link:
-        return _fetch_naver_fulltext(link)
-    return _fetch_generic_fulltext(link)
+        return _fetch_naver_fulltext_requests(link)
+    return _fetch_generic_fulltext_requests(link)
 
-
-def _fetch_naver_fulltext(url: str) -> str | None:
+def _fetch_naver_fulltext_requests(url: str) -> str | None:
     try:
         resp = requests.get(url, headers=_get_headers("https://news.naver.com/"), timeout=10)
         resp.raise_for_status()
@@ -321,17 +275,13 @@ def _fetch_naver_fulltext(url: str) -> str | None:
         logger.warning(f"[전문 실패-naver] {url}: {e}")
         return None
 
-
-def _fetch_generic_fulltext(url: str) -> str | None:
-    """네이버 외 일반 언론사 기사 전문 크롤링"""
+def _fetch_generic_fulltext_requests(url: str) -> str | None:
     try:
         resp = requests.get(url, headers=_get_headers(url), timeout=10)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-        # 불필요한 태그 제거
         for tag in soup(["script", "style", "nav", "header", "footer", "aside", "iframe"]):
             tag.decompose()
-        # 본문 선택자 순서대로 시도
         for sel in [
             "article",
             "[class*='article-body']", "[class*='article_body']",
@@ -342,23 +292,20 @@ def _fetch_generic_fulltext(url: str) -> str | None:
             tag = soup.select_one(sel)
             if tag:
                 text = _clean_text(tag.get_text(separator="\n"))
-                if len(text) > 200:  # 너무 짧으면 본문 아닐 가능성
+                if len(text) > 200:
                     return text
         return None
     except Exception as e:
         logger.warning(f"[전문 실패-generic] {url}: {e}")
         return None
 
-
 def _clean_text(text: str) -> str:
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     return "\n".join(lines)
 
-
 # ─────────────────────────────────────────────
-# 저장
+# 공통 저장 및 유틸
 # ─────────────────────────────────────────────
-
 def save_article(company_name: str, ticker: str, article: dict, fulltext: str | None) -> Path:
     folder = DATA_DIR / f"{company_name}_{ticker}"
     folder.mkdir(parents=True, exist_ok=True)
@@ -370,11 +317,11 @@ def save_article(company_name: str, ticker: str, article: dict, fulltext: str | 
         "title":        article["title"],
         "fulltext":     fulltext,
         "link":         article["link"],
+        "source":       article.get("source", "naver"),
     }
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=2)
     return filepath
-
 
 def date_range(start: date, end: date):
     current = start
@@ -382,48 +329,39 @@ def date_range(start: date, end: date):
         yield current
         current += timedelta(days=1)
 
-
 # ─────────────────────────────────────────────
-# 메인 수집 루프
+# 1단계 고속 수집 루프 (Requests)
 # ─────────────────────────────────────────────
-
-def collect_all():
+def collect_all_requests():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     total_stocks = len(STOCKS)
     total_days   = (END_DATE - START_DATE).days + 1
-    logger.info(f"수집 시작: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
+    logger.info(f"Requests 고속 수집 시작: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
     provider_order = " → ".join(name.upper() for name, _ in PROVIDERS)
     logger.info(f"프로바이더 순서: {provider_order}")
 
     for stock_idx, (company_name, ticker) in enumerate(STOCKS, 1):
         logger.info(f"[{stock_idx}/{total_stocks}] {company_name} ({ticker})")
-
         collected        = 0
         skipped          = 0
-        consecutive_block = 0  # 연속 전체차단일 카운터
+        consecutive_block = 0
 
         for target_date in date_range(START_DATE, END_DATE):
             filepath = DATA_DIR / f"{company_name}_{ticker}" / f"{target_date.isoformat()}.json"
 
-            # 이미 수집된 날짜 스킵
             if filepath.exists():
                 skipped += 1
                 consecutive_block = 0
                 continue
 
-            # 폴백 검색
             article = search_with_fallback(company_name, target_date)
 
             if article == "ALL_BLOCKED":
-                # 네이버 + 구글 둘 다 차단
                 skipped += 1
                 consecutive_block += 1
                 logger.warning(f"  ⛔ 전체차단 [{consecutive_block}일째] {target_date}")
                 if consecutive_block >= CONSECUTIVE_403_LIMIT:
-                    logger.warning(
-                        f"  ⛔ {consecutive_block}일 연속 전체차단 → "
-                        f"{COOLDOWN_SECONDS//60}분 쿨다운 시작"
-                    )
+                    logger.warning(f"  ⛔ {consecutive_block}일 연속 전체차단 → {COOLDOWN_SECONDS//60}분 쿨다운 시작")
                     time.sleep(COOLDOWN_SECONDS)
                     consecutive_block = 0
                 else:
@@ -431,33 +369,290 @@ def collect_all():
                 continue
 
             if not article:
-                # 결과 없음 (차단이 아님)
                 skipped += 1
                 consecutive_block = 0
                 time.sleep(random.uniform(0.5, 1.0))
                 continue
 
             consecutive_block = 0
-
-            # 전문 크롤링
-            fulltext = fetch_fulltext(article["link"])
-
-            # 저장
+            fulltext = fetch_fulltext_requests(article["link"])
             save_article(company_name, ticker, article, fulltext)
             collected += 1
 
             src_tag = f"[{article.get('source', '?').upper()}]"
-            logger.info(
-                f"  저장 {src_tag}: {target_date} | {article['title'][:40]}..."
-                + (" [전문X]" if not fulltext else "")
-            )
-
+            logger.info(f"  저장 {src_tag}: {target_date} | {article['title'][:40]}..." + (" [전문X]" if not fulltext else ""))
             time.sleep(random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX))
 
-        logger.info(f"  → {company_name} 완료: 수집 {collected}건 / 스킵 {skipped}건")
+        logger.info(f"  → {company_name} Requests 완료: 수집 {collected}건 / 스킵 {skipped}건")
 
-    logger.info("전체 수집 완료!")
+    logger.info("Requests 고속 수집 단계 완료!\n")
 
+
+# ─────────────────────────────────────────────
+# 2단계 보완 수집 루프 (Playwright)
+# ─────────────────────────────────────────────
+
+def find_missing(company_name: str, ticker: str) -> list:
+    folder = DATA_DIR / f"{company_name}_{ticker}"
+    # 비어 있거나 아예 파일이 존재하지 않는 날짜 찾기
+    missing_dates = []
+    for d in date_range(START_DATE, END_DATE):
+        fp = folder / f"{d.isoformat()}.json"
+        if not fp.exists():
+            missing_dates.append(d)
+        else:
+            # 빈 파일 체크 (수집 결과가 없어서 빈 json으로 생성된 것 제외하고 진짜 데이터가 날아갔거나 본문 수집에 완전히 실패한 경우 재수집하고 싶다면 체크)
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    content = json.load(f)
+                # 타이틀이 비어있는 빈 기사 저장형식이 아니라, 크래시 등으로 빈 데이터가 생겼다면 채우기
+                if not content.get("title") and content.get("link"):
+                    missing_dates.append(d)
+            except Exception:
+                missing_dates.append(d)
+    return missing_dates
+
+def search_naver_playwright(page, company_name: str, target_date: date) -> dict | None:
+    from urllib.parse import quote, urlparse
+    search_names = get_search_names(company_name, target_date)
+    date_str = target_date.strftime("%Y%m%d")
+    SKIP_DOMAINS = {"naver.com", "nid.naver.com", "help.naver.com"}
+
+    def is_article_url(href: str) -> bool:
+        try:
+            p = urlparse(href)
+            path  = p.path.rstrip("/")
+            if not path or len(path) < 3:
+                return False
+            if any(c in path for c in [".", "=", "-", "_"]):
+                return True
+            if p.query:
+                return True
+            return len(path) > 4
+        except Exception:
+            return False
+
+    for suffix in [" 주가", ""]:
+        for search_name in search_names:
+            query = f"{search_name}{suffix}"
+            url = (
+                f"https://search.naver.com/search.naver"
+                f"?where=news&query={quote(query)}"
+                f"&nso=so:sim,p:from{date_str}to{date_str}&start=1"
+            )
+
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=15_000)
+                try:
+                    page.wait_for_selector("._fe_news_collection a, .list_news a", timeout=5_000)
+                except PWTimeout:
+                    pass
+            except PWTimeout:
+                logger.warning(f"  타임아웃: {company_name} {target_date} [{query}]")
+                continue
+            except Exception as e:
+                err_msg = str(e).lower()
+                logger.warning(f"  페이지 로드 오류 [{company_name} {target_date}]: {e}")
+                if "crash" in err_msg or "closed" in err_msg or "disconnected" in err_msg:
+                    raise
+                continue
+
+            try:
+                candidates = page.query_selector_all("._fe_news_collection a, .list_news a, .group_news a")
+                for el in candidates:
+                    href  = el.get_attribute("href") or ""
+                    title = (el.inner_text() or "").strip()
+                    if (
+                        href.startswith("http")
+                        and len(title) >= 10
+                        and not any(d in href for d in SKIP_DOMAINS)
+                        and not title.startswith("구독")
+                        and is_article_url(href)
+                    ):
+                        if suffix == "":
+                            logger.info(f"  [{search_name}] 기업명 단독 쿼리로 수집")
+                        elif search_name != company_name:
+                            logger.info(f"  [{search_name}] 과거 사명 쿼리로 수집")
+                        return {
+                            "title":    title,
+                            "link":     href,
+                            "pub_date": target_date.isoformat(),
+                            "source":   "naver",
+                        }
+            except Exception as e:
+                logger.warning(f"  셀렉터 오류 [{company_name} {target_date}]: {e}")
+
+    logger.info(f"  [{company_name}] {target_date} 결과없음 (모든 조합 시도)")
+    return None
+
+def fetch_fulltext_playwright(page, link: str) -> str | None:
+    if not link or not link.startswith("http"):
+        return None
+    try:
+        page.goto(link, wait_until="domcontentloaded", timeout=15_000)
+        page.wait_for_timeout(2_500)
+        html = page.content()
+    except Exception as e:
+        logger.warning(f"  전문 로드 오류 [{link}]: {e}")
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # 1순위: 네이버/언론사 공통 본문 셀렉터
+    for sel in ["#dic_area", "#articeBody", ".newsct_article",
+                "article", ".article_body", ".article-body",
+                ".news_body", ".view_con", "#news_body_area",
+                ".article_txt", ".news_content", ".cont_article"]:
+        el = soup.select_one(sel)
+        if el:
+            lines = [l.strip() for l in el.get_text().splitlines() if l.strip()]
+            text = "\n".join(lines)
+            if len(text) > 100:
+                return text
+
+    # 2순위: p 태그 폴백 (BeautifulSoup)
+    for tag in soup.find_all(["nav", "header", "footer", "aside", "script", "style"]):
+        tag.decompose()
+    paras = [p.get_text().strip() for p in soup.find_all("p")]
+    meaningful = [p for p in paras if len(p) >= 30]
+    if meaningful:
+        return "\n".join(meaningful)
+
+    # 3순위: JS 렌더링 사이트 폴백
+    try:
+        js_text = page.evaluate("""
+        () => {
+            const SKIP = ['script','style','nav','header','footer','aside'];
+            let best = { el: null, len: 0 };
+            document.querySelectorAll('div, section, main, article').forEach(el => {
+                if (SKIP.some(t => el.tagName.toLowerCase() === t)) return;
+                const text = (el.innerText || '').trim();
+                if (text.length > best.len && el.children.length < 20) {
+                    best = { el, len: text.length };
+                }
+            });
+            return best.el ? best.el.innerText.trim() : '';
+        }
+        """)
+        if js_text and len(js_text) > 100:
+            lines = [l.strip() for l in js_text.splitlines() if l.strip()]
+            return "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"  JS 본문 추출 오류: {e}")
+
+    return None
+
+def fill_gaps_playwright():
+    logger.info("Playwright 빈 날짜 보완 수집을 시작합니다...")
+    # 빈 날짜 집계
+    gap_map = {}
+    total_missing = 0
+    for company_name, ticker in STOCKS:
+        missing = find_missing(company_name, ticker)
+        gap_map[(company_name, ticker)] = missing
+        total_missing += len(missing)
+        logger.info(f"  {company_name}: 빈 날짜 {len(missing)}개")
+
+    logger.info(f"총 보완 대상: {total_missing}개 날짜")
+    if total_missing == 0:
+        logger.info("빈 날짜가 없습니다. 보완 단계를 스킵합니다.")
+        return
+
+    with sync_playwright() as pw:
+        def init_browser():
+            browser = pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+            )
+            ctx = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720},
+                locale="ko-KR",
+            )
+            page = ctx.new_page()
+            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            return browser, page
+
+        browser, page = init_browser()
+        total_stocks = len(STOCKS)
+        global_collected = 0
+
+        try:
+            for idx, (company_name, ticker) in enumerate(STOCKS, 1):
+                missing_dates = gap_map[(company_name, ticker)]
+                if not missing_dates:
+                    continue
+
+                logger.info(f"[{idx}/{total_stocks}] {company_name} ({ticker}) - {len(missing_dates)}개 보완 시작")
+                collected = 0
+
+                for target_date in missing_dates:
+                    if global_collected > 0 and global_collected % 30 == 0:
+                        logger.info("  [System] 브라우저 메모리 세척을 위한 재시작...")
+                        browser.close()
+                        browser, page = init_browser()
+
+                    fp = DATA_DIR / f"{company_name}_{ticker}" / f"{target_date.isoformat()}.json"
+                    if fp.exists():
+                        # 파일이 있는데 내용이 없는 경우를 제외하고 정상 파일 존재 시 스킵
+                        try:
+                            with open(fp, "r", encoding="utf-8") as f:
+                                content = json.load(f)
+                            if content.get("title"):
+                                continue
+                        except Exception:
+                            pass
+
+                    try:
+                        article = search_naver_playwright(page, company_name, target_date)
+                        if not article:
+                            logger.info(f"  기사 없음 (빈 파일 생성하여 향후 스킵): {target_date}")
+                            empty_article = {
+                                "title": "",
+                                "link": "",
+                                "pub_date": target_date.isoformat(),
+                                "source": "naver"
+                            }
+                            save_article(company_name, ticker, empty_article, "")
+                            time.sleep(random.uniform(1.0, 2.0))
+                            continue
+
+                        fulltext = fetch_fulltext_playwright(page, article["link"])
+                        save_article(company_name, ticker, article, fulltext)
+                        collected += 1
+                        global_collected += 1
+                        logger.info(f"  저장: {target_date} | {article['title'][:45]}..." + (" [전문X]" if not fulltext else ""))
+                        time.sleep(random.uniform(PW_DELAY_MIN, PW_DELAY_MAX))
+
+                    except Exception as e:
+                        if "crash" in str(e).lower() or "closed" in str(e).lower():
+                            logger.warning(f"  [Error] 브라우저 충돌 감지 ({e}). 재시작 중...")
+                            try: browser.close()
+                            except: pass
+                            browser, page = init_browser()
+                        else:
+                            logger.error(f"  [Error] 알 수 없는 오류: {e}")
+
+                logger.info(f"  → {company_name} 보완 완료: {collected}개")
+        finally:
+            browser.close()
+            logger.info("=== Playwright 보완 수집 단계 완료 ===")
+
+# ─────────────────────────────────────────────
+# 메인 통합 제어
+# ─────────────────────────────────────────────
+def main():
+    logger.info("=========================================")
+    logger.info("대표 10개 종목 뉴스 수집 및 보완 실행")
+    logger.info("=========================================")
+    
+    # 1단계: Requests 기반 고속 수집
+    collect_all_requests()
+    
+    # 2단계: Playwright 기반 누락 날짜 보완 수집
+    fill_gaps_playwright()
+    
+    logger.info("모든 뉴스 수집 및 보완 단계가 완료되었습니다.")
 
 if __name__ == "__main__":
-    collect_all()
+    main()
