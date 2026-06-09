@@ -20,6 +20,10 @@ echo "1. 시스템 패키지 업데이트..."
 sudo apt-get update
 sudo apt-get upgrade -y
 
+# 현재 사용자 감지
+CURRENT_USER=$(whoami)
+echo "현재 사용자: $CURRENT_USER"
+
 # 2. 필수 도구 설치
 echo "2. 필수 도구 설치..."
 sudo apt-get install -y \
@@ -49,14 +53,14 @@ fi
 
 # 3. Docker 권한 설정
 echo "3. Docker 권한 설정..."
-sudo usermod -aG docker ubuntu
+sudo usermod -aG docker "$CURRENT_USER"
 sudo usermod -aG docker root
 
 # 4. GitHub Actions Runner 디렉토리 생성
 echo "4. GitHub Actions Runner 디렉토리 생성..."
 RUNNER_DIR="/opt/github-actions-runner"
 sudo mkdir -p "$RUNNER_DIR"
-sudo chown -R ubuntu:ubuntu "$RUNNER_DIR"
+sudo chown -R "$CURRENT_USER:$CURRENT_USER" "$RUNNER_DIR"
 cd "$RUNNER_DIR"
 
 # 5. Runner 다운로드
@@ -94,7 +98,7 @@ echo ""
 
 # 8. systemd 서비스 등록
 echo "8. systemd 서비스로 등록..."
-sudo ./svc.sh install ubuntu
+sudo ./svc.sh install "$CURRENT_USER"
 
 # 9. 서비스 시작
 echo "9. 서비스 시작..."
