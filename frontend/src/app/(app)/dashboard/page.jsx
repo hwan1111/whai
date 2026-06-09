@@ -213,7 +213,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13 }}>
           <span style={{ color: '#94a3b8' }}>기간 변동률</span>
           <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#dc2626' : '#2563eb' }}>
-            {tooltip.periodVal >= 0 ? '+' : ''}{tooltip.periodVal.toFixed(2)}%
+            {tooltip.periodVal >= 0 ? '+' : ''}{Number(tooltip.periodVal).toFixed(2)}%
           </span>
         </div>
       </div>
@@ -708,7 +708,7 @@ export default function DashboardPage() {
     return (
       <div className={`tk-card${inChart ? ' in-chart' : ''}`} onClick={() => toggleAsset(id)} title={name}>
         <div className="tk-card-head">
-          <div className="tk-card-logo" style={{ width: 24, height: 24 }}>
+          <div className="tk-card-logo">
             <img src={LOGO(id)} alt={name} />
           </div>
           <div className="tk-card-name">{name}</div>
@@ -749,7 +749,7 @@ export default function DashboardPage() {
     return (
       <div className={`fx-card${inChart ? ' in-chart' : ''}`} onClick={() => toggleAsset(id)}>
         <div className="fx-card-head">
-          <img src={info.flag} alt={currency} className="fx-card-flag" style={{ width: 24, height: 16 }} />
+          <img src={info.flag} alt={currency} className="fx-card-flag" />
           <span className="fx-card-code">{currency}</span>
           <div className="tk-card-acts">
             <button
@@ -900,7 +900,7 @@ export default function DashboardPage() {
         <div className="left-wrapper">
           <div className="chart-controls">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginRight: 4 }}>기간</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginRight: 4 }}>기간</div>
               <div className="period-sel">
                 {PERIODS.map(p => (
                   <button
@@ -913,8 +913,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 10 }}>(최대 3개)</span></span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
                 {[...favs].filter(id => ASSETS[id]).map(id => {
                   const isSelected = id === selectedStockId;
@@ -969,7 +969,7 @@ export default function DashboardPage() {
                           onMouseLeave={() => setHoveredAsset(null)}>
                           <div className="leg-dot" style={{ background: ASSETS[id].color }} />
                           <span className="leg-name">{ASSETS[id].label}</span>
-                          <span className="leg-val" style={{ color: col }}>{sign}{last.toFixed(1)}%</span>
+                          <span className="leg-val" style={{ color: col }}>{sign}{Number(last).toFixed(1)}%</span>
                         </div>
                       );
                     })}
@@ -1019,8 +1019,8 @@ export default function DashboardPage() {
                   <div className="grid g11" style={{ gap: 5 }}>
                     {[
                       { label: '현재 환율', value: fxPrice ? `${Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—' },
-                      { label: '전일 대비', value: fxChgAmt != null ? `${fxChgAmt >= 0 ? '+' : ''}${fxChgAmt.toFixed(2)}` : '—', color: fxChgAmt != null ? fxChgColor : undefined },
-                      { label: '변동률', value: fxChgPct != null ? `${fxChgPct >= 0 ? '+' : ''}${fxChgPct.toFixed(2)}%` : '—', color: fxChgPct != null ? fxChgColor : undefined },
+                      { label: '전일 대비', value: fxChgAmt != null ? `${fxChgAmt >= 0 ? '+' : ''}${Number(fxChgAmt).toFixed(2)}` : '—', color: fxChgAmt != null ? fxChgColor : undefined },
+                      { label: '변동률', value: fxChgPct != null ? `${fxChgPct >= 0 ? '+' : ''}${Number(fxChgPct).toFixed(2)}%` : '—', color: fxChgPct != null ? fxChgColor : undefined },
                       { label: '기준통화', value: 'KRW (원화)' },
                       { label: '대상통화', value: currency },
                       { label: '통화권', value: fxInfo.desc },
@@ -1175,63 +1175,6 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* RIGHT WRAPPER: News + Matrix */}
-        <div className="right-wrapper">
-
-        {/* NEWS column - moved to top */}
-        <div className="news-col">
-          <div className="news-preview-card" style={{ flex: 1, overflow: 'hidden' }}>
-            <div className="news-preview-header">
-              <div className="news-preview-title">
-                <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-                관련 뉴스
-              </div>
-              <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
-            </div>
-            <div className="news-preview-body">
-              {favDetailLoading ? (
-                [0, 1, 2].map(i => (
-                  <div key={i} className="news-preview-item">
-                    <div className="news-meta" style={{ gap: 6 }}>
-                      <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
-                      <span className="skeleton" style={{ width: 56, height: 12 }} />
-                    </div>
-                    <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
-                  </div>
-                ))
-              ) : !favDetail || favDetail.news.length === 0 ? (
-                <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
-                  {selectedStockId && STOCK_CONFIG[selectedStockId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
-                </div>
-              ) : favNewsExpanded !== null ? (
-                (() => { const n = favDetail.news[favNewsExpanded]; return (
-                  <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
-                    <div className="news-meta">
-                      <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                      <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
-                    </div>
-                    <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
-                    {n.vol_insight && (
-                      <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
-                      </div>
-                    )}
-                  </div>
-                ); })()
-              ) : favDetail.news.map((n, i) => (
-                <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
-                  <div className="news-meta">
-                    <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                    <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
-                  </div>
-                  <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* MATRIX column - moved to bottom */}
         <div className="matrix-col" ref={matrixColRef}>
           {showComplex ? (() => {
             const allPairs = [];
@@ -1329,7 +1272,7 @@ export default function DashboardPage() {
                         onClick={showFull ? undefined : () => setExpandedPairKey(isExpanded ? null : pairKey)}
                         style={{ cursor: showFull ? 'default' : 'pointer' }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: showFull ? 4 : 3 }}>
-                          <span style={{ fontSize: showFull ? 12 : 11, color: '#312e81', fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortLabel(a)} · {shortLabel(b)}</span>
+                          <span style={{ fontSize: showFull ? 12 : 11, color: '#312e81', fontWeight: 800, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortLabel(a)} · {shortLabel(b)}</span>
                           <span style={{ fontSize: showFull ? 12 : 11, fontWeight: 800, color: textCol, flexShrink: 0 }}>{isPos ? '▲' : '▼'} {v.toFixed(2)}</span>
                         </div>
                         <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: showFull ? 4 : 3 }}>
@@ -1444,8 +1387,57 @@ export default function DashboardPage() {
           )}
         </div>
 
+        <div className="news-col">
+          <div className="news-preview-card" style={{ flex: 1, overflow: 'hidden' }}>
+            <div className="news-preview-header">
+              <div className="news-preview-title">
+                <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+                관련 뉴스
+              </div>
+              <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
+            </div>
+            <div className="news-preview-body">
+              {favDetailLoading ? (
+                [0, 1, 2].map(i => (
+                  <div key={i} className="news-preview-item">
+                    <div className="news-meta" style={{ gap: 6 }}>
+                      <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
+                      <span className="skeleton" style={{ width: 56, height: 12 }} />
+                    </div>
+                    <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
+                  </div>
+                ))
+              ) : !favDetail || favDetail.news.length === 0 ? (
+                <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
+                  {selectedStockId && STOCK_CONFIG[selectedStockId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
+                </div>
+              ) : favNewsExpanded !== null ? (
+                (() => { const n = favDetail.news[favNewsExpanded]; return (
+                  <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
+                    <div className="news-meta">
+                      <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                      <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                    </div>
+                    <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
+                    {n.vol_insight && (
+                      <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
+                      </div>
+                    )}
+                  </div>
+                ); })()
+              ) : favDetail.news.map((n, i) => (
+                <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
+                  <div className="news-meta">
+                    <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                    <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                  </div>
+                  <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-        {/* END OF right-wrapper */}
 
         {/* Sidebar toggle tab */}
         <button
@@ -1459,7 +1451,7 @@ export default function DashboardPage() {
 
         {/* RIGHT panel */}
         <div className={`right-panel${rightOpen ? '' : ' right-panel-closed'}`} style={{ width: panelWidth }}>
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1, justifyContent: 'space-between' }}>
             <div>
               <div className="panel-section-label">KOSPI 지수</div>
               <div
@@ -1509,7 +1501,7 @@ export default function DashboardPage() {
             </div>
 
             <div>
-              <div className="panel-section-label">주요국 환율</div>
+              <div className="panel-section-label">환율</div>
               <div className="fx-grid">
                 {Object.keys(FX_INFO).map(id => <FxCard key={id} id={id} />)}
               </div>

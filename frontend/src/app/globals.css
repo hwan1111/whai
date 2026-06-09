@@ -31,7 +31,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
   background: var(--bg);
   color: var(--text);
-  font-size: 16px;
+  font-size: 14px;
 }
 html, body { height: 100%; overflow: hidden; }
 
@@ -46,7 +46,7 @@ html, body { height: 100%; overflow: hidden; }
 .header-logo-text span { color: #2563eb; }
 .header-logo-sub { font-size: 9px; color: #94a3b8; }
 .header-nav { display: flex; align-items: center; gap: 2px; }
-.header-nav-tab { padding: 6px 14px; font-size: 15px; font-weight: 500; color: #64748b; border-radius: 8px; text-decoration: none; transition: background 0.13s, color 0.13s; }
+.header-nav-tab { padding: 6px 14px; font-size: 13px; font-weight: 500; color: #64748b; border-radius: 8px; text-decoration: none; transition: background 0.13s, color 0.13s; }
 .header-nav-tab:hover { background: #f1f5f9; color: #1e293b; }
 .header-nav-tab.active { background: #eff6ff; color: #2563eb; font-weight: 600; }
 .header-report-btn { display: flex; align-items: center; gap: 5px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: #475569; border: 1px solid #e2e8f0; border-radius: 8px; text-decoration: none; transition: background 0.13s, color 0.13s, border-color 0.13s; white-space: nowrap; }
@@ -155,8 +155,8 @@ html, body { height: 100%; overflow: hidden; }
 .rbtn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
 .metric-box { background: #f8fafc; border-radius: 7px; padding: 5px 8px; }
-.metric-label { font-size: 10px; color: var(--text-secondary); }
-.metric-value { font-size: 14px; font-weight: 700; margin-top: 1px; }
+.metric-label { font-size: 9px; color: var(--text-secondary); }
+.metric-value { font-size: 12px; font-weight: 700; margin-top: 1px; }
 
 .factor-row { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
 .factor-label { font-size: 11px; color: var(--text-secondary); width: 108px; flex-shrink: 0; }
@@ -182,12 +182,11 @@ html, body { height: 100%; overflow: hidden; }
    ============================================================ */
 .dash-layout { display: flex; gap: 14px; position: relative; flex: 1; min-height: 0; height: 100%; }
 
-.left-wrapper { flex: 2 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; min-height: 0; height: calc(100vh - 88px); overflow: hidden; }
-.right-wrapper { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; min-height: 0; height: calc(100vh - 88px); overflow: hidden; }
+.left-wrapper { flex: 3 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; min-height: 0; height: calc(100vh - 88px); overflow: hidden; }
 .chart-panel { flex: 2 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow: hidden; }
 .chart-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 8px; }
 .period-sel { display: flex; gap: 3px; }
-.per-btn { padding: 6px 13px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text-secondary); transition: all 0.15s; font-family: inherit; }
+.per-btn { padding: 5px 11px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text-secondary); transition: all 0.15s; font-family: inherit; }
 .per-btn:hover { border-color: #93c5fd; color: var(--primary); }
 .per-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
@@ -242,7 +241,7 @@ html, body { height: 100%; overflow: hidden; }
 .chart-svg-wrap { flex: 1; position: relative; min-height: 0; max-height: 320px; }
 .chart-empty { display: flex; position: absolute; inset: 0; z-index: 10; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: white; border-radius: 12px; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
-.leg-item { display: flex; align-items: center; gap: 5px; font-size: 14px; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
 .leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .leg-name { color: var(--text-secondary); }
 .leg-val { font-weight: 700; }
@@ -258,10 +257,10 @@ html, body { height: 100%; overflow: hidden; }
 
 /* ── AI 메인 패널 (차트 옆 고정 컬럼) ── */
 .ai-main-panel { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
-.matrix-col { flex: 0 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: white; padding: 14px 12px; }
-.news-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.matrix-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 88px); align-self: flex-start; }
+.news-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 88px); align-self: flex-start; }
 .ai-main-card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: flex-start; overflow: hidden; }
-.ai-main-title { font-size: 12px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
+.ai-main-title { font-size: 11px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
 .ai-main-body { flex: 1; font-size: 13px; line-height: 1.8; color: #334155; }
 
 /* ── 관심종목 뉴스 미리보기 카드 ── */
@@ -272,7 +271,7 @@ html, body { height: 100%; overflow: hidden; }
 .news-preview-title { font-size: 11px; font-weight: 700; color: #4c1d95; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 7px; }
 .news-preview-more { background: none; border: none; font-size: 11px; font-weight: 600; color: #6d28d9; cursor: pointer; padding: 0; }
 .news-preview-more:hover { text-decoration: underline; }
-.news-preview-item { padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+.news-preview-item { padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
 .news-preview-item:last-child { border-bottom: none; padding-bottom: 0; }
 
 /* ── 뉴스 드로어 ── */
