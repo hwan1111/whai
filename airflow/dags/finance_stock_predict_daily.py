@@ -262,6 +262,7 @@ def finance_stock_predict_daily():
         import pickle
         import warnings
 
+        import mlflow
         import numpy as np
         import pandas as pd
         import torch
@@ -272,6 +273,9 @@ def finance_stock_predict_daily():
 
         warnings.filterwarnings("ignore")
         load_dotenv(PROJECT_ROOT / ".env.local", override=True)
+
+        # MLflow 설정
+        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://52.78.237.104:5001"))
 
         today    = pd.Timestamp.today().normalize()
         info     = MODEL_PRIORITY[ticker]
@@ -881,7 +885,38 @@ def finance_stock_predict_daily():
                     record,
                 )
 
-            # Step 5: retrain_needed 시 재학습 DAG 트리거 ──────────────
+            # Step 5: MLflow 예측 run 기록 ────────────────────────────
+            try:
+                mlflow.set_experiment(f"stock_prediction/{ticker}")
+                with mlflow.start_run(run_name=f"{today.date()}_{model_name}"):
+                    mlflow.log_params({
+                        "ticker":       ticker,
+                        "name":         name,
+                        "model_name":   model_name,
+                        "model_source": model_source,
+                        "model_used":   model_used,
+                        "threshold":    threshold,
+                        "ci_pct":       CI_PCT,
+                    })
+                    mlflow.log_metrics({
+                        "pred_price_d5":  round(d5, 2),
+                        "pred_return_d5": round(lr_d5, 6),
+                        "vol_20d":        round(vol, 6),
+                        "rolling_mape":   round(rolling_mape, 4) if rolling_mape else -1.0,
+                        "drift_detected": float(drift),
+                        "retrain_needed": float(retrain),
+                        "ci_upper_d5":    ci_u,
+                        "ci_lower_d5":    ci_l,
+                    })
+                    mlflow.set_tags({
+                        "date":        str(today.date()),
+                        "target_date": str(target_dt),
+                        "base_price":  str(round(base_price, 2)),
+                    })
+            except Exception as me:
+                log.warning(f"[{ticker}/{name}] MLflow logging 실패 (예측은 정상): {me}")
+
+            # Step 6: retrain_needed 시 재학습 DAG 트리거 ──────────────
             if retrain:
                 try:
                     from airflow.operators.trigger_dagrun import TriggerDagRunOperator
@@ -894,6 +929,8 @@ def finance_stock_predict_daily():
                     log.info(f"[{ticker}/{name}] 재학습 DAG 트리거 완료")
                 except Exception as te:
                     log.error(f"[{ticker}/{name}] 재학습 DAG 트리거 실패: {te}")
+
+
 
             log.info(
                 f"[{ticker}/{name}] 완료 — {model_name}({model_source}) "

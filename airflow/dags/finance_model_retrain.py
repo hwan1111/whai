@@ -149,6 +149,8 @@ def finance_model_retrain():
         import warnings
 
         import boto3
+        import mlflow
+        import mlflow.sklearn
         import numpy as np
         import pandas as pd
         import FinanceDataReader as fdr
@@ -158,6 +160,7 @@ def finance_model_retrain():
 
         warnings.filterwarnings("ignore")
         load_dotenv(PROJECT_ROOT / ".env.local", override=True)
+        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://52.78.237.104:5001"))
 
         ticker = context["dag_run"].conf.get("ticker", "")
         if ticker not in MODEL_PRIORITY:
@@ -322,7 +325,60 @@ def finance_model_retrain():
         s3_client.upload_file(str(local_path), S3_BUCKET, s3_key)
         log.info(f"[{ticker}/{name}] 새 pkl → s3://{S3_BUCKET}/{s3_key} 업로드 완료")
 
-        if val_mape <= threshold:
+        success = val_mape <= threshold
+
+        # 6. MLflow 재학습 run 기록 + Model Registry 등록
+        try:
+            model_registry_name = f"stock-{ticker}"
+            mlflow.set_experiment(f"stock_retrain/{ticker}")
+            with mlflow.start_run(
+                run_name=f"retrain_{today.date()}_{su_model_info['model']}"
+            ):
+                mlflow.log_params({
+                    "ticker":       ticker,
+                    "name":         name,
+                    "model_type":   su_model_info["model"],
+                    "which":        which_priority,
+                    "train_rows":   len(df_train),
+                    "val_rows":     len(df_val),
+                    "n_features":   n_feat,
+                    "s3_key":       s3_key,
+                })
+                mlflow.log_metrics({
+                    "val_mape":  round(val_mape, 4),
+                    "threshold": round(threshold, 4),
+                    "passed":    float(success),
+                })
+                mlflow.set_tags({
+                    "date":        str(today.date()),
+                    "result":      "success" if success else "force_priority_2",
+                    "s3_bucket":   S3_BUCKET,
+                })
+                # sklearn 모델을 MLflow Model Registry에 등록
+                mlflow.sklearn.log_model(
+                    sk_model=model,
+                    artifact_path="model",
+                    registered_model_name=model_registry_name,
+                )
+            # 검증 통과 시 → Production 승격 / 실패 시 → Staging 유지
+            client = mlflow.tracking.MlflowClient()
+            latest = client.get_latest_versions(model_registry_name)
+            new_ver = max(v.version for v in latest)
+            if success:
+                client.transition_model_version_stage(
+                    name=model_registry_name, version=new_ver, stage="Production",
+                    archive_existing_versions=True,
+                )
+                log.info(f"[{ticker}/{name}] MLflow Registry → Production v{new_ver}")
+            else:
+                client.transition_model_version_stage(
+                    name=model_registry_name, version=new_ver, stage="Staging",
+                )
+                log.info(f"[{ticker}/{name}] MLflow Registry → Staging v{new_ver} (검증 미통과)")
+        except Exception as me:
+            log.warning(f"[{ticker}/{name}] MLflow 기록 실패 (재학습은 정상): {me}")
+
+        if success:
             return {"action": "retrain_success", "ticker": ticker,
                     "mape": round(val_mape, 4), "which": which_priority}
         else:
