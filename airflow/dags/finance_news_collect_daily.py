@@ -38,7 +38,7 @@ dag = DAG(
 
 dag.doc_md = __doc__
 
-_prefix = f"cd '{ROOT}' && python '{ROOT}/script/"
+_prefix = f"cd '{ROOT}' && python '{ROOT}/script/news_data/collect/"
 _suffix = "' --date {{ ds }}"
 
 t_kospi200 = BashOperator(

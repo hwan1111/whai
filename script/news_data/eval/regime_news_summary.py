@@ -8,7 +8,7 @@ test3.py 에서 도출한 가격 국면을 입력으로 받아
 
 실행:
     python script/regime_news_summary.py
-    python script/regime_news_summary.py --provider openrouter 
+    python script/regime_news_summary.py --provider gemini
     python script/regime_news_summary.py --start 2020-01-01 --end 2026-05-12
     python script/regime_news_summary.py --dry-run
 """
@@ -36,19 +36,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 
-# ══════════════════════════════════════════════════════════════════════
-# ★ 분석 대상 종목 및 기간 — 변경 시 여기만 수정
-# ══════════════════════════════════════════════════════════════════════
-TICKER_NAME = "SK이노베이션"
-TICKER_CODE = "096770"
-SECTOR      = "화학"
+START_DATE = "2020-01-01"
+END_DATE   = "2026-05-28"
 
-START_DATE  = "2020-01-01"
-END_DATE    = "2026-05-12"
-# ══════════════════════════════════════════════════════════════════════
-
-
-OUTPUT_PATH = Path(f"data/regime_news_summary_{TICKER_CODE}.json")
+TICKER_MAP: dict[str, tuple[str, str]] = {
+    "005930": ("삼성전자",                  "반도체"),
+    "000660": ("SK하이닉스",                "반도체"),
+    "005380": ("현대차",                    "자동차"),
+    "000270": ("기아",                      "자동차"),
+    "079550": ("LIG디펜스앤에어로스페이스", "방산"),
+    "051910": ("LG화학",                    "화학"),
+    "096770": ("SK이노베이션",              "에너지"),
+    "055550": ("신한지주",                  "금융"),
+    "105560": ("KB금융",                    "금융"),
+    "012450": ("한화에어로스페이스",        "방산"),
+}
 
 S3_BUCKET = "fisa-news-archive"
 S3_PREFIX = "raw"
@@ -219,7 +221,7 @@ def _build_news_context(articles: list[dict]) -> str:
     sorted_articles = sorted(articles, key=lambda x: x.get("pub_date", ""))[:MAX_NEWS_COUNT]
     parts = []
     for a in sorted_articles:
-        fulltext = a.get("fulltext") or ""   # None 방어
+        fulltext = a.get("fulltext") or ""
         body = fulltext[:MAX_NEWS_CHARS] + ("…" if len(fulltext) > MAX_NEWS_CHARS else "")
         parts.append(f"▶ {a.get('pub_date','')}  {a.get('title','')}\n{body}")
     return "\n\n".join(parts)
@@ -311,6 +313,8 @@ def _call_with_retry(provider: str, client, model: str,
             log.info(f"  rate limit — {wait}초 대기")
             time.sleep(wait)
         except Exception as e:
+            if "402" in str(e):
+                raise DailyQuotaExceeded(f"크레딧 부족 (402): {e}")
             if "429" in str(e) or "quota" in str(e).lower():
                 if attempt < retries - 1:
                     wait = 60 * (attempt + 1)
@@ -327,13 +331,19 @@ def _call_with_retry(provider: str, client, model: str,
 
 # ── 메인 ─────────────────────────────────────────────────────────────
 
-def run(provider: str = "groq", model: str | None = None,
-        start: str = START_DATE, end: str = END_DATE,
-        dry_run: bool = False,
-        rerun_ids: set[int] | None = None) -> None:
-    rerun_ids = rerun_ids or set()
-    model     = model or DEFAULT_MODEL[provider]
-    sleep_sec = SLEEP_SEC[provider]
+def run(ticker_code: str,
+        ticker_name: str,
+        sector:      str,
+        provider:    str = "groq",
+        model:       str | None = None,
+        start:       str = START_DATE,
+        end:         str = END_DATE,
+        dry_run:     bool = False,
+        rerun_ids:   set[int] | None = None) -> None:
+    rerun_ids   = rerun_ids or set()
+    model       = model or DEFAULT_MODEL[provider]
+    sleep_sec   = SLEEP_SEC[provider]
+    output_path = Path(f"data/{ticker_code}/regime_news_summary_{ticker_code}.json")
 
     llm_client = None
     if not dry_run:
@@ -359,17 +369,17 @@ def run(provider: str = "groq", model: str | None = None,
     s3_client = boto3.client("s3")
 
     # ── 국면 도출 ─────────────────────────────────────────────────────
-    log.info(f"가격 데이터 수집: {TICKER_NAME}({TICKER_CODE})  {start} ~ {end}")
-    returns, volume = _fetch_price_volume(TICKER_CODE, start, end)
+    log.info(f"가격 데이터 수집: {ticker_name}({ticker_code})  {start} ~ {end}")
+    returns, volume = _fetch_price_volume(ticker_code, start, end)
     raw_regimes     = _detect_price_regimes(returns)
     regimes         = _merge_noise(raw_regimes, returns)
     log.info(f"국면: {len(raw_regimes)}개 → 병합 후 {len(regimes)}개")
 
     # ── 기존 결과 로드 ────────────────────────────────────────────────
     results: list[dict] = []
-    if OUTPUT_PATH.exists():
+    if output_path.exists():
         try:
-            results = json.loads(OUTPUT_PATH.read_text(encoding="utf-8"))
+            results = json.loads(output_path.read_text(encoding="utf-8"))
             log.info(f"기존 결과 {len(results)}건 로드")
         except Exception:
             pass
@@ -403,7 +413,7 @@ def run(provider: str = "groq", model: str | None = None,
         vol_trend  = _vol_trend(volume, reg["dates"])
         dir_str    = DIR_STR.get(reg["direction"], reg["direction"])
 
-        news_articles = _fetch_regime_news(s3_client, TICKER_CODE,
+        news_articles = _fetch_regime_news(s3_client, ticker_code,
                                            reg["start"], reg["end"],
                                            NEWS_PRE, NEWS_POST)
 
@@ -423,10 +433,10 @@ def run(provider: str = "groq", model: str | None = None,
 
         user_prompt = _USER_TMPL.format(
             start=start_str, end=end_str, days=reg["days"],
-            name=TICKER_NAME, code=TICKER_CODE,
+            name=ticker_name, code=ticker_code,
             dir_str=dir_str, cum_ret=cum_ret,
             direction=reg["direction"], vol_trend=vol_trend,
-            sector=SECTOR,
+            sector=sector,
             news_pre=NEWS_PRE, news_post=NEWS_POST,
             max_news_count=MAX_NEWS_COUNT,
             news_context=news_context,
@@ -455,8 +465,8 @@ def run(provider: str = "groq", model: str | None = None,
         results.append({
             "regime_id":    i,
             "regime_key":   regime_key,
-            "ticker":       TICKER_NAME,
-            "ticker_code":  TICKER_CODE,
+            "ticker":       ticker_name,
+            "ticker_code":  ticker_code,
             "start":        start_str,
             "end":          end_str,
             "days":         reg["days"],
@@ -470,28 +480,40 @@ def run(provider: str = "groq", model: str | None = None,
         })
         done_keys.add(regime_key)
 
-        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT_PATH.write_text(
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
             json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         time.sleep(sleep_sec)
 
     log.info(
         f"완료: {len(results)}건  "
-        f"토큰 합계 in={total_in:,}  out={total_out:,}  → {OUTPUT_PATH}"
+        f"토큰 합계 in={total_in:,}  out={total_out:,}  → {output_path}"
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="가격 국면별 뉴스 LLM 요약")
-    parser.add_argument("--provider", choices=["groq", "gemini", "openrouter"], default="groq")
-    parser.add_argument("--model",    default=None)
-    parser.add_argument("--start",    default=START_DATE)
-    parser.add_argument("--end",      default=END_DATE)
+    parser.add_argument("--ticker",    required=True, choices=list(TICKER_MAP),
+                        help="종목 코드 (예: 005930)")
+    parser.add_argument("--provider",  choices=["groq", "gemini", "openrouter"], default="groq")
+    parser.add_argument("--model",     default=None)
+    parser.add_argument("--start",     default=START_DATE)
+    parser.add_argument("--end",       default=END_DATE)
     parser.add_argument("--dry-run",   action="store_true")
     parser.add_argument("--rerun-ids", nargs="+", type=int, default=[],
                         metavar="ID", help="강제 재처리할 regime_id (예: --rerun-ids 21 22)")
     args = parser.parse_args()
-    run(provider=args.provider, model=args.model,
-        start=args.start, end=args.end,
-        dry_run=args.dry_run, rerun_ids=set(args.rerun_ids))
+
+    name, sector = TICKER_MAP[args.ticker]
+    run(
+        ticker_code = args.ticker,
+        ticker_name = name,
+        sector      = sector,
+        provider    = args.provider,
+        model       = args.model,
+        start       = args.start,
+        end         = args.end,
+        dry_run     = args.dry_run,
+        rerun_ids   = set(args.rerun_ids),
+    )
