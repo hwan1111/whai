@@ -85,9 +85,10 @@ jobs:
       pull-requests: write
       contents: write
     steps:
-      - name: Merge pull request
-        uses: pascalgn/automerge-action@v0.16
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MERGE_METHOD: squash
-          MERGE_DELETE_BRANCH: true
+      - name: Enable auto-merge
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash
+          delete-branch: true
