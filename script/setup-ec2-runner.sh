@@ -72,7 +72,7 @@ rm actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz
 
 # 6. Runner 의존성 설치
 echo "6. Runner 의존성 설치..."
-bash ./bin/installdependencies.sh
+sudo bash ./bin/installdependencies.sh
 
 # 7. Runner 등록 설정
 echo "7. GitHub Runner 등록 설정..."
