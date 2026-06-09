@@ -18,9 +18,9 @@ drift_detected / retrain_needed 는 DB에만 기록.
 의존:
   finance_market_data_daily.py → price 테이블 (드리프트 MAPE JOIN)
 
-SU pkl: S3 버킷 whai-stock-models 에서 런타임 다운로드 → /tmp/su_models/ 캐시
-  su/saved_models/{ticker}.pkl   ← sklearn 7종목
-  su/patchtst_v18_model.pkl      ← PatchTST 3종목 공용
+pretrained pkl: S3 버킷 whai-stock-models 에서 런타임 다운로드 → /tmp/su_models/ 캐시
+  pretrained/saved_models/{ticker}.pkl   ← sklearn 7종목
+  pretrained/patchtst_v18_model.pkl      ← PatchTST 3종목 공용
   Choi: 매일 yfinance 재학습 (pkl 없음)
 """
 
@@ -71,7 +71,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'LGBMRegressor', 'source': 'SU', 'mape': 7.07,
             'config': {
                 'features': 9,
-                's3_key': 'su/saved_models/105560.pkl',
+                's3_key': 'pretrained/saved_models/105560.pkl',
             },
         },
     },
@@ -87,7 +87,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'XGBRegressor', 'source': 'SU', 'mape': 2.08,
             'config': {
                 'features': 12,
-                's3_key': 'su/saved_models/055550.pkl',
+                's3_key': 'pretrained/saved_models/055550.pkl',
             },
         },
     },
@@ -103,7 +103,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'LGBMRegressor', 'source': 'SU', 'mape': 11.94,
             'config': {
                 'features': 12,
-                's3_key': 'su/saved_models/012450.pkl',
+                's3_key': 'pretrained/saved_models/012450.pkl',
             },
         },
     },
@@ -119,7 +119,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'ElasticNet', 'source': 'SU', 'mape': 7.44,
             'config': {
                 'features': 12,
-                's3_key': 'su/saved_models/000270.pkl',
+                's3_key': 'pretrained/saved_models/000270.pkl',
             },
         },
     },
@@ -135,7 +135,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'PatchTST', 'source': 'SU', 'mape': 8.08,
             'config': {
                 'features': 9,
-                's3_key': 'su/patchtst_v18_model.pkl',
+                's3_key': 'pretrained/patchtst_v18_model.pkl',
                 'state_dict_key': 'LG Chem',
             },
         },
@@ -146,7 +146,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'LGBMRegressor', 'source': 'SU', 'mape': 5.21,
             'config': {
                 'features': 11,
-                's3_key': 'su/saved_models/096770.pkl',
+                's3_key': 'pretrained/saved_models/096770.pkl',
             },
         },
         'priority_2': {
@@ -163,7 +163,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'HuberRegressor', 'source': 'SU', 'mape': 5.68,
             'config': {
                 'features': 12,
-                's3_key': 'su/saved_models/079550.pkl',
+                's3_key': 'pretrained/saved_models/079550.pkl',
             },
         },
         'priority_2': {
@@ -189,7 +189,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'PatchTST', 'source': 'SU', 'mape': 9.87,
             'config': {
                 'features': 9,
-                's3_key': 'su/patchtst_v18_model.pkl',
+                's3_key': 'pretrained/patchtst_v18_model.pkl',
                 'state_dict_key': 'Hyundai Motor',
             },
         },
@@ -200,7 +200,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'ExtraTreesRegressor', 'source': 'SU', 'mape': 5.09,
             'config': {
                 'features': 12,
-                's3_key': 'su/saved_models/005930.pkl',
+                's3_key': 'pretrained/saved_models/005930.pkl',
             },
         },
         'priority_2': {
@@ -216,7 +216,7 @@ MODEL_PRIORITY: dict[str, dict] = {
             'model': 'PatchTST', 'source': 'SU', 'mape': 10.84,
             'config': {
                 'features': 9,
-                's3_key': 'su/patchtst_v18_model.pkl',
+                's3_key': 'pretrained/patchtst_v18_model.pkl',
                 'state_dict_key': 'SK Hynix',
             },
         },

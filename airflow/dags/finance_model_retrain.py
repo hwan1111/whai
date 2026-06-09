@@ -17,7 +17,7 @@ SU 모델 재학습 DAG.
   최근 20거래일 hold-out MAPE.  baseline_mape × 1.5 이하면 model_config 초기화 (정상 복귀).
 
 PatchTST 복구 절차 (수동):
-  1. SU 팀원이 노트북으로 재학습 → S3 whai-stock-models/su/patchtst_v18_model.pkl 업로드
+  1. SU 팀원이 노트북으로 재학습 → S3 whai-stock-models/pretrained/patchtst_v18_model.pkl 업로드
   2. model_config 테이블에서 해당 ticker row 삭제
   3. 다음 날 예측 DAG가 새 pkl 다운로드 → 자동 복귀
 """
@@ -46,48 +46,48 @@ MODEL_PRIORITY: dict[str, dict] = {
         'priority_1': {'model': 'ARIMA',  'source': 'Choi', 'mape': 1.56,
                        'config': {'order': (3,0,0), 'preprocess': 'log', 'train_window': 'Super_Short'}},
         'priority_2': {'model': 'LGBMRegressor', 'source': 'SU',   'mape': 7.07,
-                       'config': {'features': 9,  's3_key': 'su/saved_models/105560.pkl'}},
+                       'config': {'features': 9,  's3_key': 'pretrained/saved_models/105560.pkl'}},
     },
     '055550': {
         'name': '신한지주',
         'priority_1': {'model': 'Prophet', 'source': 'Choi', 'mape': 1.72,
                        'config': {'preprocess': 'diff1', 'train_window': 'Short'}},
         'priority_2': {'model': 'XGBRegressor',  'source': 'SU',   'mape': 2.08,
-                       'config': {'features': 12, 's3_key': 'su/saved_models/055550.pkl'}},
+                       'config': {'features': 12, 's3_key': 'pretrained/saved_models/055550.pkl'}},
     },
     '012450': {
         'name': '한화에어로스페이스',
         'priority_1': {'model': 'Prophet', 'source': 'Choi', 'mape': 3.43,
                        'config': {'preprocess': 'ret', 'train_window': 'Mid_Short'}},
         'priority_2': {'model': 'LGBMRegressor', 'source': 'SU',   'mape': 11.94,
-                       'config': {'features': 12, 's3_key': 'su/saved_models/012450.pkl'}},
+                       'config': {'features': 12, 's3_key': 'pretrained/saved_models/012450.pkl'}},
     },
     '000270': {
         'name': '기아',
         'priority_1': {'model': 'Prophet', 'source': 'Choi', 'mape': 3.52,
                        'config': {'preprocess': 'raw', 'train_window': 'Recent'}},
         'priority_2': {'model': 'ElasticNet',    'source': 'SU',   'mape': 7.44,
-                       'config': {'features': 12, 's3_key': 'su/saved_models/000270.pkl'}},
+                       'config': {'features': 12, 's3_key': 'pretrained/saved_models/000270.pkl'}},
     },
     '051910': {
         'name': 'LG화학',
         'priority_1': {'model': 'Prophet', 'source': 'Choi', 'mape': 4.78,
                        'config': {'preprocess': 'diff1', 'train_window': 'Full'}},
         'priority_2': {'model': 'PatchTST',      'source': 'SU',   'mape': 8.08,
-                       'config': {'features': 9,  's3_key': 'su/patchtst_v18_model.pkl',
+                       'config': {'features': 9,  's3_key': 'pretrained/patchtst_v18_model.pkl',
                                   'state_dict_key': 'LG Chem'}},
     },
     '096770': {
         'name': 'SK이노베이션',
         'priority_1': {'model': 'LGBMRegressor', 'source': 'SU',   'mape': 5.21,
-                       'config': {'features': 11, 's3_key': 'su/saved_models/096770.pkl'}},
+                       'config': {'features': 11, 's3_key': 'pretrained/saved_models/096770.pkl'}},
         'priority_2': {'model': 'ARIMA',  'source': 'Choi', 'mape': 5.36,
                        'config': {'order': (0,0,3), 'preprocess': 'raw', 'train_window': 'Super_Short'}},
     },
     '079550': {
         'name': 'LIG넥스원',
         'priority_1': {'model': 'HuberRegressor','source': 'SU',   'mape': 5.68,
-                       'config': {'features': 12, 's3_key': 'su/saved_models/079550.pkl'}},
+                       'config': {'features': 12, 's3_key': 'pretrained/saved_models/079550.pkl'}},
         'priority_2': {'model': 'VECM',   'source': 'Choi', 'mape': 5.70,
                        'config': {'preprocess': 'level', 'train_window': 'Mid',
                                   'exog_cols': ['KOSPI200','WTI','VIX'],
@@ -98,20 +98,20 @@ MODEL_PRIORITY: dict[str, dict] = {
         'priority_1': {'model': 'Prophet', 'source': 'Choi', 'mape': 7.82,
                        'config': {'preprocess': 'log', 'train_window': 'Short'}},
         'priority_2': {'model': 'PatchTST',      'source': 'SU',   'mape': 9.87,
-                       'config': {'features': 9,  's3_key': 'su/patchtst_v18_model.pkl',
+                       'config': {'features': 9,  's3_key': 'pretrained/patchtst_v18_model.pkl',
                                   'state_dict_key': 'Hyundai Motor'}},
     },
     '005930': {
         'name': '삼성전자',
         'priority_1': {'model': 'ExtraTreesRegressor','source': 'SU','mape': 5.09,
-                       'config': {'features': 12, 's3_key': 'su/saved_models/005930.pkl'}},
+                       'config': {'features': 12, 's3_key': 'pretrained/saved_models/005930.pkl'}},
         'priority_2': {'model': 'Prophet', 'source': 'Choi', 'mape': 10.22,
                        'config': {'preprocess': 'diff1', 'train_window': 'Super_Short'}},
     },
     '000660': {
         'name': 'SK하이닉스',
         'priority_1': {'model': 'PatchTST',      'source': 'SU',   'mape': 10.84,
-                       'config': {'features': 9,  's3_key': 'su/patchtst_v18_model.pkl',
+                       'config': {'features': 9,  's3_key': 'pretrained/patchtst_v18_model.pkl',
                                   'state_dict_key': 'SK Hynix'}},
         'priority_2': {'model': 'Prophet', 'source': 'Choi', 'mape': 13.13,
                        'config': {'preprocess': 'log_diff2', 'train_window': 'Recent'}},

@@ -28,11 +28,11 @@ UPLOAD_MAP = {
     # 로컬 경로: S3 key
     **{
         str(MODEL_ROOT / "su" / "data" / "saved_models" / f"{t}.pkl"):
-        f"su/saved_models/{t}.pkl"
+        f"pretrained/saved_models/{t}.pkl"
         for t in SKLEARN_TICKERS
     },
     str(MODEL_ROOT / "su" / "model" / "patchtst_v18_model.pkl"):
-        "su/patchtst_v18_model.pkl",
+        "pretrained/patchtst_v18_model.pkl",
 }
 
 
