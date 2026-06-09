@@ -913,8 +913,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기 (최대 3개)</span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
                 {[...favs].filter(id => ASSETS[id]).map(id => {
                   const isSelected = id === selectedStockId;
@@ -969,7 +969,7 @@ export default function DashboardPage() {
                           onMouseLeave={() => setHoveredAsset(null)}>
                           <div className="leg-dot" style={{ background: ASSETS[id].color }} />
                           <span className="leg-name">{ASSETS[id].label}</span>
-                          <span className="leg-val" style={{ color: col }}>{sign}{last.toFixed(1)}%</span>
+                          <span className="leg-val" style={{ color: col }}>{sign}{Number(last).toFixed(1)}%</span>
                         </div>
                       );
                     })}
@@ -1019,8 +1019,8 @@ export default function DashboardPage() {
                   <div className="grid g11" style={{ gap: 5 }}>
                     {[
                       { label: '현재 환율', value: fxPrice ? `${Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—' },
-                      { label: '전일 대비', value: fxChgAmt != null ? `${fxChgAmt >= 0 ? '+' : ''}${fxChgAmt.toFixed(2)}` : '—', color: fxChgAmt != null ? fxChgColor : undefined },
-                      { label: '변동률', value: fxChgPct != null ? `${fxChgPct >= 0 ? '+' : ''}${fxChgPct.toFixed(2)}%` : '—', color: fxChgPct != null ? fxChgColor : undefined },
+                      { label: '전일 대비', value: fxChgAmt != null ? `${fxChgAmt >= 0 ? '+' : ''}${Number(fxChgAmt).toFixed(2)}` : '—', color: fxChgAmt != null ? fxChgColor : undefined },
+                      { label: '변동률', value: fxChgPct != null ? `${fxChgPct >= 0 ? '+' : ''}${Number(fxChgPct).toFixed(2)}%` : '—', color: fxChgPct != null ? fxChgColor : undefined },
                       { label: '기준통화', value: 'KRW (원화)' },
                       { label: '대상통화', value: currency },
                       { label: '통화권', value: fxInfo.desc },
@@ -1444,6 +1444,59 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* NEWS column */}
+        <div className="news-col">
+          <div className="news-preview-card" style={{ flex: 1, overflow: 'hidden' }}>
+            <div className="news-preview-header">
+              <div className="news-preview-title">
+                <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+                관련 뉴스
+              </div>
+              <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
+            </div>
+            <div className="news-preview-body">
+              {favDetailLoading ? (
+                [0, 1, 2].map(i => (
+                  <div key={i} className="news-preview-item">
+                    <div className="news-meta" style={{ gap: 6 }}>
+                      <span className="skeleton" style={{ width: 48, height: 16, borderRadius: 6 }} />
+                      <span className="skeleton" style={{ width: 56, height: 12 }} />
+                    </div>
+                    <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
+                  </div>
+                ))
+              ) : !favDetail || favDetail.news.length === 0 ? (
+                <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
+                  {(selectedFxId || (selectedStockId && STOCK_CONFIG[selectedStockId]))
+                    ? '관련 뉴스가 없습니다.'
+                    : '관심종목을 선택해주세요'}
+                </div>
+              ) : favNewsExpanded !== null ? (
+                (() => { const n = favDetail.news[favNewsExpanded]; return (
+                  <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
+                    <div className="news-meta">
+                      <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                      <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                    </div>
+                    <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
+                    {n.vol_insight && (
+                      <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
+                      </div>
+                    )}
+                  </div>
+                ); })()
+              ) : favDetail.news.map((n, i) => (
+                <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
+                  <div className="news-meta">
+                    <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                    <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                  </div>
+                  <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
         {/* END OF right-wrapper */}
 
