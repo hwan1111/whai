@@ -41,31 +41,31 @@ def _setup():
     sys.path.insert(0, str(ROOT / "src"))
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env.local", override=True)
-    from script.load_market_data import get_engine
+    from script.others.load_market_data import get_engine
     return get_engine()
 
 
 def task_load_kospi(**_):
     engine = _setup()
-    from script.load_market_data import load_kospi
+    from script.others.load_market_data import load_kospi
     load_kospi(engine)
 
 
 def task_load_stocks(**_):
     engine = _setup()
-    from script.load_market_data import load_stocks
+    from script.others.load_market_data import load_stocks
     load_stocks(engine)
 
 
 def task_load_exchange_rates(**_):
     engine = _setup()
-    from script.load_market_data import load_exchange_rates
+    from script.others.load_market_data import load_exchange_rates
     load_exchange_rates(engine)
 
 
 def task_load_fundamentals(**_):
     engine = _setup()
-    from script.load_market_data import load_fundamentals
+    from script.others.load_market_data import load_fundamentals
     load_fundamentals(engine)
 
 
