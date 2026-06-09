@@ -330,14 +330,10 @@ def _call_with_retry(provider: str, client, model: str,
 def run(provider: str = "groq", model: str | None = None,
         start: str = START_DATE, end: str = END_DATE,
         dry_run: bool = False,
-        rerun_ids: set[int] | None = None,
-        ticker_code: str = TICKER_CODE,
-        ticker_name: str = TICKER_NAME,
-        sector: str = SECTOR) -> None:
+        rerun_ids: set[int] | None = None) -> None:
     rerun_ids = rerun_ids or set()
     model     = model or DEFAULT_MODEL[provider]
     sleep_sec = SLEEP_SEC[provider]
-    output_path = Path(f"data/{ticker_code}/regime_news_summary_{ticker_code}.json")
 
     llm_client = None
     if not dry_run:
@@ -363,17 +359,17 @@ def run(provider: str = "groq", model: str | None = None,
     s3_client = boto3.client("s3")
 
     # ── 국면 도출 ─────────────────────────────────────────────────────
-    log.info(f"가격 데이터 수집: {ticker_name}({ticker_code})  {start} ~ {end}")
-    returns, volume = _fetch_price_volume(ticker_code, start, end)
+    log.info(f"가격 데이터 수집: {TICKER_NAME}({TICKER_CODE})  {start} ~ {end}")
+    returns, volume = _fetch_price_volume(TICKER_CODE, start, end)
     raw_regimes     = _detect_price_regimes(returns)
     regimes         = _merge_noise(raw_regimes, returns)
     log.info(f"국면: {len(raw_regimes)}개 → 병합 후 {len(regimes)}개")
 
     # ── 기존 결과 로드 ────────────────────────────────────────────────
     results: list[dict] = []
-    if output_path.exists():
+    if OUTPUT_PATH.exists():
         try:
-            results = json.loads(output_path.read_text(encoding="utf-8"))
+            results = json.loads(OUTPUT_PATH.read_text(encoding="utf-8"))
             log.info(f"기존 결과 {len(results)}건 로드")
         except Exception:
             pass
@@ -407,7 +403,7 @@ def run(provider: str = "groq", model: str | None = None,
         vol_trend  = _vol_trend(volume, reg["dates"])
         dir_str    = DIR_STR.get(reg["direction"], reg["direction"])
 
-        news_articles = _fetch_regime_news(s3_client, ticker_code,
+        news_articles = _fetch_regime_news(s3_client, TICKER_CODE,
                                            reg["start"], reg["end"],
                                            NEWS_PRE, NEWS_POST)
 
@@ -427,10 +423,10 @@ def run(provider: str = "groq", model: str | None = None,
 
         user_prompt = _USER_TMPL.format(
             start=start_str, end=end_str, days=reg["days"],
-            name=ticker_name, code=ticker_code,
+            name=TICKER_NAME, code=TICKER_CODE,
             dir_str=dir_str, cum_ret=cum_ret,
             direction=reg["direction"], vol_trend=vol_trend,
-            sector=sector,
+            sector=SECTOR,
             news_pre=NEWS_PRE, news_post=NEWS_POST,
             max_news_count=MAX_NEWS_COUNT,
             news_context=news_context,
@@ -459,8 +455,8 @@ def run(provider: str = "groq", model: str | None = None,
         results.append({
             "regime_id":    i,
             "regime_key":   regime_key,
-            "ticker":       ticker_name,
-            "ticker_code":  ticker_code,
+            "ticker":       TICKER_NAME,
+            "ticker_code":  TICKER_CODE,
             "start":        start_str,
             "end":          end_str,
             "days":         reg["days"],
@@ -474,32 +470,28 @@ def run(provider: str = "groq", model: str | None = None,
         })
         done_keys.add(regime_key)
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
+        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        OUTPUT_PATH.write_text(
             json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         time.sleep(sleep_sec)
 
     log.info(
         f"완료: {len(results)}건  "
-        f"토큰 합계 in={total_in:,}  out={total_out:,}  → {output_path}"
+        f"토큰 합계 in={total_in:,}  out={total_out:,}  → {OUTPUT_PATH}"
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="가격 국면별 뉴스 LLM 요약")
-    parser.add_argument("--provider",     choices=["groq", "gemini", "openrouter"], default="groq")
-    parser.add_argument("--model",        default=None)
-    parser.add_argument("--start",        default=START_DATE)
-    parser.add_argument("--end",          default=END_DATE)
-    parser.add_argument("--ticker-code",  default=TICKER_CODE, help="종목 코드 (예: 105560)")
-    parser.add_argument("--ticker-name",  default=TICKER_NAME, help="종목명 (예: KB금융)")
-    parser.add_argument("--sector",       default=SECTOR,       help="섹터 (예: 금융)")
-    parser.add_argument("--dry-run",      action="store_true")
-    parser.add_argument("--rerun-ids",    nargs="+", type=int, default=[],
+    parser.add_argument("--provider", choices=["groq", "gemini", "openrouter"], default="groq")
+    parser.add_argument("--model",    default=None)
+    parser.add_argument("--start",    default=START_DATE)
+    parser.add_argument("--end",      default=END_DATE)
+    parser.add_argument("--dry-run",   action="store_true")
+    parser.add_argument("--rerun-ids", nargs="+", type=int, default=[],
                         metavar="ID", help="강제 재처리할 regime_id (예: --rerun-ids 21 22)")
     args = parser.parse_args()
     run(provider=args.provider, model=args.model,
         start=args.start, end=args.end,
-        dry_run=args.dry_run, rerun_ids=set(args.rerun_ids),
-        ticker_code=args.ticker_code, ticker_name=args.ticker_name, sector=args.sector)
+        dry_run=args.dry_run, rerun_ids=set(args.rerun_ids))
