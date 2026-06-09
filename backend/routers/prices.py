@@ -10,7 +10,6 @@ from backend.db import get_db
 router = APIRouter(prefix="/prices", tags=["prices"])
 
 _TICKER_RE = re.compile(r'^([0-9]{6}|[A-Z]{3})$')
-_DECIMAL_TICKER_RE = re.compile(r'^([A-Z]{3}|000000)$')
 
 def _validate_ticker(ticker: str) -> None:
     if not _TICKER_RE.match(ticker):
@@ -40,16 +39,14 @@ def get_latest_prices(db: Session = Depends(get_db)) -> list[dict]:
 
     result = []
     for r in rows:
-        to_close = float if _DECIMAL_TICKER_RE.match(r.ticker) else int
-        close = float(r.close)
-        prev = float(r.prev_close) if r.prev_close else close
-        change_pct = round((close - prev) / prev * 100, 2) if prev else 0.0
+        prev = int(r.prev_close) if r.prev_close else r.close
+        change_pct = round((r.close - prev) / prev * 100, 2) if prev else 0.0
         result.append({
             "ticker": r.ticker,
             "name": r.name,
             "sector": r.sector,
-            "close": to_close(r.close),
-            "change": to_close(round(close - prev, 2)),
+            "close": r.close,
+            "change": round(r.close - prev, 2),
             "change_pct": change_pct,
             "date": str(r.date),
         })
@@ -74,13 +71,12 @@ def get_price_history(
     if not rows:
         return []
 
-    to_close = float if _DECIMAL_TICKER_RE.match(ticker) else int
-    base = float(rows[0].close)
+    base = rows[0].close
     return [
         {
             "date": str(r.date),
-            "close": to_close(r.close),
-            "return_pct": round((float(r.close) - base) / base * 100, 2),
+            "close": r.close,
+            "return_pct": round((r.close - base) / base * 100, 2),
         }
         for r in rows
     ]
