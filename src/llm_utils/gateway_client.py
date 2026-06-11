@@ -62,11 +62,11 @@ class GatewayClient:
         # 환경 변수 로드 (인스턴스 생성 시점에 로드)
         self.GATEWAY_BASE_URL = os.getenv(
             "MLFLOW_GATEWAY_URL",
-            "https://team4.ap.loclx.io/gateway/mlflow/v1",
+            "http://52.78.237.104:5001/gateway/mlflow/v1",
         )
         self.MLFLOW_TRACKING_USERNAME = os.getenv("MLFLOW_TRACKING_USERNAME", "")
         self.MLFLOW_TRACKING_PASSWORD = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
-        self.ROUTE_NAME = os.getenv("MLFLOW_SUMMARIZE_URI", "summarlize-llm")
+        self.ROUTE_NAME = os.getenv("MLFLOW_SUMMARIZE_URI", "mid_performance_llm")
 
         logger.debug(
             f"환경 변수 로드 확인:\n"
