@@ -979,7 +979,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px' }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 10 }}>(최대 3개)</span></span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 10 }}>(최대 3개)</span></span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
                 {[...favs].filter(id => ASSETS[id]).map(id => {
                   const isFx = !!FX_INFO[id];
@@ -1048,7 +1048,7 @@ export default function DashboardPage() {
 
         {/* 종목/환율 상세 패널 */}
         <div className="ai-main-panel">
-          <div className="ai-main-card" style={{ flex: 1, overflowY: 'hidden' }}>
+          <div className="ai-main-card" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {/* ── 환율 상세 ── */}
             {selectedFxId ? (() => {
               const fxInfo = FX_INFO[selectedFxId];

@@ -15,7 +15,7 @@ description: Launch backend (Uvicorn) and frontend (Next.js) dev servers for thi
 Working directory: repo root (`c:/Users/minha/whai`)
 
 ```bash
-cd "c:/Users/minha/whai" && source .venv/Scripts/activate && uvicorn backend.main:app --port 8000
+cd "c:/Users/minha/whai" && source .venv/Scripts/activate && uvicorn backend.main:app --port 8000 --reload
 ```
 
 Run in background. Healthy when output contains:

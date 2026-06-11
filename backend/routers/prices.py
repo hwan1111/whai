@@ -21,6 +21,22 @@ PERIOD_DAYS = {
 }
 
 
+@router.get("/data-freshness")
+def get_data_freshness(db: Session = Depends(get_db)) -> dict:
+    row = db.execute(text("""
+        SELECT
+            (SELECT MAX(date) FROM price) AS price_date,
+            (SELECT MAX(created_at) FROM regime_summary) AS news_indexed_at,
+            (SELECT MAX(date) FROM fundamental) AS fundamental_date
+    """)).fetchone()
+
+    return {
+        "price": str(row.price_date) if row and row.price_date else None,
+        "news": row.news_indexed_at.isoformat() if row and row.news_indexed_at else None,
+        "fundamental": str(row.fundamental_date) if row and row.fundamental_date else None,
+    }
+
+
 @router.get("/latest")
 def get_latest_prices(db: Session = Depends(get_db)) -> list[dict]:
     rows = db.execute(text("""
