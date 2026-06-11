@@ -162,6 +162,11 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
   activeAssets.forEach(a => { if (pd.d[a]) allV.push(...pd.d[a].filter(v => v !== null)); });
   let minV = Math.min(...allV), maxV = Math.max(...allV);
   const pad = Math.max((maxV - minV) * 0.12, 3);
+  const lineAssets = [
+    ...activeAssets.filter(id => id !== '000000' && id !== 'USD'),
+    ...activeAssets.filter(id => id === '000000'),
+    ...activeAssets.filter(id => id === 'USD'),
+  ];
   minV -= pad; maxV += pad;
 
   const ticks = niceTicks(minV, maxV, 6);
@@ -277,7 +282,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
       )}
 
       {/* 라인 */}
-      {activeAssets.map(a => {
+      {lineAssets.map(a => {
         const vals = pd.d[a];
         if (!vals) return null;
         const col = ASSETS[a].color;
@@ -285,8 +290,8 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
         const isKospi = a === '000000';
         const isDimmed = hoveredAsset !== null && hoveredAsset !== a;
 
-        const strokeDasharray = isKospi ? '1,5' : isFx ? '7,4' : undefined;
-        const strokeLinecap = isFx ? 'butt' : 'round';
+        const strokeDasharray = undefined;
+        const strokeLinecap = 'round';
         const strokeWidth = isKospi ? 2.5 : isFx ? 1.8 : 2;
 
         const segments = [];
@@ -1057,7 +1062,7 @@ export default function DashboardPage() {
                     <img src={fxInfo.flag} alt={currency} style={{ width: 32, height: 22, borderRadius: 4, objectFit: 'cover', border: '1px solid #e8ecf0', flexShrink: 0 }} />
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{currency} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{fxInfo.desc}</span></div>
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{selectedFxId} · 원화 기준</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8' }}>원/달러 환율 · 원화 기준</div>
                     </div>
                     {fxPrice ? (
                       <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
@@ -1185,7 +1190,7 @@ export default function DashboardPage() {
                             <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: idx > 0 ? 5 : 0 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span style={{ fontSize: 8, color: labelColor, fontWeight: 700, background: `${labelColor}18`, borderRadius: 3, padding: '1px 4px' }}>{label}</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: '#334155' }}>{NAMES[item.id] || item.id}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#334155' }}>{STOCK_NAMES[item.id] || item.id}</span>
                               </div>
                               <span style={{ fontSize: 13, fontWeight: 800, color: vColor }}>{isPos ? '+' : ''}{item.v.toFixed(2)}</span>
                             </div>
@@ -1433,6 +1438,7 @@ export default function DashboardPage() {
               const labelStyle = { height: cellH, lineHeight: `${cellH}px`, width: labelW, minWidth: labelW, maxWidth: labelW };
               const lbl = id => {
                 const l = shortLabel(id);
+                if (isCompact) return l.slice(0, 4);
                 return CW < 30 ? l.slice(0, 1) : CW < 38 ? l.slice(0, 2) : CW < 48 ? l.slice(0, 3) : CW < 60 ? l.slice(0, 4) : l;
               };
               return (
@@ -1446,7 +1452,7 @@ export default function DashboardPage() {
                       <tbody>
                         {complexIds.map(row => (
                           <tr key={row}>
-                            <th className="mh" style={{ ...labelStyle, textAlign: 'right', paddingRight: 5 }}>{lbl(row)}</th>
+                            <th className="mh" title={shortLabel(row)} style={{ ...labelStyle, textAlign: 'right', paddingRight: 5, textOverflow: 'clip' }}>{lbl(row)}</th>
                             {complexIds.map(col => {
                               if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
                               const v = calcPearson(complexData[row], complexData[col]);
@@ -1516,17 +1522,17 @@ export default function DashboardPage() {
                 <div className="matrix-side-title">
                   상관계수 분석
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400 }}>Pearson</span>
-                    {/* 5개 이상일 때만 돋보기 노출 */}
-                    {!isCompact && (
+                    {/* 5개부터는 기본 카드가 조밀해져 확대 히트맵을 제공 */}
+                    {complexIds.length >= 5 && (
                       <button
                         onClick={() => setShowMatrix(true)}
                         title="전체 히트맵 팝업"
-                        style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 6px', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center' }}
+                        style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 6px', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600 }}
                       >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
                         </svg>
+                        히트맵 보기
                       </button>
                     )}
                   </div>
