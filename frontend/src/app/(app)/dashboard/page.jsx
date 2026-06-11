@@ -1063,12 +1063,12 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                     <img src={fxInfo.flag} alt={currency} style={{ width: 32, height: 22, borderRadius: 4, objectFit: 'cover', border: '1px solid #e8ecf0', flexShrink: 0 }} />
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{currency} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{fxInfo.desc}</span></div>
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>원/달러 환율 · 원화 기준</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{currency} <span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>{fxInfo.desc}</span></div>
+                      <div style={{ fontSize: 10, color: '#64748b' }}>원/달러 환율 · 원화 기준</div>
                     </div>
                     {fxPrice ? (
                       <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                        <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span></div>
+                        <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}<span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>원</span></div>
                         {fxChgPct != null && (
                           <div style={{ fontSize: 11, fontWeight: 600, color: fxChgColor }}>{fxChgArrow} {fxChgAmt != null ? Math.abs(fxChgAmt).toFixed(2) : ''} ({Math.abs(fxChgPct).toFixed(2)}%)</div>
                         )}
@@ -1124,9 +1124,9 @@ export default function DashboardPage() {
                       <div style={{ marginTop: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                           <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>52주 환율 위치</span>
-                          <span style={{ fontSize: 8, color: '#cbd5e1' }}>BOK ECOS</span>
+                          <span style={{ fontSize: 8, color: '#94a3b8' }}>BOK ECOS</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', marginBottom: 3 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#64748b', marginBottom: 3 }}>
                           <span>최저 {fmtFx(l)}원</span>
                           <span>최고 {fmtFx(h)}원</span>
                         </div>
@@ -1157,9 +1157,9 @@ export default function DashboardPage() {
                             <span style={{ fontSize: 12, fontWeight: 800, color: dirColor }}>{isUp ? '▲' : '▼'} {regime.direction}</span>
                             {ret && <span style={{ fontSize: 12, fontWeight: 700, color: dirColor }}>{ret}</span>}
                           </div>
-                          <span style={{ fontSize: 9, color: '#94a3b8' }}>{regime.start_date} ~ {regime.end_date}</span>
+                          <span style={{ fontSize: 9, color: '#64748b' }}>{regime.start_date} ~ {regime.end_date}</span>
                         </div>
-                        {regime.cause && <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.5 }}>{regime.cause}</div>}
+                        {regime.cause && <div style={{ fontSize: 10, color: '#1e293b', lineHeight: 1.5 }}>{regime.cause}</div>}
                       </div>
                     );
                   })()}
@@ -1180,7 +1180,7 @@ export default function DashboardPage() {
                       <div style={{ marginTop: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                           <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>분석 종목 상관관계</span>
-                          <span style={{ fontSize: 8, color: '#cbd5e1' }}>Pearson</span>
+                          <span style={{ fontSize: 8, color: '#94a3b8' }}>Pearson</span>
                         </div>
                         <div style={{ padding: '6px 9px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                         {items.map((item, idx) => {
@@ -1214,8 +1214,8 @@ export default function DashboardPage() {
                     <img src={cfg.logoSrc ?? `/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: cfg.name.length > 8 ? 11 : 14, fontWeight: 800, color: '#1e293b', wordBreak: 'keep-all', overflowWrap: 'break-word' }}>{cfg.name}{selectedStockId !== '000000' && <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}> {selectedStockId}</span>}</div>
-                    <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
+                    <div style={{ fontSize: cfg.name.length > 8 ? 11 : 14, fontWeight: 800, color: '#1e293b', wordBreak: 'keep-all', overflowWrap: 'break-word' }}>{cfg.name}{selectedStockId !== '000000' && <span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}> {selectedStockId}</span>}</div>
+                    <div style={{ fontSize: 10, color: '#64748b' }}>{cfg.meta}</div>
                   </div>
                   {favDetailLoading ? (
                     <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
@@ -1224,7 +1224,7 @@ export default function DashboardPage() {
                     </div>
                   ) : favDetail?.price ? (
                     <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}{selectedStockId !== '000000' && <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span>}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}{selectedStockId !== '000000' && <span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>원</span>}</div>
                       {chgPct != null && (
                         <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}${selectedStockId !== '000000' ? '원' : ''}` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
                       )}
@@ -1282,7 +1282,7 @@ export default function DashboardPage() {
                   return (
                     <div style={{ marginTop: 8 }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>52주 가격 위치</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', marginBottom: 3 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#64748b', marginBottom: 3 }}>
                         <span>최저 {fmt(s.low52)}{selectedStockId !== '000000' ? '원' : ''}</span>
                         <span>최고 {fmt(s.high52)}{selectedStockId !== '000000' ? '원' : ''}</span>
                       </div>
@@ -1354,7 +1354,6 @@ export default function DashboardPage() {
                     <div style={{ marginTop: 8, padding: '7px 10px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                         <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>PER 업종 평균 비교</span>
-                        <span style={{ fontSize: 8, color: '#cbd5e1' }}>KRX · 2026 Q1</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <div style={{ flex: 1, textAlign: 'center' }}>
@@ -1385,19 +1384,26 @@ export default function DashboardPage() {
             const factors = selectedFxId ? FX_INFO[selectedFxId]?.factors : cfg?.factors;
             const title = selectedFxId ? '환율 변동 원인 분석' : selectedStockId === '000000' ? '지수 변동 원인 분석' : '주가 변동 원인 분석';
             if (!factors?.length) return null;
+            const maxPct = Math.max(...factors.map(f => f.pct));
             return (
               <div className="ai-main-card">
                 <div className="ai-main-title" style={{ marginBottom: 10 }}>{title}</div>
-                {factors.map(f => (
+                {factors.map(f => {
+                  const isNeg = f.val.startsWith('-');
+                  const intensity = 0.4 + 0.6 * (f.pct / maxPct);
+                  const barColor = isNeg ? `rgba(29,78,216,${intensity.toFixed(2)})` : `rgba(185,28,28,${intensity.toFixed(2)})`;
+                  const textColor = '#475569';
+                  return (
                   <div key={f.label}>
                     <div className="factor-row">
                       <div className="factor-label">{f.label}</div>
-                      <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: f.color }} /></div>
-                      <div className={`factor-val ${f.val.startsWith('-') ? 'negative' : 'positive'}`}>{f.val}</div>
+                      <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: barColor }} /></div>
+                      <div className={`factor-val ${isNeg ? 'negative' : 'positive'}`}>{f.val}</div>
                     </div>
-                    <div className="factor-desc">{f.desc}</div>
+                    <div className="factor-desc" style={{ color: textColor }}>{f.desc}</div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })() : null}
@@ -1440,8 +1446,8 @@ export default function DashboardPage() {
               const labelStyle = { height: cellH, lineHeight: `${cellH}px`, width: labelW, minWidth: labelW, maxWidth: labelW };
               const lbl = id => {
                 const l = shortLabel(id);
-                if (isCompact) return l.slice(0, 4);
-                return CW < 30 ? l.slice(0, 1) : CW < 38 ? l.slice(0, 2) : CW < 48 ? l.slice(0, 3) : CW < 60 ? l.slice(0, 4) : l;
+                if (isCompact) return l.slice(0, 5);
+                return CW < 30 ? l.slice(0, 1) : CW < 38 ? l.slice(0, 2) : CW < 48 ? l.slice(0, 3) : CW < 60 ? l.slice(0, 5) : l;
               };
               return (
                 <>
@@ -1493,7 +1499,7 @@ export default function DashboardPage() {
                     const abs = Math.abs(v);
                     const desc = abs >= 0.3
                       ? getPairDesc(a, b, isPos, abs)
-                      : `|r| = ${abs.toFixed(2)} · 0.3 미만으로 통계적으로 유의미한 상관관계가 없습니다.`;
+                      : `|r|가 0.3 미만으로 통계적으로 유의미한 상관관계가 없습니다.`;
                     const pairKey = `${a}|${b}`;
                     const isExpanded = showFull || expandedPairKey === pairKey;
                     return (
