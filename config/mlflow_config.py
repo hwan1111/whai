@@ -13,17 +13,8 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-# .env.local 파일 로드 (프로젝트 루트 기준)
-# override=True로 설정하여 기존 환경변수를 덮어씀
 _project_root = Path(__file__).parent.parent
-_env_file = _project_root / ".env.local"
-if _env_file.exists():
-    load_dotenv(_env_file, override=True)
-else:
-    # .env.local이 없으면 .env 시도
-    _env_file_fallback = _project_root / ".env"
-    if _env_file_fallback.exists():
-        load_dotenv(_env_file_fallback, override=True)
+load_dotenv(_project_root / ".env", override=True)
 
 # 프록시 설정 처리 (원격 MLflow 서버 접근을 위해 프록시 우회 필요할 수 있음)
 # NO_PROXY 환경변수가 설정되면 우선적용, 아니면 기본값
@@ -81,7 +72,7 @@ class MLflowConfig:
         if not (cls.MLFLOW_TRACKING_USERNAME and cls.MLFLOW_TRACKING_PASSWORD):
             print(
                 "⚠️ Warning: MLflow 인증 정보가 설정되지 않았습니다."
-                "\n   .env.local에 다음을 추가하세요:"
+                "\n   .env에 다음을 추가하세요:"
                 "\n   - MLFLOW_TRACKING_USERNAME"
                 "\n   - MLFLOW_TRACKING_PASSWORD"
             )

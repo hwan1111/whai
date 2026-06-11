@@ -1,4 +1,4 @@
-"""
+﻿"""
 가격 국면별 뉴스 LLM 요약
 
 test3.py 에서 도출한 가격 국면을 입력으로 받아
@@ -30,7 +30,6 @@ from dotenv import load_dotenv
 from scipy import stats
 
 load_dotenv(".env")
-load_dotenv(".env.local", override=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)

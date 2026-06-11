@@ -4,10 +4,10 @@ from urllib.parse import urlparse
 import pymysql
 from dotenv import load_dotenv, dotenv_values
 
-env = dotenv_values(Path(__file__).resolve().parents[1] / ".env.local")
+env = dotenv_values(Path(__file__).resolve().parents[1] / ".env")
 url = env.get("DATABASE_URL") or env.get("ADMIN_DATABASE_URL")
 if not url:
-    raise SystemExit("DATABASE_URL이 .env.local에 없습니다.")
+    raise SystemExit("DATABASE_URL이 .env에 없습니다.")
 
 parsed = urlparse(url)
 conn = pymysql.connect(

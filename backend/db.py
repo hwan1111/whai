@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(ROOT / ".env.local", override=True)
+load_dotenv(ROOT / ".env", override=True)
 
 _raw_url = os.getenv("SERVICE_DATABASE_URL", "")
 CA_PATH = str(ROOT / "config" / "certs" / "ca.pem")

@@ -12,8 +12,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-ROOT = Path(__file__).parent.parent
-load_dotenv(ROOT / ".env.local", override=True)
+ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(ROOT / ".env", override=True)
 sys.stdout.reconfigure(encoding="utf-8")
 
 CA_PATH = str(ROOT / "config" / "certs" / "ca.pem")

@@ -22,9 +22,7 @@ from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-_env_file = Path(__file__).parent.parent / ".env.local"
-if _env_file.exists():
-    load_dotenv(_env_file, override=True)
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)
 
 _CONFIDENCE_SCORE = {"high": 1.0, "medium": 0.5, "low": 0.0}
 

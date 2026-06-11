@@ -1,10 +1,9 @@
-"""
+﻿"""
 script/collect_kospi200_news.py
-코스피 200 지수 뉴스 수집기 (Requests + Playwright 통합 버전)
+코스피 200 뉴스 수집기 - 멀티 프로바이더 폴백 지원
 
-수집 순서:
-- 1단계 (Requests): Naver → Google 고속 크롤링
-- 2단계 (Playwright): 크롤링 실패 및 차단으로 누락된 날짜에 대해 Chrome 브라우저 기반 우회 보완 수집
+수집 순서: 네이버 → 구글
+각 프로바이더가 403이면 자동으로 다음 프로바이더로 전환
 """
 
 import re
@@ -12,20 +11,17 @@ import json
 import time
 import random
 import logging
-import argparse
-import boto3
 import requests
 from datetime import date, timedelta
 from pathlib import Path
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 # ─────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────
-BASE_DIR  = Path(__file__).resolve().parent.parent.parent
+BASE_DIR  = Path(__file__).resolve().parent.parent.parent.parent
 DATA_DIR  = BASE_DIR / "data" / "news"
-LOG_PATH  = BASE_DIR / "data" / "collect_kospi200.log"
+LOG_PATH  = BASE_DIR / "data" / "kospi200_news_collect.log"
 
 START_DATE = date(2020, 1, 1)
 END_DATE   = date.today()
@@ -34,10 +30,6 @@ REQUEST_DELAY_MIN     = 2.0
 REQUEST_DELAY_MAX     = 4.0
 CONSECUTIVE_403_LIMIT = 5      # 프로바이더당 연속 403 허용 횟수
 COOLDOWN_SECONDS      = 600    # 전체 프로바이더 차단 시 대기(10분)
-
-# Playwright 보완 수집 설정
-PW_DELAY_MIN = 2.5
-PW_DELAY_MAX = 5.0
 
 # ─────────────────────────────────────────────
 # User-Agent 풀 (랜덤 선택으로 봇 감지 회피)
@@ -58,28 +50,29 @@ def _get_headers(referer: str = "https://www.naver.com/") -> dict:
     }
 
 # ─────────────────────────────────────────────
-# 수집 대상
+# 수집 대상 (코스피 200 단일 키워드)
 # ─────────────────────────────────────────────
 STOCKS = [
     ("코스피200", "KOSPI200")
 ]
 
-# 별칭 이력
+# 사명 변경이나 별칭 이력 (동일하게 사용하기 위한 구조 매칭)
 NAME_ALIASES: dict[str, list[tuple]] = {
     "코스피200": [
-        (date(2030, 1, 1), "코스피 200"),
-        (date(2030, 1, 1), "KOSPI200"),
-        (date(2030, 1, 1), "KOSPI 200"),
+        (date(2030, 1, 1), "코스피 200"), # 공백 포함 패턴도 시도하도록 설정
     ],
 }
 
 def get_search_names(company_name: str, target_date: date) -> list[str]:
-    names = [company_name]
+    """사명 변경/별칭 이력을 반영한 검색어 목록 반환 (우선순위 순)"""
+    names = []
     for change_date, old_name in NAME_ALIASES.get(company_name, []):
         if target_date < change_date:
-            if old_name not in names:
-                names.append(old_name)
+            names.append(old_name)
+    if company_name not in names:
+        names.append(company_name)
     return names
+
 
 # ─────────────────────────────────────────────
 # 로깅
@@ -94,34 +87,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-S3_BUCKET = "fisa-news-archive"
-
-def _upload_to_s3(ticker: str, pub_date: str, doc: dict) -> None:
-    if not doc.get("title"):
-        return
-    try:
-        dt  = date.fromisoformat(pub_date)
-        key = f"raw/{ticker}/{dt.year}/{dt.month:02d}/{pub_date}.json"
-        boto3.client("s3").put_object(
-            Bucket=S3_BUCKET,
-            Key=key,
-            Body=json.dumps(doc, ensure_ascii=False).encode("utf-8"),
-            ContentType="application/json; charset=utf-8",
-        )
-    except Exception as e:
-        logger.warning(f"  [S3] 업로드 실패 {ticker}/{pub_date}: {e}")
-
 
 # ─────────────────────────────────────────────
-# 1단계 (Requests 방식) 검색 함수들
+# 검색 프로바이더
 # ─────────────────────────────────────────────
 
 def search_naver(company_name: str, target_date: date) -> dict | str | None:
+    """
+    네이버 뉴스 검색 페이지 크롤링
+    """
     search_names = get_search_names(company_name, target_date)
     date_str = target_date.strftime("%Y%m%d")
 
     for search_name in search_names:
-        query = search_name  # 직접 검색 (지수 뉴스는 "주가" 접미사 제외)
+        query = search_name  # "코스피 200" 또는 "코스피200" 직접 검색
         url = (
             "https://search.naver.com/search.naver"
             f"?where=news&query={requests.utils.quote(query)}"
@@ -145,6 +124,7 @@ def search_naver(company_name: str, target_date: date) -> dict | str | None:
 
     return None
 
+
 def _parse_naver_result(html: str, target_date: date) -> dict | None:
     soup = BeautifulSoup(html, "html.parser")
     seen: set[str] = set()
@@ -163,9 +143,13 @@ def _parse_naver_result(html: str, target_date: date) -> dict | None:
             container = container.parent
     return None
 
+
 def search_google(company_name: str, target_date: date) -> dict | str | None:
+    """
+    구글 뉴스 검색 크롤링
+    """
     d = target_date
-    query    = company_name  # 직접 검색
+    query    = company_name
     date_min = f"{d.month}/{d.day}/{d.year}"
     url = (
         "https://www.google.com/search"
@@ -187,6 +171,7 @@ def search_google(company_name: str, target_date: date) -> dict | str | None:
         logger.warning(f"[GOOGLE ERR] {company_name} {target_date}: {e}")
         return None
 
+
 def _parse_google_result(html: str, target_date: date) -> dict | None:
     soup = BeautifulSoup(html, "html.parser")
     for sel in ["div.SoaBEf a", "a.WlydOe", "div.dbsr a", "h3 > a", "a[data-ved]"]:
@@ -199,9 +184,11 @@ def _parse_google_result(html: str, target_date: date) -> dict | None:
                 return {"title": title, "link": href, "pub_date": target_date.isoformat(), "source": "google"}
     return None
 
+
 # ─────────────────────────────────────────────
-# Requests 폴백 및 본문 파서
+# 폴백 검색 (Naver → Google)
 # ─────────────────────────────────────────────
+
 PROVIDERS = [
     ("naver",  search_naver),
     ("google", search_google),
@@ -209,12 +196,15 @@ PROVIDERS = [
 
 def search_with_fallback(company_name: str, target_date: date) -> dict | str | None:
     all_blocked = True
+
     for provider_name, provider_fn in PROVIDERS:
         result = provider_fn(company_name, target_date)
+
         if result == "BLOCKED":
             logger.info(f"  [{provider_name.upper()} 차단] → 다음 프로바이더 시도...")
             time.sleep(random.uniform(2.0, 3.0))
             continue
+
         all_blocked = False
         return result
 
@@ -222,14 +212,20 @@ def search_with_fallback(company_name: str, target_date: date) -> dict | str | N
         return "ALL_BLOCKED"
     return None
 
-def fetch_fulltext_requests(link: str) -> str | None:
+
+# ─────────────────────────────────────────────
+# 전문 크롤링
+# ─────────────────────────────────────────────
+
+def fetch_fulltext(link: str) -> str | None:
     if not link:
         return None
     if "n.news.naver.com" in link:
-        return _fetch_naver_fulltext_requests(link)
-    return _fetch_generic_fulltext_requests(link)
+        return _fetch_naver_fulltext(link)
+    return _fetch_generic_fulltext(link)
 
-def _fetch_naver_fulltext_requests(url: str) -> str | None:
+
+def _fetch_naver_fulltext(url: str) -> str | None:
     try:
         resp = requests.get(url, headers=_get_headers("https://news.naver.com/"), timeout=10)
         resp.raise_for_status()
@@ -243,7 +239,8 @@ def _fetch_naver_fulltext_requests(url: str) -> str | None:
         logger.warning(f"[전문 실패-naver] {url}: {e}")
         return None
 
-def _fetch_generic_fulltext_requests(url: str) -> str | None:
+
+def _fetch_generic_fulltext(url: str) -> str | None:
     try:
         resp = requests.get(url, headers=_get_headers(url), timeout=10)
         resp.raise_for_status()
@@ -267,13 +264,16 @@ def _fetch_generic_fulltext_requests(url: str) -> str | None:
         logger.warning(f"[전문 실패-generic] {url}: {e}")
         return None
 
+
 def _clean_text(text: str) -> str:
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     return "\n".join(lines)
 
+
 # ─────────────────────────────────────────────
-# 공통 저장 및 유틸
+# 저장
 # ─────────────────────────────────────────────
+
 def save_article(company_name: str, ticker: str, article: dict, fulltext: str | None) -> Path:
     folder = DATA_DIR / f"{company_name}_{ticker}"
     folder.mkdir(parents=True, exist_ok=True)
@@ -285,12 +285,11 @@ def save_article(company_name: str, ticker: str, article: dict, fulltext: str | 
         "title":        article["title"],
         "fulltext":     fulltext,
         "link":         article["link"],
-        "source":       article.get("source", "naver"),
     }
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=2)
-    _upload_to_s3(ticker, article["pub_date"], doc)
     return filepath
+
 
 def date_range(start: date, end: date):
     current = start
@@ -298,19 +297,22 @@ def date_range(start: date, end: date):
         yield current
         current += timedelta(days=1)
 
+
 # ─────────────────────────────────────────────
-# 1단계 고속 수집 루프 (Requests)
+# 메인 수집 루프
 # ─────────────────────────────────────────────
-def collect_all_requests():
+
+def collect_all():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     total_stocks = len(STOCKS)
     total_days   = (END_DATE - START_DATE).days + 1
-    logger.info(f"Requests 고속 수집 시작: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
+    logger.info(f"KOSPI200 수집 시작: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
     provider_order = " → ".join(name.upper() for name, _ in PROVIDERS)
     logger.info(f"프로바이더 순서: {provider_order}")
 
     for stock_idx, (company_name, ticker) in enumerate(STOCKS, 1):
         logger.info(f"[{stock_idx}/{total_stocks}] {company_name} ({ticker})")
+
         collected        = 0
         skipped          = 0
         consecutive_block = 0
@@ -330,7 +332,10 @@ def collect_all_requests():
                 consecutive_block += 1
                 logger.warning(f"  ⛔ 전체차단 [{consecutive_block}일째] {target_date}")
                 if consecutive_block >= CONSECUTIVE_403_LIMIT:
-                    logger.warning(f"  ⛔ {consecutive_block}일 연속 전체차단 → {COOLDOWN_SECONDS//60}분 쿨다운 시작")
+                    logger.warning(
+                        f"  ⛔ {consecutive_block}일 연속 전체차단 → "
+                        f"{COOLDOWN_SECONDS//60}분 쿨다운 시작"
+                    )
                     time.sleep(COOLDOWN_SECONDS)
                     consecutive_block = 0
                 else:
@@ -344,276 +349,22 @@ def collect_all_requests():
                 continue
 
             consecutive_block = 0
-            fulltext = fetch_fulltext_requests(article["link"])
+            fulltext = fetch_fulltext(article["link"])
             save_article(company_name, ticker, article, fulltext)
             collected += 1
 
             src_tag = f"[{article.get('source', '?').upper()}]"
-            logger.info(f"  저장 {src_tag}: {target_date} | {article['title'][:40]}..." + (" [전문X]" if not fulltext else ""))
+            logger.info(
+                f"  저장 {src_tag}: {target_date} | {article['title'][:40]}..."
+                + (" [전문X]" if not fulltext else "")
+            )
+
             time.sleep(random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX))
 
-        logger.info(f"  → {company_name} Requests 완료: 수집 {collected}건 / 스킵 {skipped}건")
+        logger.info(f"  → {company_name} 완료: 수집 {collected}건 / 스킵 {skipped}건")
 
-    logger.info("Requests 고속 수집 단계 완료!\n")
+    logger.info("전체 수집 완료!")
 
-
-# ─────────────────────────────────────────────
-# 2단계 보완 수집 루프 (Playwright)
-# ─────────────────────────────────────────────
-
-def find_missing(company_name: str, ticker: str) -> list:
-    folder = DATA_DIR / f"{company_name}_{ticker}"
-    missing_dates = []
-    for d in date_range(START_DATE, END_DATE):
-        fp = folder / f"{d.isoformat()}.json"
-        if not fp.exists():
-            missing_dates.append(d)
-        else:
-            try:
-                with open(fp, "r", encoding="utf-8") as f:
-                    content = json.load(f)
-                if not content.get("title") and content.get("link"):
-                    missing_dates.append(d)
-            except Exception:
-                missing_dates.append(d)
-    return missing_dates
-
-def search_naver_playwright(page, company_name: str, target_date: date) -> dict | None:
-    from urllib.parse import quote, urlparse
-    search_names = get_search_names(company_name, target_date)
-    date_str = target_date.strftime("%Y%m%d")
-    SKIP_DOMAINS = {"naver.com", "nid.naver.com", "help.naver.com"}
-
-    def is_article_url(href: str) -> bool:
-        try:
-            p = urlparse(href)
-            path  = p.path.rstrip("/")
-            if not path or len(path) < 3:
-                return False
-            if any(c in path for c in [".", "=", "-", "_"]):
-                return True
-            if p.query:
-                return True
-            return len(path) > 4
-        except Exception:
-            return False
-
-    for query in search_names:
-        url = (
-            f"https://search.naver.com/search.naver"
-            f"?where=news&query={quote(query)}"
-            f"&nso=so:sim,p:from{date_str}to{date_str}&start=1"
-        )
-
-        try:
-            page.goto(url, wait_until="domcontentloaded", timeout=15_000)
-            try:
-                page.wait_for_selector("._fe_news_collection a, .list_news a", timeout=5_000)
-            except PWTimeout:
-                pass
-        except PWTimeout:
-            logger.warning(f"  타임아웃: {company_name} {target_date} [{query}]")
-            continue
-        except Exception as e:
-            err_msg = str(e).lower()
-            logger.warning(f"  페이지 로드 오류 [{company_name} {target_date}]: {e}")
-            if "crash" in err_msg or "closed" in err_msg or "disconnected" in err_msg:
-                raise
-            continue
-
-        try:
-            candidates = page.query_selector_all("._fe_news_collection a, .list_news a, .group_news a")
-            for el in candidates:
-                href  = el.get_attribute("href") or ""
-                title = (el.inner_text() or "").strip()
-                if (
-                    href.startswith("http")
-                    and len(title) >= 10
-                    and not any(d in href for d in SKIP_DOMAINS)
-                    and not title.startswith("구독")
-                    and is_article_url(href)
-                ):
-                    return {
-                        "title":    title,
-                        "link":     href,
-                        "pub_date": target_date.isoformat(),
-                        "source":   "naver",
-                    }
-        except Exception as e:
-            logger.warning(f"  셀렉터 오류 [{company_name} {target_date}]: {e}")
-
-    logger.info(f"  [{company_name}] {target_date} 결과없음 (모든 조합 시도)")
-    return None
-
-def fetch_fulltext_playwright(page, link: str) -> str | None:
-    if not link or not link.startswith("http"):
-        return None
-    try:
-        page.goto(link, wait_until="domcontentloaded", timeout=15_000)
-        page.wait_for_timeout(2_500)
-        html = page.content()
-    except Exception as e:
-        logger.warning(f"  전문 로드 오류 [{link}]: {e}")
-        return None
-
-    soup = BeautifulSoup(html, "html.parser")
-
-    for sel in ["#dic_area", "#articeBody", ".newsct_article",
-                "article", ".article_body", ".article-body",
-                ".news_body", ".view_con", "#news_body_area",
-                ".article_txt", ".newsct_article", ".cont_article"]:
-        el = soup.select_one(sel)
-        if el:
-            lines = [l.strip() for l in el.get_text().splitlines() if l.strip()]
-            text = "\n".join(lines)
-            if len(text) > 100:
-                return text
-
-    for tag in soup.find_all(["nav", "header", "footer", "aside", "script", "style"]):
-        tag.decompose()
-    paras = [p.get_text().strip() for p in soup.find_all("p")]
-    meaningful = [p for p in paras if len(p) >= 30]
-    if meaningful:
-        return "\n".join(meaningful)
-
-    try:
-        js_text = page.evaluate("""
-        () => {
-            const SKIP = ['script','style','nav','header','footer','aside'];
-            let best = { el: null, len: 0 };
-            document.querySelectorAll('div, section, main, article').forEach(el => {
-                if (SKIP.some(t => el.tagName.toLowerCase() === t)) return;
-                const text = (el.innerText || '').trim();
-                if (text.length > best.len && el.children.length < 20) {
-                    best = { el, len: text.length };
-                }
-            });
-            return best.el ? best.el.innerText.trim() : '';
-        }
-        """)
-        if js_text and len(js_text) > 100:
-            lines = [l.strip() for l in js_text.splitlines() if l.strip()]
-            return "\n".join(lines)
-    except Exception as e:
-        logger.warning(f"  JS 본문 추출 오류: {e}")
-
-    return None
-
-def fill_gaps_playwright():
-    logger.info("Playwright 빈 날짜 보완 수집을 시작합니다...")
-    gap_map = {}
-    total_missing = 0
-    for company_name, ticker in STOCKS:
-        missing = find_missing(company_name, ticker)
-        gap_map[(company_name, ticker)] = missing
-        total_missing += len(missing)
-        logger.info(f"  {company_name}: 빈 날짜 {len(missing)}개")
-
-    logger.info(f"총 보완 대상: {total_missing}개 날짜")
-    if total_missing == 0:
-        logger.info("빈 날짜가 없습니다. 보완 단계를 스킵합니다.")
-        return
-
-    with sync_playwright() as pw:
-        def init_browser():
-            browser = pw.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
-            )
-            ctx = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 720},
-                locale="ko-KR",
-            )
-            page = ctx.new_page()
-            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            return browser, page
-
-        browser, page = init_browser()
-        total_stocks = len(STOCKS)
-        global_collected = 0
-
-        try:
-            for idx, (company_name, ticker) in enumerate(STOCKS, 1):
-                missing_dates = gap_map[(company_name, ticker)]
-                if not missing_dates:
-                    continue
-
-                logger.info(f"[{idx}/{total_stocks}] {company_name} ({ticker}) - {len(missing_dates)}개 보완 시작")
-                collected = 0
-
-                for target_date in missing_dates:
-                    if global_collected > 0 and global_collected % 30 == 0:
-                        logger.info("  [System] 브라우저 메모리 세척을 위한 재시작...")
-                        browser.close()
-                        browser, page = init_browser()
-
-                    fp = DATA_DIR / f"{company_name}_{ticker}" / f"{target_date.isoformat()}.json"
-                    if fp.exists():
-                        try:
-                            with open(fp, "r", encoding="utf-8") as f:
-                                content = json.load(f)
-                            if content.get("title"):
-                                continue
-                        except Exception:
-                            pass
-
-                    try:
-                        article = search_naver_playwright(page, company_name, target_date)
-                        if not article:
-                            logger.info(f"  기사 없음 (빈 파일 생성하여 향후 스킵): {target_date}")
-                            empty_article = {
-                                "title": "",
-                                "link": "",
-                                "pub_date": target_date.isoformat(),
-                                "source": "naver"
-                            }
-                            save_article(company_name, ticker, empty_article, "")
-                            time.sleep(random.uniform(1.0, 2.0))
-                            continue
-
-                        fulltext = fetch_fulltext_playwright(page, article["link"])
-                        save_article(company_name, ticker, article, fulltext)
-                        collected += 1
-                        global_collected += 1
-                        logger.info(f"  저장: {target_date} | {article['title'][:45]}..." + (" [전문X]" if not fulltext else ""))
-                        time.sleep(random.uniform(PW_DELAY_MIN, PW_DELAY_MAX))
-
-                    except Exception as e:
-                        if "crash" in str(e).lower() or "closed" in str(e).lower():
-                            logger.warning(f"  [Error] 브라우저 충돌 감지 ({e}). 재시작 중...")
-                            try: browser.close()
-                            except: pass
-                            browser, page = init_browser()
-                        else:
-                            logger.error(f"  [Error] 알 수 없는 오류: {e}")
-
-                logger.info(f"  → {company_name} 보완 완료: {collected}개")
-        finally:
-            browser.close()
-            logger.info("=== Playwright 보완 수집 단계 완료 ===")
-
-# ─────────────────────────────────────────────
-# 메인 통합 제어
-# ─────────────────────────────────────────────
-def main():
-    parser = argparse.ArgumentParser(description="코스피200 지수 뉴스 수집")
-    parser.add_argument("--date", default=None, help="수집 날짜 YYYY-MM-DD (미지정 시 전체 범위)")
-    args = parser.parse_args()
-
-    if args.date:
-        global START_DATE, END_DATE
-        d = date.fromisoformat(args.date)
-        START_DATE = END_DATE = d
-
-    logger.info("=========================================")
-    logger.info("코스피 200 지수 뉴스 수집 및 보완 실행")
-    logger.info("=========================================")
-
-    collect_all_requests()
-    fill_gaps_playwright()
-
-    logger.info("모든 코스피 200 지수 뉴스 수집 및 보완 단계가 완료되었습니다.")
 
 if __name__ == "__main__":
-    main()
+    collect_all()
