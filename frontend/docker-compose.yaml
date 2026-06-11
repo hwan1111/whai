@@ -9,6 +9,7 @@ networks:
 
 services:
   frontend:
+    image: ${FRONTEND_IMAGE:-whai-frontend:latest}
     build:
       context: ..
       dockerfile: frontend/Dockerfile.frontend

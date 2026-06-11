@@ -23,8 +23,8 @@ default_args = {
     "start_date": datetime(2026, 6, 9),
     "email_on_failure": True,
     "email_on_retry": False,
-    "retries": 0,
-    "retry_delay": timedelta(minutes=10),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=0),
 }
 
 dag = DAG(
