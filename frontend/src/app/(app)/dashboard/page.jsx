@@ -63,13 +63,13 @@ const NEWS_TICKER_GROUPS = [
   },
 ];
 
-function NewsDrawer({ open, onClose }) {
-  const [ticker, setTicker] = useState('');
-  const [days, setDays] = useState('30');
+function NewsDrawer({ open, onClose, defaultTicker }) {
+  const [ticker, setTicker] = useState(defaultTicker || '');
+  const [days, setDays] = useState('90');
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { if (open) fetchNews(); }, [open]);
+  useEffect(() => { if (open) { setTicker(defaultTicker || ''); fetchNews(); } }, [open, defaultTicker]);
 
   async function fetchNews() {
     setLoading(true);
@@ -101,9 +101,10 @@ function NewsDrawer({ open, onClose }) {
             ))}
           </select>
           <select className="fsel" value={days} onChange={e => setDays(e.target.value)}>
-            <option value="7">최근 7일</option>
-            <option value="30">최근 30일</option>
-            <option value="90">최근 90일</option>
+            <option value="30">최근 1개월</option>
+            <option value="90">최근 3개월</option>
+            <option value="180">최근 6개월</option>
+            <option value="365">전체</option>
           </select>
           <button className="btn btn-primary" onClick={fetchNews}>검색</button>
         </div>
@@ -872,7 +873,7 @@ export default function DashboardPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-      <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} />
+      <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} defaultTicker={selectedFxId || selectedStockId || ''} />
       {showMatrix && showComplex && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -886,7 +887,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexShrink: 0 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>상관계수 히트맵</div>
-                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Pearson · {complexIds.length}개 종목</div>
+                <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginTop: 2 }}>Pearson · {complexIds.length}개 종목</div>
               </div>
               <button
                 onClick={() => setShowMatrix(false)}
@@ -947,7 +948,7 @@ export default function DashboardPage() {
 
             {/* 컬러 스케일 (고정) */}
             <div style={{ flexShrink: 0, marginTop: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#94a3b8' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#475569', fontWeight: 600 }}>
                 <span>-1.0</span>
                 <div style={{ flex: 1, height: 7, borderRadius: 4, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
                 <span>+1.0</span>
@@ -1060,7 +1061,7 @@ export default function DashboardPage() {
               const currency = selectedFxId;
               return (
                 <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
                     <img src={fxInfo.flag} alt={currency} style={{ width: 32, height: 22, borderRadius: 4, objectFit: 'cover', border: '1px solid #e8ecf0', flexShrink: 0 }} />
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{currency} <span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>{fxInfo.desc}</span></div>
@@ -1081,7 +1082,7 @@ export default function DashboardPage() {
                     )}
                   </div>
                   <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
-                  <div className="ai-main-title" style={{ marginBottom: 6 }}>환율 정보</div>
+                  <div className="ai-main-title" style={{ marginBottom: 4 }}>환율 정보</div>
                   <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
                     {[
                       { label: '현재 환율', value: fxPrice ? `${Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—' },
@@ -1121,7 +1122,7 @@ export default function DashboardPage() {
                     const safePct = cur != null && range > 0 ? Math.max(0, Math.min(100, Math.round(((cur - l) / range) * 100))) : null;
                     const dotColor = safePct != null && safePct >= 50 ? '#dc2626' : '#2563eb';
                     return (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: 5 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                           <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>52주 환율 위치</span>
                           <span style={{ fontSize: 8, color: '#94a3b8' }}>BOK ECOS</span>
@@ -1151,7 +1152,7 @@ export default function DashboardPage() {
                       ? `${regime.cum_return >= 0 ? '+' : ''}${(regime.cum_return * 100).toFixed(1)}%`
                       : null;
                     return (
-                      <div style={{ marginTop: 8, padding: '7px 9px', background: isUp ? 'rgba(220,38,38,0.04)' : 'rgba(37,99,235,0.04)', borderRadius: 8, border: `1px solid ${isUp ? 'rgba(220,38,38,0.15)' : 'rgba(37,99,235,0.15)'}` }}>
+                      <div style={{ marginTop: 5, padding: '5px 9px', background: isUp ? 'rgba(220,38,38,0.04)' : 'rgba(37,99,235,0.04)', borderRadius: 8, border: `1px solid ${isUp ? 'rgba(220,38,38,0.15)' : 'rgba(37,99,235,0.15)'}` }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontSize: 12, fontWeight: 800, color: dirColor }}>{isUp ? '▲' : '▼'} {regime.direction}</span>
@@ -1177,7 +1178,7 @@ export default function DashboardPage() {
                     if (!highest) return null;
                     const items = highest?.id === lowest?.id ? [highest] : [highest, lowest];
                     return (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: 5 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                           <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>분석 종목 상관관계</span>
                           <span style={{ fontSize: 8, color: '#94a3b8' }}>Pearson</span>
@@ -1215,7 +1216,7 @@ export default function DashboardPage() {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: cfg.name.length > 8 ? 11 : 14, fontWeight: 800, color: '#1e293b', wordBreak: 'keep-all', overflowWrap: 'break-word' }}>{cfg.name}{selectedStockId !== '000000' && <span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}> {selectedStockId}</span>}</div>
-                    <div style={{ fontSize: 10, color: '#64748b' }}>{cfg.meta}</div>
+                    <div style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cfg.meta}</div>
                   </div>
                   {favDetailLoading ? (
                     <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
@@ -1386,7 +1387,7 @@ export default function DashboardPage() {
             if (!factors?.length) return null;
             const maxPct = Math.max(...factors.map(f => f.pct));
             return (
-              <div className="ai-main-card">
+              <div className="ai-main-card" style={{ flexShrink: 0, overflow: 'visible' }}>
                 <div className="ai-main-title" style={{ marginBottom: 10 }}>{title}</div>
                 {factors.map(f => {
                   const isNeg = f.val.startsWith('-');
@@ -1473,7 +1474,7 @@ export default function DashboardPage() {
                     </table>
                   </div>
                   <div style={{ marginTop: isTiny ? 12 : 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#94a3b8' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#475569', fontWeight: 600 }}>
                       <span>-1.0</span>
                       <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'linear-gradient(to right,rgb(30,64,175),rgb(248,250,252),rgb(185,28,28))' }} />
                       <span>+1.0</span>

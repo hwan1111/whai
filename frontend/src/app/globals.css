@@ -162,7 +162,7 @@ html, body { height: 100%; overflow: hidden; }
 .factor-label { font-size: 12px; font-weight: 700; color: #1e293b; width: 108px; flex-shrink: 0; }
 .factor-bar-bg { flex: 1; height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
 .factor-fill { height: 100%; border-radius: 3px; }
-.factor-val { font-size: 11px; font-weight: 600; width: 40px; text-align: right; flex-shrink: 0; }
+.factor-val { font-size: 12px; font-weight: 800; width: 40px; text-align: right; flex-shrink: 0; }
 .factor-desc { font-size: 11px; font-weight: 600; margin-bottom: 5px; margin-left: 117px; margin-top: -2px; }
 
 .matrix-table { border-collapse: separate; border-spacing: 3px; table-layout: fixed; }

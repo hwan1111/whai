@@ -36,6 +36,24 @@ const getFlag = id => FLAG_MAP[id] ? `/assets/flags/${FLAG_MAP[id]}.png` : null;
 const MAX_SNAPSHOTS = 10;
 
 const fmt = n => Math.round(n).toLocaleString('ko-KR');
+const fmtPrice = (id, n) => id === 'USD' ? n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : fmt(n);
+function josa(word, type) {
+  const last = word[word.length - 1];
+  const code = last.charCodeAt(0);
+  const hasBatchim = code >= 0xAC00 && code <= 0xD7A3 && (code - 0xAC00) % 28 !== 0;
+  const batchimIdx = hasBatchim ? (code - 0xAC00) % 28 : 0;
+  if (type === '이/가') return hasBatchim ? '이' : '가';
+  if (type === '은/는') return hasBatchim ? '은' : '는';
+  if (type === '을/를') return hasBatchim ? '을' : '를';
+  if (type === '으로/로') return hasBatchim && batchimIdx !== 8 ? '으로' : '로';
+  return type;
+}
+function initPrice(id, price) {
+  if (!price) return '';
+  const n = parseFloat(price);
+  if (isNaN(n)) return '';
+  return id === 'USD' ? n.toFixed(2) : String(Math.round(n));
+}
 function parseNumberInput(value) {
   return parseFloat(String(value).replace(/,/g, ''));
 }
@@ -246,7 +264,7 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   else if (top.w >= 35)
     lines.push(`<strong>📊 비중 점검 권장</strong>: <strong>${top.name}</strong> 비중이 <strong>${top.w.toFixed(1)}%</strong>로 다소 높습니다. 리스크 관리 차원에서 30% 이하로 조절하는 것을 고려해 보세요.`);
   else
-    lines.push(`<strong>✅ 분산 투자 양호</strong>: 최고 비중 종목인 <strong>${top.name}</strong>이 <strong>${top.w.toFixed(1)}%</strong>로 집중 위험이 낮습니다. 현재 비중 분산 수준은 안정적입니다.`);
+    lines.push(`<strong>✅ 분산 투자 양호</strong>: 최고 비중 종목인 <strong>${top.name}</strong>${josa(top.name, '이/가')} <strong>${top.w.toFixed(1)}%</strong>로 집중 위험이 낮습니다. 현재 비중 분산 수준은 안정적입니다.`);
 
   // 2. 섹터 분석
   if (sectorList.length === 1)
@@ -258,12 +276,12 @@ function buildAiHtml(sorted, totalVal, totalCost) {
 
   // 3. 수익/손실 종목
   if (gainers.length > 0 && losers.length > 0) {
-    lines.push(`<strong>📈 성과 상위</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#dc2626">+${gainers[0].pnlPct.toFixed(1)}%</span>로 가장 높은 수익을 기록 중입니다.`);
-    lines.push(`<strong>📉 손실 종목</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#2563eb">${losers[0].pnlPct.toFixed(1)}%</span> 손실 중입니다. 손절 기준 또는 추가 매수 여부를 점검해 보세요.`);
+    lines.push(`<strong>📈 성과 상위</strong>: <strong>${gainers[0].name}</strong>${josa(gainers[0].name, '이/가')} <span style="color:#dc2626">+${gainers[0].pnlPct.toFixed(1)}%</span>로 가장 높은 수익을 기록 중입니다.`);
+    lines.push(`<strong>📉 손실 종목</strong>: <strong>${losers[0].name}</strong>${josa(losers[0].name, '이/가')} <span style="color:#2563eb">${losers[0].pnlPct.toFixed(1)}%</span> 손실 중입니다. 손절 기준 또는 추가 매수 여부를 점검해 보세요.`);
   } else if (gainers.length > 0) {
-    lines.push(`<strong>📈 전 종목 수익</strong>: <strong>${gainers[0].name}</strong>이 <span style="color:#dc2626">+${gainers[0].pnlPct.toFixed(1)}%</span>로 최고 성과를 기록 중입니다.`);
+    lines.push(`<strong>📈 전 종목 수익</strong>: <strong>${gainers[0].name}</strong>${josa(gainers[0].name, '이/가')} <span style="color:#dc2626">+${gainers[0].pnlPct.toFixed(1)}%</span>로 최고 성과를 기록 중입니다.`);
   } else if (losers.length > 0) {
-    lines.push(`<strong>📉 전 종목 손실</strong>: <strong>${losers[0].name}</strong>이 <span style="color:#2563eb">${losers[0].pnlPct.toFixed(1)}%</span>로 가장 큰 손실입니다. 시장 상황과 보유 근거를 재검토하세요.`);
+    lines.push(`<strong>📉 전 종목 손실</strong>: <strong>${losers[0].name}</strong>${josa(losers[0].name, '이/가')} <span style="color:#2563eb">${losers[0].pnlPct.toFixed(1)}%</span>로 가장 큰 손실입니다. 시장 상황과 보유 근거를 재검토하세요.`);
   }
 
   // 4. 종합 의견
@@ -313,7 +331,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
           }}>{label}</button>
         ))}
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))`, gap: rowGap }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateRows: `repeat(${MAX_SNAPSHOTS}, minmax(0, 1fr))`, gap: rowGap }}>
       {rows.map(({ snap, sorted, totalVal }) => {
         const maxVal = Math.max(...rows.map(r => r.totalVal));
         const barWidthPct = maxVal > 0 ? totalVal / maxVal * 100 : 0;
@@ -652,7 +670,7 @@ export default function MyReportPage() {
       const next = {};
       if (pr.ok) { const d = await pr.json(); d.forEach(({ ticker, close }) => { next[ticker] = close; }); }
       setPrices(next);
-      if (next['005930']) setAddPrice(String(next['005930']));
+      if (next['005930']) setAddPrice(initPrice('005930', next['005930']));
     } catch { /* silent */ }
     setPricesLoaded(true);
   }
@@ -679,7 +697,7 @@ export default function MyReportPage() {
     } else {
       setHoldings([...holdings, { id: addAsset, qty, avgPrice: avg }]);
     }
-    setAddQty('1'); setAddPrice(prices[addAsset] ? String(prices[addAsset]) : '');
+    setAddQty('1'); setAddPrice(initPrice(addAsset, prices[addAsset]));
   }
 
   function removeHolding(id) { setHoldings(holdings.filter(h => h.id !== id)); }
@@ -701,7 +719,7 @@ export default function MyReportPage() {
       setSnapshots(next);
       setSelectedSnapId(next[0]?.id ?? null);
       setHoldings([]);
-      setAddQty('1'); setAddPrice(prices[addAsset] ? String(prices[addAsset]) : '');
+      setAddQty('1'); setAddPrice(initPrice(addAsset, prices[addAsset]));
       setFormOpen(false);
       setGenerating(false);
     }, 800);
@@ -776,7 +794,7 @@ export default function MyReportPage() {
               const logo = getLogo(id);
               const sel = addAsset === id;
               return (
-                <div key={id} className={`asset-pick-card${sel ? ' selected' : ''}`} onClick={() => { setAddAsset(id); setAddPrice(prices[id] ? String(prices[id]) : ''); }}>
+                <div key={id} className={`asset-pick-card${sel ? ' selected' : ''}`} onClick={() => { setAddAsset(id); setAddPrice(initPrice(id, prices[id])); }}>
                   <div className="asset-pick-logo">
                     {logo && <img src={logo} alt={info.name} />}
                   </div>
@@ -795,7 +813,7 @@ export default function MyReportPage() {
               const sel = addAsset === id;
               const [code, ...rest] = info.name.split(' ');
               return (
-                <div key={id} className={`asset-pick-card${sel ? ' selected' : ''}`} onClick={() => { setAddAsset(id); setAddPrice(prices[id] ? String(prices[id]) : ''); }}>
+                <div key={id} className={`asset-pick-card${sel ? ' selected' : ''}`} onClick={() => { setAddAsset(id); setAddPrice(initPrice(id, prices[id])); }}>
                   {flag && <img className="asset-pick-flag" src={flag} alt={info.name} />}
                   <span className="asset-pick-name">{code}<span className="asset-pick-label"> · {rest.join(' ')}</span></span>
                 </div>
@@ -835,7 +853,7 @@ export default function MyReportPage() {
               <label className="add-holding-label">평균 매입가 <span style={{ fontWeight: 400, color: '#94a3b8' }}>(현재가 자동 입력 · 수정 가능)</span></label>
               <div style={{ position: 'relative', width: 220 }}>
                 <input className="form-input" type="text" inputMode="decimal"
-                  placeholder={!pricesLoaded ? '가격 불러오는 중...' : prices[addAsset] ? formatNumberInput(prices[addAsset]) : '직접 입력'}
+                  placeholder={!pricesLoaded ? '가격 불러오는 중...' : prices[addAsset] ? formatNumberInput(initPrice(addAsset, prices[addAsset])) : '직접 입력'}
                   value={formatNumberInput(addPrice)}
                   onChange={e => setAddPrice(e.target.value.replace(/,/g, ''))}
                   style={{ width: '100%', paddingRight: 34 }} />
@@ -876,9 +894,9 @@ export default function MyReportPage() {
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>
                         {isEditing
                           ? <input type="text" inputMode="decimal" value={formatNumberInput(editPrice)} onChange={e => setEditPrice(e.target.value.replace(/,/g, ''))} className="form-input" style={{ width: 100, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
-                          : <>{fmt(h.avgPrice)}원</>}
+                          : <>{fmtPrice(h.id, h.avgPrice)}원</>}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(cur)}원</td>
+                      <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmtPrice(h.id, cur)}원</td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmt(curVal)}원</td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{w.toFixed(1)}%</td>
                       <td style={{ padding: '7px 8px', borderBottom: '1px solid #f8fafc', textAlign: 'center', whiteSpace: 'nowrap' }}>
