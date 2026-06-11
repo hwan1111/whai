@@ -27,10 +27,14 @@ from urllib.parse import urlparse
 import pymysql
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(ROOT / ".env.local", override=True)
 
-CA_PATH = str(ROOT / "config" / "certs" / "ca.pem")
+_CA_CANDIDATES = [
+    Path("/opt/certs/ca.pem"),              # Airflow container
+    ROOT / "config" / "certs" / "ca.pem",  # local dev
+]
+CA_PATH = next((str(p) for p in _CA_CANDIDATES if p.exists()), str(_CA_CANDIDATES[-1]))
 
 
 # ── DB 연결 ───────────────────────────────────────────────────────────
@@ -130,16 +134,63 @@ ON DUPLICATE KEY UPDATE
     sem_mean    = VALUES(sem_mean)
 """
 
+# append 모드: 이미 존재하는 행은 건드리지 않고 신규 행만 INSERT
+APPEND_REGIME = """
+INSERT IGNORE INTO regime
+    (ticker, regime_id, start_date, end_date, days, direction,
+     cum_return, vol_trend, news_count, tokens_in)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+"""
+
+APPEND_SUMMARY = """
+INSERT IGNORE INTO regime_summary
+    (regime_pk, cause, vol_insight, confidence, reasoning, tokens_out,
+     coverage, novelty, sem_max, sem_mean)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+"""
+
+
+_S3_BUCKET    = "fisa-news-archive"
+_S3_PROCESSED = "processed"
+
+
+def _cleanup_local(ticker: str) -> None:
+    import boto3
+    s3 = boto3.client("s3")
+
+    summary_path = ROOT / "data" / ticker / f"regime_news_summary_{ticker}.json"
+    eval_path    = ROOT / "data" / ticker / f"eval_regime_summary_{ticker}.json"
+
+    if summary_path.exists():
+        s3_key = f"{_S3_PROCESSED}/{ticker}/regime_news_summary_{ticker}.json"
+        s3.put_object(
+            Bucket=_S3_BUCKET, Key=s3_key,
+            Body=summary_path.read_bytes(),
+            ContentType="application/json; charset=utf-8",
+        )
+        print(f"  [cleanup] S3 backup: {s3_key}")
+        summary_path.unlink()
+        print(f"  [cleanup] 삭제: {summary_path}")
+
+    if eval_path.exists():
+        eval_path.unlink()
+        print(f"  [cleanup] 삭제: {eval_path}")
+
 
 def upload(ticker: str, mode: str = "skip", dry_run: bool = False,
-           skip_company_check: bool = False, db_ticker: str | None = None) -> None:
+           skip_company_check: bool = False, db_ticker: str | None = None,
+           cleanup: bool = True) -> None:
     """
     mode:
-      skip    - 이미 존재하는 ticker 국면은 건너뜀 (기본)
+      skip    - 이미 존재하는 ticker 국면이 하나라도 있으면 전체 건너뜀 (기본)
       replace - ON DUPLICATE KEY UPDATE 로 전체 덮어쓰기
+      append  - 이미 존재하는 행은 유지, 신규 행만 INSERT (DAG 증분 적재용)
 
     db_ticker:
       파일 경로 조회는 ticker 로, DB INSERT는 db_ticker 로 수행 (예: KOSPI200 파일 → 000000 행)
+
+    cleanup:
+      True(기본) — DB 적재 성공 후 로컬 JSON 파일 삭제
     """
     db_ticker = db_ticker or ticker
 
@@ -161,11 +212,15 @@ def upload(ticker: str, mode: str = "skip", dry_run: bool = False,
 
             existing = count_existing(cur, db_ticker)
             if existing > 0 and mode == "skip":
-                print(f"  [스킵] 이미 {existing}건 존재 (--mode replace 로 덮어쓰기 가능)")
+                print(f"  [스킵] 이미 {existing}건 존재 (--mode replace 또는 append 로 변경 가능)")
                 return
 
-            regime_sql  = UPDATE_REGIME  if mode == "replace" else INSERT_REGIME
-            summary_sql = UPDATE_SUMMARY if mode == "replace" else INSERT_SUMMARY
+            if mode == "replace":
+                regime_sql, summary_sql = UPDATE_REGIME, UPDATE_SUMMARY
+            elif mode == "append":
+                regime_sql, summary_sql = APPEND_REGIME, APPEND_SUMMARY
+            else:
+                regime_sql, summary_sql = INSERT_REGIME, INSERT_SUMMARY
 
             inserted_regime  = 0
             inserted_summary = 0
@@ -194,12 +249,12 @@ def upload(ticker: str, mode: str = "skip", dry_run: bool = False,
 
                 cur.execute(regime_sql, regime_params)
 
-                # replace 모드: lastrowid가 0이면 기존 행 id 조회
+                # replace/append 모드: lastrowid가 0이면 기존 행 id 조회
                 regime_pk = cur.lastrowid
                 if not regime_pk:
                     cur.execute(
                         "SELECT id FROM regime WHERE ticker=%s AND regime_id=%s",
-                        (ticker, rid)
+                        (db_ticker, rid)
                     )
                     row = cur.fetchone()
                     regime_pk = row["id"] if row else None
@@ -265,13 +320,16 @@ def upload(ticker: str, mode: str = "skip", dry_run: bool = False,
                 f"  conf={row['confidence']}  cov={row['coverage']}  sem={row['sem_mean']}"
             )
 
+        if cleanup and not dry_run:
+            _cleanup_local(ticker)
+
     finally:
         conn.close()
 
 
 if __name__ == "__main__":
     AVAILABLE = ["005930", "000660", "005380", "000270", "079550",
-                 "051910", "096770", "055550", "105560", "012450", "KOSPI200"]
+                 "051910", "096770", "055550", "105560", "012450", "KOSPI200", "USD_KRW"]
 
     parser = argparse.ArgumentParser(description="국면 요약 Aiven DB 업로드")
     parser.add_argument(
@@ -279,8 +337,8 @@ if __name__ == "__main__":
         help=f"종목 코드 ({', '.join(AVAILABLE)})",
     )
     parser.add_argument(
-        "--mode", choices=["skip", "replace"], default="skip",
-        help="skip=기존 데이터 유지(기본)  replace=전체 덮어쓰기",
+        "--mode", choices=["skip", "replace", "append"], default="skip",
+        help="skip=기존 데이터 전체 유지(기본)  replace=덮어쓰기  append=신규만 INSERT",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -294,12 +352,24 @@ if __name__ == "__main__":
         "--db-ticker", default=None,
         help="DB에 저장할 ticker 코드 (파일과 다를 때 사용, 예: --ticker KOSPI200 --db-ticker 000000)",
     )
+    parser.add_argument(
+        "--no-cleanup", action="store_true",
+        help="DB 적재 후 로컬 JSON 파일 유지 (기본: 적재 성공 후 삭제)",
+    )
+    parser.add_argument(
+        "--cleanup-only", action="store_true",
+        help="DB 적재 없이 로컬 JSON 파일 S3 백업 + 삭제만 수행 (skip 경로용)",
+    )
     args = parser.parse_args()
 
-    upload(
-        ticker=args.ticker,
-        mode=args.mode,
-        dry_run=args.dry_run,
-        skip_company_check=args.skip_company_check,
-        db_ticker=args.db_ticker,
-    )
+    if args.cleanup_only:
+        _cleanup_local(args.ticker)
+    else:
+        upload(
+            ticker=args.ticker,
+            mode=args.mode,
+            dry_run=args.dry_run,
+            skip_company_check=args.skip_company_check,
+            db_ticker=args.db_ticker,
+            cleanup=not args.no_cleanup,
+        )

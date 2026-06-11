@@ -6,12 +6,15 @@ script/collect_kospi200_news.py
 각 프로바이더가 403이면 자동으로 다음 프로바이더로 전환
 """
 
+import argparse
 import re
 import json
 import time
 import random
 import logging
 import requests
+import boto3
+from botocore.exceptions import ClientError
 from datetime import date, timedelta
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -25,6 +28,10 @@ LOG_PATH  = BASE_DIR / "data" / "kospi200_news_collect.log"
 
 START_DATE = date(2020, 1, 1)
 END_DATE   = date.today()
+
+S3_BUCKET  = "fisa-news-archive"
+_S3_MODE   = False   # True when --date flag used
+_S3_CLIENT = None
 
 REQUEST_DELAY_MIN     = 2.0
 REQUEST_DELAY_MAX     = 4.0
@@ -72,6 +79,36 @@ def get_search_names(company_name: str, target_date: date) -> list[str]:
     if company_name not in names:
         names.append(company_name)
     return names
+
+
+# ─────────────────────────────────────────────
+# S3 헬퍼 (--date 모드 전용)
+# ─────────────────────────────────────────────
+
+def _s3():
+    global _S3_CLIENT
+    if _S3_CLIENT is None:
+        _S3_CLIENT = boto3.client("s3")
+    return _S3_CLIENT
+
+def _s3_exists(ticker: str, date_str: str) -> bool:
+    year, month = date_str[:4], date_str[5:7]
+    try:
+        _s3().head_object(Bucket=S3_BUCKET, Key=f"raw/{ticker}/{year}/{month}/{date_str}.json")
+        return True
+    except ClientError:
+        return False
+
+def _s3_upload(ticker: str, date_str: str, doc: dict) -> None:
+    year, month = date_str[:4], date_str[5:7]
+    key = f"raw/{ticker}/{year}/{month}/{date_str}.json"
+    payload = {**doc, "fulltext_length": len(doc.get("fulltext") or "")}
+    _s3().put_object(
+        Bucket=S3_BUCKET, Key=key,
+        Body=json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+        ContentType="application/json; charset=utf-8",
+    )
+    logger.info(f"  S3 uploaded: {key}")
 
 
 # ─────────────────────────────────────────────
@@ -274,10 +311,7 @@ def _clean_text(text: str) -> str:
 # 저장
 # ─────────────────────────────────────────────
 
-def save_article(company_name: str, ticker: str, article: dict, fulltext: str | None) -> Path:
-    folder = DATA_DIR / f"{company_name}_{ticker}"
-    folder.mkdir(parents=True, exist_ok=True)
-    filepath = folder / f"{article['pub_date']}.json"
+def save_article(company_name: str, ticker: str, article: dict, fulltext: str | None) -> None:
     doc = {
         "pub_date":     article["pub_date"],
         "ticker":       ticker,
@@ -286,9 +320,14 @@ def save_article(company_name: str, ticker: str, article: dict, fulltext: str | 
         "fulltext":     fulltext,
         "link":         article["link"],
     }
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(doc, f, ensure_ascii=False, indent=2)
-    return filepath
+    if _S3_MODE:
+        _s3_upload(ticker, article["pub_date"], doc)
+    else:
+        folder = DATA_DIR / f"{company_name}_{ticker}"
+        folder.mkdir(parents=True, exist_ok=True)
+        filepath = folder / f"{article['pub_date']}.json"
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(doc, f, ensure_ascii=False, indent=2)
 
 
 def date_range(start: date, end: date):
@@ -306,7 +345,8 @@ def collect_all():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     total_stocks = len(STOCKS)
     total_days   = (END_DATE - START_DATE).days + 1
-    logger.info(f"KOSPI200 수집 시작: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
+    mode_label   = "S3모드" if _S3_MODE else "로컬모드"
+    logger.info(f"KOSPI200 수집 시작 [{mode_label}]: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
     provider_order = " → ".join(name.upper() for name, _ in PROVIDERS)
     logger.info(f"프로바이더 순서: {provider_order}")
 
@@ -318,9 +358,14 @@ def collect_all():
         consecutive_block = 0
 
         for target_date in date_range(START_DATE, END_DATE):
-            filepath = DATA_DIR / f"{company_name}_{ticker}" / f"{target_date.isoformat()}.json"
+            date_str = target_date.isoformat()
 
-            if filepath.exists():
+            if _S3_MODE:
+                already = _s3_exists(ticker, date_str)
+            else:
+                already = (DATA_DIR / f"{company_name}_{ticker}" / f"{date_str}.json").exists()
+
+            if already:
                 skipped += 1
                 consecutive_block = 0
                 continue
@@ -367,4 +412,19 @@ def collect_all():
 
 
 if __name__ == "__main__":
+    import sys as _sys
+    global START_DATE, END_DATE, _S3_MODE
+
+    parser = argparse.ArgumentParser(description="KOSPI200 뉴스 수집")
+    parser.add_argument("--date", default=None, help="기준 날짜 YYYY-MM-DD (미지정 시 전체 기간 로컬 수집)")
+    parser.add_argument("--lookback", type=int, default=13, help="--date 사용 시 소급 일수 (기본 13 = 2주)")
+    args = parser.parse_args()
+
+    if args.date:
+        from datetime import datetime as _dt
+        _end = _dt.strptime(args.date, "%Y-%m-%d").date()
+        START_DATE = _end - timedelta(days=args.lookback)
+        END_DATE   = _end
+        _S3_MODE   = True
+
     collect_all()

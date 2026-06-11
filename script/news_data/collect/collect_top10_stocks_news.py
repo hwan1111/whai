@@ -7,12 +7,15 @@ script/collect_top10_stocks_news.py
 - 2단계 (Playwright): 크롤링 실패 및 차단으로 누락된 날짜에 대해 Chrome 브라우저 기반 우회 보완 수집
 """
 
+import argparse
 import re
 import json
 import time
 import random
 import logging
 import requests
+import boto3
+from botocore.exceptions import ClientError
 from datetime import date, timedelta
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -27,6 +30,10 @@ LOG_PATH  = BASE_DIR / "data" / "collect_top10_stocks.log"
 
 START_DATE = date(2020, 1, 1)
 END_DATE   = date.today()
+
+S3_BUCKET  = "fisa-news-archive"
+_S3_MODE   = False
+_S3_CLIENT = None
 
 REQUEST_DELAY_MIN     = 2.0
 REQUEST_DELAY_MAX     = 4.0
@@ -93,6 +100,37 @@ def get_search_names(company_name: str, target_date: date) -> list[str]:
     if company_name not in names:
         names.append(company_name)
     return names
+
+
+# ─────────────────────────────────────────────
+# S3 헬퍼 (--date 모드 전용)
+# ─────────────────────────────────────────────
+
+def _s3():
+    global _S3_CLIENT
+    if _S3_CLIENT is None:
+        _S3_CLIENT = boto3.client("s3")
+    return _S3_CLIENT
+
+def _s3_exists(ticker: str, date_str: str) -> bool:
+    year, month = date_str[:4], date_str[5:7]
+    try:
+        _s3().head_object(Bucket=S3_BUCKET, Key=f"raw/{ticker}/{year}/{month}/{date_str}.json")
+        return True
+    except ClientError:
+        return False
+
+def _s3_upload(ticker: str, date_str: str, doc: dict) -> None:
+    year, month = date_str[:4], date_str[5:7]
+    key = f"raw/{ticker}/{year}/{month}/{date_str}.json"
+    payload = {**doc, "fulltext_length": len(doc.get("fulltext") or "")}
+    _s3().put_object(
+        Bucket=S3_BUCKET, Key=key,
+        Body=json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+        ContentType="application/json; charset=utf-8",
+    )
+    logger.info(f"  S3 uploaded: {key}")
+
 
 # ─────────────────────────────────────────────
 # 로깅
@@ -306,10 +344,7 @@ def _clean_text(text: str) -> str:
 # ─────────────────────────────────────────────
 # 공통 저장 및 유틸
 # ─────────────────────────────────────────────
-def save_article(company_name: str, ticker: str, article: dict, fulltext: str | None) -> Path:
-    folder = DATA_DIR / f"{company_name}_{ticker}"
-    folder.mkdir(parents=True, exist_ok=True)
-    filepath = folder / f"{article['pub_date']}.json"
+def save_article(company_name: str, ticker: str, article: dict, fulltext: str | None) -> None:
     doc = {
         "pub_date":     article["pub_date"],
         "ticker":       ticker,
@@ -319,9 +354,14 @@ def save_article(company_name: str, ticker: str, article: dict, fulltext: str | 
         "link":         article["link"],
         "source":       article.get("source", "naver"),
     }
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(doc, f, ensure_ascii=False, indent=2)
-    return filepath
+    if _S3_MODE:
+        _s3_upload(ticker, article["pub_date"], doc)
+    else:
+        folder = DATA_DIR / f"{company_name}_{ticker}"
+        folder.mkdir(parents=True, exist_ok=True)
+        filepath = folder / f"{article['pub_date']}.json"
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(doc, f, ensure_ascii=False, indent=2)
 
 def date_range(start: date, end: date):
     current = start
@@ -336,7 +376,8 @@ def collect_all_requests():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     total_stocks = len(STOCKS)
     total_days   = (END_DATE - START_DATE).days + 1
-    logger.info(f"Requests 고속 수집 시작: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
+    mode_label   = "S3모드" if _S3_MODE else "로컬모드"
+    logger.info(f"Requests 고속 수집 시작 [{mode_label}]: {START_DATE} ~ {END_DATE} ({total_days}일) × {total_stocks}종목")
     provider_order = " → ".join(name.upper() for name, _ in PROVIDERS)
     logger.info(f"프로바이더 순서: {provider_order}")
 
@@ -347,9 +388,12 @@ def collect_all_requests():
         consecutive_block = 0
 
         for target_date in date_range(START_DATE, END_DATE):
-            filepath = DATA_DIR / f"{company_name}_{ticker}" / f"{target_date.isoformat()}.json"
+            date_str = target_date.isoformat()
+            already = _s3_exists(ticker, date_str) if _S3_MODE else (
+                DATA_DIR / f"{company_name}_{ticker}" / f"{date_str}.json"
+            ).exists()
 
-            if filepath.exists():
+            if already:
                 skipped += 1
                 consecutive_block = 0
                 continue
@@ -394,22 +438,24 @@ def collect_all_requests():
 
 def find_missing(company_name: str, ticker: str) -> list:
     folder = DATA_DIR / f"{company_name}_{ticker}"
-    # 비어 있거나 아예 파일이 존재하지 않는 날짜 찾기
     missing_dates = []
     for d in date_range(START_DATE, END_DATE):
-        fp = folder / f"{d.isoformat()}.json"
-        if not fp.exists():
-            missing_dates.append(d)
-        else:
-            # 빈 파일 체크 (수집 결과가 없어서 빈 json으로 생성된 것 제외하고 진짜 데이터가 날아갔거나 본문 수집에 완전히 실패한 경우 재수집하고 싶다면 체크)
-            try:
-                with open(fp, "r", encoding="utf-8") as f:
-                    content = json.load(f)
-                # 타이틀이 비어있는 빈 기사 저장형식이 아니라, 크래시 등으로 빈 데이터가 생겼다면 채우기
-                if not content.get("title") and content.get("link"):
-                    missing_dates.append(d)
-            except Exception:
+        date_str = d.isoformat()
+        if _S3_MODE:
+            if not _s3_exists(ticker, date_str):
                 missing_dates.append(d)
+        else:
+            fp = folder / f"{date_str}.json"
+            if not fp.exists():
+                missing_dates.append(d)
+            else:
+                try:
+                    with open(fp, "r", encoding="utf-8") as f:
+                        content = json.load(f)
+                    if not content.get("title") and content.get("link"):
+                        missing_dates.append(d)
+                except Exception:
+                    missing_dates.append(d)
     return missing_dates
 
 def search_naver_playwright(page, company_name: str, target_date: date) -> dict | None:
@@ -606,14 +652,15 @@ def fill_gaps_playwright():
                     try:
                         article = search_naver_playwright(page, company_name, target_date)
                         if not article:
-                            logger.info(f"  기사 없음 (빈 파일 생성하여 향후 스킵): {target_date}")
-                            empty_article = {
-                                "title": "",
-                                "link": "",
-                                "pub_date": target_date.isoformat(),
-                                "source": "naver"
-                            }
-                            save_article(company_name, ticker, empty_article, "")
+                            logger.info(f"  기사 없음: {target_date}" + (" (S3모드: 빈 파일 저장 생략)" if _S3_MODE else " (빈 파일 생성)"))
+                            if not _S3_MODE:
+                                empty_article = {
+                                    "title": "",
+                                    "link": "",
+                                    "pub_date": target_date.isoformat(),
+                                    "source": "naver"
+                                }
+                                save_article(company_name, ticker, empty_article, "")
                             time.sleep(random.uniform(1.0, 2.0))
                             continue
 
@@ -655,4 +702,19 @@ def main():
     logger.info("모든 뉴스 수집 및 보완 단계가 완료되었습니다.")
 
 if __name__ == "__main__":
-    main()
+    global START_DATE, END_DATE, _S3_MODE
+
+    parser = argparse.ArgumentParser(description="Top10 종목 뉴스 수집")
+    parser.add_argument("--date", default=None, help="기준 날짜 YYYY-MM-DD (미지정 시 전체 기간 로컬 수집)")
+    parser.add_argument("--lookback", type=int, default=13, help="--date 사용 시 소급 일수 (기본 13 = 2주)")
+    args = parser.parse_args()
+
+    if args.date:
+        from datetime import datetime as _dt
+        _end = _dt.strptime(args.date, "%Y-%m-%d").date()
+        START_DATE = _end - timedelta(days=args.lookback)
+        END_DATE   = _end
+        _S3_MODE   = True
+        collect_all_requests()
+    else:
+        main()

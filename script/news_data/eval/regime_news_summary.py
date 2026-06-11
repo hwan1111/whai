@@ -391,6 +391,19 @@ def run(ticker_code: str,
             log.info(f"기존 결과 {len(results)}건 로드")
         except Exception:
             pass
+    else:
+        # 로컬 파일 없으면 S3 백업에서 복구 (upload 후 삭제된 경우)
+        try:
+            s3_key = f"processed/{ticker_code}/regime_news_summary_{ticker_code}.json"
+            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            results = json.loads(obj["Body"].read().decode("utf-8"))
+            log.info(f"S3 백업에서 기존 결과 {len(results)}건 복구: {s3_key}")
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except ClientError:
+            pass
 
     REQUIRED_KEYS = {"cause", "evidence", "vol_insight", "confidence", "reasoning"}
 

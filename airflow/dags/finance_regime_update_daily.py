@@ -146,5 +146,16 @@ for t in TICKERS:
 
         skip = EmptyOperator(task_id=f"skip_{code}", dag=dag)
 
+        skip_cleanup = BashOperator(
+            task_id=f"skip_cleanup_{code}",
+            bash_command=(
+                f"cd '{ROOT}' && python '{_script}/others/upload_regime_to_db.py'"
+                f" --ticker {code} --cleanup-only"
+            ),
+            execution_timeout=timedelta(minutes=5),
+            dag=dag,
+        )
+
         summary >> branch >> [eval_task, skip]
         eval_task >> upload
+        skip >> skip_cleanup

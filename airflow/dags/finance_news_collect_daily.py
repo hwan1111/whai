@@ -8,7 +8,6 @@ Schedule: 14:00 UTC (23:00 KST) every weekday, same as finance_market_data_daily
 S3 path: raw/{ticker}/{year}/{month:02d}/{date}.json
 """
 
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -38,29 +37,26 @@ dag = DAG(
 
 dag.doc_md = __doc__
 
-_prefix = f"cd '{ROOT}' && python '{ROOT}/script/news_data/collect/"
-_suffix = "' --date {{ ds }}"
+_collect_prefix = f"cd '{ROOT}' && python '{ROOT}/script/news_data/collect/"
+_collect_suffix = "' --date {{ next_ds }}"
 
 t_kospi200 = BashOperator(
     task_id="collect_kospi200_news",
-    bash_command=_prefix + "collect_kospi200_news.py" + _suffix,
+    bash_command=_collect_prefix + "collect_kospi200_news.py" + _collect_suffix,
     execution_timeout=timedelta(hours=1),
     dag=dag,
 )
 
 t_top10 = BashOperator(
     task_id="collect_top10_stocks_news",
-    bash_command=_prefix + "collect_top10_stocks_news.py" + _suffix,
+    bash_command=_collect_prefix + "collect_top10_stocks_news.py" + _collect_suffix,
     execution_timeout=timedelta(hours=1),
     dag=dag,
 )
 
 t_usd_krw = BashOperator(
     task_id="collect_usd_krw_news",
-    bash_command=_prefix + "collect_usd_krw_news.py" + _suffix,
+    bash_command=_collect_prefix + "collect_usd_krw_news.py" + _collect_suffix,
     execution_timeout=timedelta(hours=1),
     dag=dag,
 )
-
-# 3개 태스크 병렬 실행 (서로 독립적)
-[t_kospi200, t_top10, t_usd_krw]
