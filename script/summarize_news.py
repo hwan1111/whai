@@ -20,7 +20,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from src.data.s3_news_loader import S3NewsDataLoader
 from src.llm_utils.gateway_client import GatewayClient
 from src.llm_utils.mlflow_logger import MLflowLogger
-from src.llm_utils.prompt_registry import PromptRegistry, log_prompt_metrics
+from src.llm_utils.prompt_registry import PromptRegistry
 
 logging.basicConfig(
     level=logging.INFO,
@@ -85,31 +85,26 @@ class NewsLLMSummarizer:
         Returns:
             요약 텍스트
         """
-        try:
-            # Prompt Registry에서 템플릿 로드 및 포맷팅
-            prompt = self.prompt_registry.format_prompt(
-                self.prompt_key,
-                title=title,
-                fulltext=fulltext
+        # MLflow Web UI에서 프롬프트 로드 및 포맷팅 (완전 동적)
+        prompt = self.prompt_registry.format_prompt(
+            self.prompt_key,
+            title=title,
+            fulltext=fulltext
+        )
+
+        with mlflow.start_span(
+            name="llm_summary",
+            attributes={
+                "endpoint": self.endpoint_name,
+                "prompt_key": self.prompt_key,
+                "prompt_source": "mlflow",  # 항상 MLflow에서 로드
+            }
+        ):
+            summary = self.gateway_client.invoke(
+                prompt=prompt,
+                max_tokens=self.max_tokens
             )
-
-            with mlflow.start_span(
-                name="llm_summary",
-                attributes={
-                    "endpoint": self.endpoint_name,
-                    "prompt_key": self.prompt_key,
-                    "model": "news_summarization"
-                }
-            ):
-                summary = self.gateway_client.invoke(
-                    prompt=prompt,
-                    max_tokens=self.max_tokens
-                )
-                return summary.strip()
-
-        except Exception as e:
-            logger.error(f"❌ 요약 생성 실패: {str(e)}")
-            raise
+            return summary.strip()
 
     def process_ticker(
         self,
@@ -342,12 +337,7 @@ class NewsLLMSummarizer:
                 summary_dir = Path("summaries")
                 summary_dir.mkdir(parents=True, exist_ok=True)
 
-                # MLflow Web UI의 프롬프트 로드 시도
-                prompt_source = self.prompt_registry.get_prompt_source(self.prompt_key)
-                logger.info(f"📝 프롬프트 출처: {prompt_source}")
-
-                # MLflow 파라미터 로깅
-                prompt_description = self.prompt_registry.get_prompt_description(self.prompt_key)
+                # MLflow 파라미터 로깅 (완전 동적 연동)
                 self.mlflow_logger.log_params({
                     "tickers": ",".join(tickers),
                     "endpoint_name": self.endpoint_name,
@@ -356,8 +346,7 @@ class NewsLLMSummarizer:
                     "summary_prefix": SUMMARIZED_PREFIX,
                     "use_registered_dataset": str(use_registered_dataset),
                     "prompt_key": self.prompt_key,
-                    "prompt_description": prompt_description,
-                    "prompt_source": prompt_source,
+                    "prompt_source": "mlflow",  # 항상 MLflow에서 로드
                 })
 
                 # 각 티커별로 요약 처리
