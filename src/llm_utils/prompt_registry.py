@@ -12,11 +12,25 @@ import mlflow
 
 logger = logging.getLogger(__name__)
 
-# MLflow Model Registry에 등록된 프롬프트 모델명 매핑
-# Web UI의 프롬프트 모델명을 정의합니다
-MLFLOW_PROMPT_MODELS = {
-    "news_summarization": "news_summary_prompt",
-    "news_summarization_detailed": "news_summary_detailed_prompt",
+# ============================================================================
+# 🎯 프롬프트 설정 (이 부분만 수정하면 됨!)
+# ============================================================================
+# 형식: "코드에서_사용할_키": {"name": "MLflow_프롬프트_이름", "version": "버전"}
+#
+# 예시:
+#   "news_summarization": {
+#       "name": "news_summary_prompt",      # MLflow에 등록된 프롬프트 이름
+#       "version": "latest"                 # 또는 "1", "2" 등 특정 버전
+#   }
+MLFLOW_PROMPTS_CONFIG = {
+    "news_summarization": {
+        "name": "news_summary_prompt",
+        "version": "2",  # 구체적인 버전 번호 사용
+    },
+    "news_summarization_detailed": {
+        "name": "news_summary_detailed_prompt",
+        "version": "latest",
+    },
 }
 
 
@@ -31,12 +45,12 @@ class PromptRegistry:
         """초기화"""
         self.prompt_cache = {}  # 로드된 프롬프트 캐시
 
-    def load_prompt(self, prompt_key: str, version: str = "latest") -> str:
-        """MLflow Web UI에서 프롬프트 로드 (완전 동적)
+    def load_prompt(self, prompt_key: str, version: Optional[str] = None) -> str:
+        """MLflow Prompts Registry에서 프롬프트 로드
 
         Args:
             prompt_key: 프롬프트 키 (예: "news_summarization")
-            version: 프롬프트 버전 ("latest", "1", "2" 등)
+            version: 버전 (None이면 설정값 사용, 또는 "latest", "1" 등)
 
         Returns:
             프롬프트 텍스트
@@ -45,78 +59,115 @@ class PromptRegistry:
             ValueError: 프롬프트를 찾을 수 없을 때
         """
         # 캐시 확인
-        cache_key = f"{prompt_key}_{version}"
+        cache_key = f"{prompt_key}_{version or 'default'}"
         if cache_key in self.prompt_cache:
             logger.debug(f"✓ 캐시에서 프롬프트 로드: {prompt_key}")
             return self.prompt_cache[cache_key]
 
-        # MLflow에 등록된 프롬프트 모델명
-        model_name = MLFLOW_PROMPT_MODELS.get(prompt_key)
-        if not model_name:
+        # 1. 설정에 정의된 프롬프트인지 확인
+        if prompt_key not in MLFLOW_PROMPTS_CONFIG:
+            available = list(MLFLOW_PROMPTS_CONFIG.keys())
             raise ValueError(
-                f"❌ 프롬프트 '{prompt_key}'가 정의되지 않았습니다.\n"
-                f"MLFLOW_PROMPT_MODELS에 추가하세요:\n"
-                f"   MLFLOW_PROMPT_MODELS['{prompt_key}'] = 'mlflow_model_name'"
+                f"❌ 프롬프트 '{prompt_key}'가 설정에 없습니다.\n\n"
+                f"📌 해결 방법:\n"
+                f"   파일: src/llm_utils/prompt_registry.py\n"
+                f"   MLFLOW_PROMPTS_CONFIG에 추가:\n"
+                f"   '{prompt_key}': {{\n"
+                f"       'name': 'MLflow_프롬프트_이름',\n"
+                f"       'version': 'latest'\n"
+                f"   }}\n\n"
+                f"현재 정의된 프롬프트: {available}"
             )
 
-        # MLflow Model Registry에서 프롬프트 로드
-        model_uri = f"models:/{model_name}/{version}"
-        logger.info(f"📥 MLflow에서 프롬프트 로드 중: {model_uri}")
+        config = MLFLOW_PROMPTS_CONFIG[prompt_key]
+        mlflow_name = config.get("name")
+        mlflow_version = version or config.get("version", "latest")
+
+        logger.info(f"📥 MLflow에서 프롬프트 로드 중: {mlflow_name} (version: {mlflow_version})")
 
         try:
-            # genai API로 프롬프트 로드
-            prompt_text = mlflow.genai.load_prompt(model_uri)
+            from mlflow.client import MlflowClient
+            client = MlflowClient()
+
+            # MLflow Prompts API로 프롬프트 객체 로드
+            if mlflow_version.lower() == "latest":
+                prompt = client.get_prompt(mlflow_name)
+            else:
+                prompt = client.get_prompt(mlflow_name, version=int(mlflow_version))
+
+            prompt_text = prompt.text if hasattr(prompt, 'text') else str(prompt)
 
             # 캐시에 저장
             self.prompt_cache[cache_key] = prompt_text
 
-            logger.info(
-                f"✅ MLflow 프롬프트 로드 성공: {prompt_key} "
-                f"(version: {version})"
-            )
+            logger.info(f"✅ MLflow 프롬프트 로드 성공: {prompt_key}")
             return prompt_text
-
-        except AttributeError as e:
-            raise RuntimeError(
-                f"❌ MLflow GenAI API를 사용할 수 없습니다.\n"
-                f"필요 패키지: pip install mlflow[genai]\n"
-                f"오류: {str(e)}"
-            ) from e
 
         except Exception as e:
             raise ValueError(
-                f"❌ MLflow Web UI에서 프롬프트를 찾을 수 없습니다.\n"
-                f"모델명: {model_name}\n"
-                f"버전: {version}\n"
-                f"MLflow UI 링크: http://52.78.237.104:5001\n"
-                f"→ Model Registry → {model_name} 에서 프롬프트를 등록하세요\n"
+                f"❌ MLflow에서 프롬프트를 찾을 수 없습니다.\n\n"
+                f"설정 정보:\n"
+                f"  - 코드 키: '{prompt_key}'\n"
+                f"  - MLflow 이름: '{mlflow_name}'\n"
+                f"  - 버전: '{mlflow_version}'\n\n"
+                f"📌 확인 사항:\n"
+                f"1. MLflow UI에서 프롬프트 확인:\n"
+                f"   http://52.78.237.104:5001/#/prompts\n\n"
+                f"2. 설정 파일 확인:\n"
+                f"   src/llm_utils/prompt_registry.py\n"
+                f"   MLFLOW_PROMPTS_CONFIG 딕셔너리\n\n"
+                f"3. MLflow 서버 연결 상태\n\n"
                 f"오류: {str(e)}"
             ) from e
 
-    def format_prompt(self, prompt_key: str, **kwargs) -> str:
-        """프롬프트 템플릿 포맷팅 (완전 동적)
+    def format_prompt(self, prompt_key: str, **kwargs) -> tuple[str, str]:
+        """프롬프트 템플릿 포맷팅
+
+        MLflow genai API를 사용하여 프롬프트를 로드하고 포맷합니다.
 
         Args:
             prompt_key: 프롬프트 키
             **kwargs: 템플릿 변수
 
         Returns:
-            포맷된 프롬프트
+            (포맷된 프롬프트 텍스트, 프롬프트 URI) 튜플
 
         Raises:
-            ValueError: 프롬프트를 찾을 수 없거나 변수가 없을 때
+            ValueError: 프롬프트를 찾을 수 없거나 필수 변수가 없을 때
         """
-        # MLflow에서 프롬프트 로드 (실패하면 에러 발생)
-        template = self.load_prompt(prompt_key)
-
         try:
-            formatted = template.format(**kwargs)
-            return formatted
-        except KeyError as e:
-            raise ValueError(
-                f"❌ 필요한 변수 '{str(e)}'가 없습니다.\n"
-                f"프롬프트 '{prompt_key}'에서 찾은 변수: {self._get_template_vars(template)}"
-            ) from e
+            # 설정에서 프롬프트 정보 가져오기
+            if prompt_key not in MLFLOW_PROMPTS_CONFIG:
+                available = list(MLFLOW_PROMPTS_CONFIG.keys())
+                raise ValueError(
+                    f"❌ 프롬프트 '{prompt_key}'가 설정에 없습니다.\n"
+                    f"정의된 프롬프트: {available}"
+                )
+
+            config = MLFLOW_PROMPTS_CONFIG[prompt_key]
+            mlflow_name = config.get("name")
+            mlflow_version = config.get("version", "latest")
+
+            # MLflow genai API로 프롬프트 로드
+            # 형식: prompts:/name/version 또는 prompts:/name@alias
+            prompt_uri = f"prompts:/{mlflow_name}/{mlflow_version}"
+            logger.info(f"📥 MLflow 프롬프트 로드 중: {prompt_uri}")
+
+            prompt_template = mlflow.genai.load_prompt(prompt_uri)
+
+            # prompt.format(**kwargs)로 변수 대입 → Prompt 객체 반환됨
+            formatted = prompt_template.format(**kwargs)
+
+            # Prompt 객체에서 실제 텍스트 추출
+            prompt_text = formatted.text if hasattr(formatted, "text") else str(formatted)
+
+            logger.info(f"✅ 프롬프트 포맷팅 완료: {prompt_key} (길이: {len(prompt_text)}자)")
+            return prompt_text, prompt_uri
+
+        except Exception as e:
+            error_msg = f"❌ 프롬프트 로드/포맷팅 실패: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     def list_available_prompts(self) -> list[str]:
         """등록된 프롬프트 키 목록
