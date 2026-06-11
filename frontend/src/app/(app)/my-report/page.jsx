@@ -491,7 +491,7 @@ function AssetDrawer({ holding, prices, onClose }) {
                 ['52주 최고', '52주 최저', 'PER', 'PBR', '시가총액', '거래량'].map(label => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
                     <span style={{ color: '#64748b' }}>{label}</span>
-                    <span className="skeleton" style={{ width: 80, height: 14 }} />
+                    <span className="loading-dots">···</span>
                   </div>
                 ))
               ) : stats ? (
@@ -746,16 +746,17 @@ export default function MyReportPage() {
             <div className="sec-title">마이 포트폴리오</div>
             <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관</div>
           </div>
-          <span className="skeleton" style={{ width: 130, height: 34, borderRadius: 8 }} />
         </div>
-        <div className="other-card">
-          <span className="skeleton" style={{ width: '100%', height: 220, display: 'block', borderRadius: 8 }} />
+        <div className="other-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 220 }}>
+          <span className="loading-dots" style={{ fontSize: 18 }}>···</span>
         </div>
       </div>
       <div style={{ width: 280, flexShrink: 0 }}>
         <div className="other-card" style={{ height: '100%', padding: '10px 12px', boxSizing: 'border-box' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8 }}>자산 비중 추이</div>
-          <span className="skeleton" style={{ width: '100%', height: 140, display: 'block', borderRadius: 6 }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 140 }}>
+            <span className="loading-dots" style={{ fontSize: 16 }}>···</span>
+          </div>
         </div>
       </div>
     </div>
