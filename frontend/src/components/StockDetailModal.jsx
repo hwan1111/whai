@@ -3,7 +3,10 @@ import { useState, useEffect } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
 
 export const STOCK_CONFIG = {
-  '000000': { name: 'KOSPI 지수', sector: null, meta: '한국종합주가지수', logoSrc: '/assets/flags/kr.png', color: '#16a34a', factors: [] },
+  '000000': { name: 'KOSPI 지수', sector: null, meta: '한국종합주가지수', logoSrc: '/assets/flags/kr.png', color: '#16a34a',
+    factors: [{ label: '외국인 순매수', pct: 45, color: '#2563eb', val: '+45%', desc: '외국인 투자자 순매수가 지수 상승 방향을 주도' },
+              { label: '글로벌 증시 동조화', pct: 32, color: '#7c3aed', val: '+32%', desc: 'S&P500·나스닥 강세와 동반 상승 흐름' },
+              { label: '원/달러 환율', pct: 8, color: '#dc2626', val: '-8%', desc: '원화 강세 → 수출 기업 실적 부담으로 지수 하방 압력' }] },
   '005930': { name: '삼성전자', sector: '반도체', meta: '코스피 · 반도체', logo: 'samsung.svg', color: '#034EA2',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 38, color: '#2563eb', val: '+38%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: 'HBM 수요 증가', pct: 42, color: '#7c3aed', val: '+42%', desc: 'AI 서버향 HBM3E 수요 급증' },

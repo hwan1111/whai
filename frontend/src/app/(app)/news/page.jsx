@@ -34,20 +34,27 @@ export default function NewsPage() {
       <div className="other-card mb">
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>종목 / 환율</div>
+            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>지수 / 종목 / 환율</div>
             <select className="fsel" value={ticker} onChange={e => setTicker(e.target.value)}>
               <option value="">전체</option>
-              <option value="005930">삼성전자 (005930)</option>
-              <option value="000660">SK하이닉스 (000660)</option>
-              <option value="005380">현대차 (005380)</option>
-              <option value="000270">기아 (000270)</option>
-              <option value="079550">LIG디펜스앤에어로스페이스 (079550)</option>
-              <option value="012450">한화에어로스페이스 (012450)</option>
-              <option value="105560">KB금융 (105560)</option>
-              <option value="055550">신한지주 (055550)</option>
-              <option value="051910">LG화학 (051910)</option>
-              <option value="096770">SK이노베이션 (096770)</option>
-              <option value="USD">USD</option>
+              <optgroup label="지수">
+                <option value="000000">KOSPI</option>
+              </optgroup>
+              <optgroup label="KRX 주요 종목">
+                <option value="005930">삼성전자</option>
+                <option value="000660">SK하이닉스</option>
+                <option value="005380">현대차</option>
+                <option value="000270">기아</option>
+                <option value="079550">LIG디펜스앤에어로스페이스</option>
+                <option value="012450">한화에어로스페이스</option>
+                <option value="105560">KB금융</option>
+                <option value="055550">신한지주</option>
+                <option value="051910">LG화학</option>
+                <option value="096770">SK이노베이션</option>
+              </optgroup>
+              <optgroup label="환율">
+                <option value="USD">USD/KRW</option>
+              </optgroup>
             </select>
           </div>
           <div>

@@ -24,7 +24,10 @@ const STOCK_NAMES = {
 };
 
 const FX_INFO = {
-  'USD': { flag: '/assets/flags/us.png', desc: '미국 달러' },
+  'USD': { flag: '/assets/flags/us.png', desc: '미국 달러',
+    factors: [{ label: '미 연준 통화정책', pct: 55, color: '#2563eb', val: '+55%', desc: '연준 금리 결정이 달러 강세·약세 방향을 결정' },
+              { label: '한미 금리차', pct: 25, color: '#7c3aed', val: '+25%', desc: '양국 금리 격차 확대로 달러 강세 지속' },
+              { label: '무역수지', pct: 10, color: '#dc2626', val: '-10%', desc: '한국 무역수지 흑자가 원화 강세 요인으로 작용' }] },
 };
 
 const LOGO = id => `/assets/logos/${({
@@ -35,13 +38,29 @@ const LOGO = id => `/assets/logos/${({
   '051910': 'lgchem.svg',  '096770': 'skinnovation.svg',
 }[id])}`;
 
-const NEWS_TICKER_OPTIONS = [
-  { value: '005930', label: '삼성전자' }, { value: '000660', label: 'SK하이닉스' },
-  { value: '005380', label: '현대차' },   { value: '000270', label: '기아' },
-  { value: '079550', label: 'LIG디펜스앤에어로스페이스' }, { value: '012450', label: '한화에어로스페이스' },
-  { value: '105560', label: 'KB금융' },   { value: '055550', label: '신한지주' },
-  { value: '051910', label: 'LG화학' },   { value: '096770', label: 'SK이노베이션' },
-  { value: 'USD', label: 'USD' },
+const NEWS_TICKER_GROUPS = [
+  {
+    label: '지수',
+    options: [
+      { value: '000000', label: 'KOSPI' },
+    ],
+  },
+  {
+    label: 'KRX 주요 종목',
+    options: [
+      { value: '005930', label: '삼성전자' }, { value: '000660', label: 'SK하이닉스' },
+      { value: '005380', label: '현대차' },   { value: '000270', label: '기아' },
+      { value: '079550', label: 'LIG디펜스앤에어로스페이스' }, { value: '012450', label: '한화에어로스페이스' },
+      { value: '105560', label: 'KB금융' },   { value: '055550', label: '신한지주' },
+      { value: '051910', label: 'LG화학' },   { value: '096770', label: 'SK이노베이션' },
+    ],
+  },
+  {
+    label: '환율',
+    options: [
+      { value: 'USD', label: 'USD/KRW' },
+    ],
+  },
 ];
 
 function NewsDrawer({ open, onClose }) {
@@ -74,8 +93,12 @@ function NewsDrawer({ open, onClose }) {
         </div>
         <div className="news-drawer-filters">
           <select className="fsel" value={ticker} onChange={e => setTicker(e.target.value)}>
-            <option value="">전체 종목</option>
-            {NEWS_TICKER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            <option value="">전체</option>
+            {NEWS_TICKER_GROUPS.map(g => (
+              <optgroup key={g.label} label={g.label}>
+                {g.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </optgroup>
+            ))}
           </select>
           <select className="fsel" value={days} onChange={e => setDays(e.target.value)}>
             <option value="7">최근 7일</option>
@@ -463,10 +486,13 @@ export default function DashboardPage() {
   const [legend, setLegend] = useState([]);
   const [favs, setFavs] = useState(new Set());
   const [complexData, setComplexData] = useState({});
+  const [allStockData, setAllStockData] = useState({});
   const [rightOpen, setRightOpen] = useState(false);
   const [newsDrawerOpen, setNewsDrawerOpen] = useState(false);
   const [selectedStockId, setSelectedStockId] = useState(null);
   const [selectedFxId, setSelectedFxId] = useState(null);
+  const [fxStats, setFxStats] = useState(null);
+  const [fxNews, setFxNews] = useState([]);
   const [favDetail, setFavDetail] = useState(null);
   const [favDetailLoading, setFavDetailLoading] = useState(false);
   const [favNewsExpanded, setFavNewsExpanded] = useState(null);
@@ -521,6 +547,37 @@ export default function DashboardPage() {
   useEffect(() => {
     if (selectedStockId) loadFavDetail(selectedStockId);
   }, [selectedStockId]);
+
+  useEffect(() => {
+    if (!selectedFxId) { setFxStats(null); setFxNews([]); return; }
+    Promise.all([
+      fetchWithAuth(`/api/v1/prices/${selectedFxId}/stats`).then(r => r.ok ? r.json() : null),
+      fetchWithAuth(`/api/v1/news?ticker=${selectedFxId}&days=90`).then(r => r.ok ? r.json() : []),
+    ]).then(([stats, news]) => {
+      setFxStats(stats);
+      setFxNews(news ?? []);
+    }).catch(() => { setFxStats(null); setFxNews([]); });
+  }, [selectedFxId]);
+
+  useEffect(() => {
+    if (!selectedFxId) { setAllStockData({}); return; }
+    const ids = Object.keys(STOCK_NAMES);
+    Promise.all(ids.map(id => fetchAssetData(id, period))).then(results => {
+      const sd = {};
+      ids.forEach((id, i) => {
+        const rows = results[i];
+        if (!rows || rows.length < 2) return;
+        const closes = rows.map(r => Number(r.close));
+        const dr = [], dates = [];
+        for (let j = 1; j < closes.length; j++) {
+          dr.push((closes[j] - closes[j - 1]) / closes[j - 1]);
+          dates.push(rows[j].date);
+        }
+        sd[id] = { dr, dates };
+      });
+      setAllStockData(sd);
+    });
+  }, [selectedFxId, period]);
 
   useEffect(() => {
     renderChart();
@@ -744,13 +801,14 @@ export default function DashboardPage() {
   function FxCard({ id }) {
     const info = FX_INFO[id];
     const inChart = activeAssets.includes(id);
-    const currency = id;
     const starred = favs.has(id);
     return (
-      <div className={`fx-card${inChart ? ' in-chart' : ''}`} onClick={() => toggleAsset(id)}>
-        <div className="fx-card-head">
-          <img src={info.flag} alt={currency} className="fx-card-flag" />
-          <span className="fx-card-code">{currency}</span>
+      <div className={`tk-card${inChart ? ' in-chart' : ''}`} onClick={() => toggleAsset(id)}>
+        <div className="tk-card-head">
+          <div className="tk-card-logo">
+            <img src={info.flag} alt={id} style={{ objectFit: 'cover' }} />
+          </div>
+          <div className="tk-card-name">{id}</div>
           <div className="tk-card-acts">
             <button
               className={`tk-card-star${starred ? ' starred' : ''}`}
@@ -763,10 +821,10 @@ export default function DashboardPage() {
             >상세</button>
           </div>
         </div>
-        <div className="fx-card-bottom">
+        <div className="tk-card-bottom">
           {prices[id] ? (
             <>
-              <span className="fx-card-rate">{priceStr(id)}</span>
+              <span className="tk-card-price">{priceStr(id)}</span>
               <ChgEl id={id} />
             </>
           ) : (
@@ -917,7 +975,8 @@ export default function DashboardPage() {
               <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 10 }}>(최대 3개)</span></span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
                 {[...favs].filter(id => ASSETS[id]).map(id => {
-                  const isSelected = id === selectedStockId;
+                  const isFx = !!FX_INFO[id];
+                  const isSelected = isFx ? id === selectedFxId : id === selectedStockId;
                   const color = ASSETS[id].color;
                   return (
                     <span
@@ -928,7 +987,7 @@ export default function DashboardPage() {
                         borderColor: color,
                         background: isSelected ? color : color + '18',
                       }}
-                      onClick={() => setSelectedStockId(id)}
+                      onClick={() => isFx ? selectFx(id) : selectStock(id)}
                     >
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: isSelected ? 'white' : color, display: 'inline-block' }} />
                       {ASSETS[id].label}
@@ -997,7 +1056,7 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                     <img src={fxInfo.flag} alt={currency} style={{ width: 32, height: 22, borderRadius: 4, objectFit: 'cover', border: '1px solid #e8ecf0', flexShrink: 0 }} />
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{fxInfo.desc} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{currency}</span></div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{currency} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{fxInfo.desc}</span></div>
                       <div style={{ fontSize: 10, color: '#94a3b8' }}>{selectedFxId} · 원화 기준</div>
                     </div>
                     {fxPrice ? (
@@ -1016,14 +1075,11 @@ export default function DashboardPage() {
                   </div>
                   <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
                   <div className="ai-main-title" style={{ marginBottom: 6 }}>환율 정보</div>
-                  <div className="grid g11" style={{ gap: 5 }}>
+                  <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
                     {[
                       { label: '현재 환율', value: fxPrice ? `${Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—' },
-                      { label: '전일 대비', value: fxChgAmt != null ? `${fxChgAmt >= 0 ? '+' : ''}${Number(fxChgAmt).toFixed(2)}` : '—', color: fxChgAmt != null ? fxChgColor : undefined },
-                      { label: '변동률', value: fxChgPct != null ? `${fxChgPct >= 0 ? '+' : ''}${Number(fxChgPct).toFixed(2)}%` : '—', color: fxChgPct != null ? fxChgColor : undefined },
-                      { label: '기준통화', value: 'KRW (원화)' },
-                      { label: '대상통화', value: currency },
-                      { label: '통화권', value: fxInfo.desc },
+                      { label: '52주 최고', value: fxStats?.high52 ? `${Number(fxStats.high52).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—', color: '#dc2626' },
+                      { label: '52주 최저', value: fxStats?.low52 ? `${Number(fxStats.low52).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—', color: '#2563eb' },
                     ].map(({ label, value, color }) => (
                       <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <div className="metric-label">{label}</div>
@@ -1031,6 +1087,114 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </div>
+                  {(fxStats?.change_30d != null || fxStats?.change_1y != null) && (() => {
+                    const fmt = v => `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
+                    const col = v => v >= 0 ? '#dc2626' : '#2563eb';
+                    return (
+                      <div className="grid g11" style={{ gap: 5, marginTop: 5 }}>
+                        {[
+                          { label: '월간 변동률', value: fxStats.change_30d },
+                          { label: '연간 변동률', value: fxStats.change_1y },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <div className="metric-label">{label}</div>
+                            <div className="metric-value" style={{ whiteSpace: 'nowrap', color: value != null ? col(value) : undefined }}>{value != null ? fmt(value) : '—'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  {(() => {
+                    const h = fxStats?.high52;
+                    const l = fxStats?.low52;
+                    if (h == null || l == null) return null;
+                    const cur = fxPrice ? Number(fxPrice.price) : null;
+                    const fmtFx = v => Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+                    const range = h - l;
+                    const safePct = cur != null && range > 0 ? Math.max(0, Math.min(100, Math.round(((cur - l) / range) * 100))) : null;
+                    const dotColor = safePct != null && safePct >= 50 ? '#dc2626' : '#2563eb';
+                    return (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>52주 환율 위치</span>
+                          <span style={{ fontSize: 8, color: '#cbd5e1' }}>BOK ECOS</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', marginBottom: 3 }}>
+                          <span>최저 {fmtFx(l)}원</span>
+                          <span>최고 {fmtFx(h)}원</span>
+                        </div>
+                        <div style={{ position: 'relative', height: 6, borderRadius: 3, background: 'linear-gradient(to right, #2563eb, #dc2626)' }}>
+                          {safePct != null && (
+                            <div style={{ position: 'absolute', top: '50%', left: `${safePct}%`, transform: 'translate(-50%, -50%)', width: 11, height: 11, borderRadius: '50%', background: dotColor, border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
+                          )}
+                        </div>
+                        {safePct != null && (
+                          <div style={{ position: 'relative', marginTop: 4, height: 13 }}>
+                            <span style={{ position: 'absolute', left: `${Math.min(Math.max(safePct, 6), 94)}%`, transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: dotColor, whiteSpace: 'nowrap' }}>{safePct}%</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {fxNews[0] && (() => {
+                    const regime = fxNews[0];
+                    const isUp = regime.direction === '상승';
+                    const dirColor = isUp ? '#dc2626' : '#2563eb';
+                    const ret = regime.cum_return != null
+                      ? `${regime.cum_return >= 0 ? '+' : ''}${(regime.cum_return * 100).toFixed(1)}%`
+                      : null;
+                    return (
+                      <div style={{ marginTop: 8, padding: '7px 9px', background: isUp ? 'rgba(220,38,38,0.04)' : 'rgba(37,99,235,0.04)', borderRadius: 8, border: `1px solid ${isUp ? 'rgba(220,38,38,0.15)' : 'rgba(37,99,235,0.15)'}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: dirColor }}>{isUp ? '▲' : '▼'} {regime.direction}</span>
+                            {ret && <span style={{ fontSize: 12, fontWeight: 700, color: dirColor }}>{ret}</span>}
+                          </div>
+                          <span style={{ fontSize: 9, color: '#94a3b8' }}>{regime.start_date} ~ {regime.end_date}</span>
+                        </div>
+                        {regime.cause && <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.5 }}>{regime.cause}</div>}
+                      </div>
+                    );
+                  })()}
+                  {(() => {
+                    if (!complexData[selectedFxId]) return null;
+                    const fxData = complexData[selectedFxId];
+                    let highest = null, highestV = -Infinity;
+                    let lowest = null, lowestV = Infinity;
+                    Object.keys(allStockData).forEach(id => {
+                      if (!allStockData[id]) return;
+                      const v = calcPearson(fxData, allStockData[id]);
+                      if (v > highestV) { highestV = v; highest = { id, v }; }
+                      if (v < lowestV) { lowestV = v; lowest = { id, v }; }
+                    });
+                    if (!highest) return null;
+                    const items = highest?.id === lowest?.id ? [highest] : [highest, lowest];
+                    return (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>분석 종목 상관관계</span>
+                          <span style={{ fontSize: 8, color: '#cbd5e1' }}>Pearson</span>
+                        </div>
+                        <div style={{ padding: '6px 9px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        {items.map((item, idx) => {
+                          const isPos = item.v >= 0;
+                          const vColor = isPos ? '#dc2626' : '#2563eb';
+                          const labelColor = idx === 0 ? '#2563eb' : '#dc2626';
+                          const label = idx === 0 ? '최고' : '최저';
+                          return (
+                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: idx > 0 ? 5 : 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontSize: 8, color: labelColor, fontWeight: 700, background: `${labelColor}18`, borderRadius: 3, padding: '1px 4px' }}>{label}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#334155' }}>{NAMES[item.id] || item.id}</span>
+                              </div>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: vColor }}>{isPos ? '+' : ''}{item.v.toFixed(2)}</span>
+                            </div>
+                          );
+                        })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               );
             })() : (
@@ -1043,7 +1207,7 @@ export default function DashboardPage() {
                     <img src={cfg.logoSrc ?? `/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: cfg.name.length > 8 ? 11 : 14, fontWeight: 800, color: '#1e293b', wordBreak: 'keep-all', overflowWrap: 'break-word' }}>{cfg.name} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>{selectedStockId}</span></div>
+                    <div style={{ fontSize: cfg.name.length > 8 ? 11 : 14, fontWeight: 800, color: '#1e293b', wordBreak: 'keep-all', overflowWrap: 'break-word' }}>{cfg.name}{selectedStockId !== '000000' && <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}> {selectedStockId}</span>}</div>
                     <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
                   </div>
                   {favDetailLoading ? (
@@ -1053,9 +1217,9 @@ export default function DashboardPage() {
                     </div>
                   ) : favDetail?.price ? (
                     <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span></div>
+                      <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}{selectedStockId !== '000000' && <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>원</span>}</div>
                       {chgPct != null && (
-                        <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}${selectedStockId !== '000000' ? '원' : ''}` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
                       )}
                     </div>
                   ) : null}
@@ -1066,7 +1230,7 @@ export default function DashboardPage() {
             <div className="ai-main-title" style={{ marginBottom: 6 }}>주요 지표</div>
             {favDetailLoading ? (
               <div className="grid g11" style={{ gap: 5 }}>
-                {['거래량', '시가총액', '52주 최고', '52주 최저', 'PER', 'PBR'].map(label => (
+                {['거래량', selectedStockId === '000000' ? '분석 종목' : '시가총액', '52주 최고', '52주 최저', 'PER', 'PBR'].map(label => (
                   <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     <div className="metric-label">{label}</div>
                     <span className="skeleton" style={{ width: '65%', height: 18, marginTop: 5 }} />
@@ -1079,10 +1243,26 @@ export default function DashboardPage() {
               <>
                 <div className="grid g11" style={{ gap: 5, flex: 1, alignContent: 'stretch' }}>
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
-                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
-                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최고</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#dc2626' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
-                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최저</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#2563eb' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
-                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? <>{s.per.toFixed(2)}<span style={{ fontSize: 10, fontWeight: 400 }}>배</span></> : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
+                  {selectedStockId === '000000' ? (() => {
+                    const allIds = STOCK_SECTORS.flatMap(sec => sec.ids);
+                    const up = allIds.filter(id => (prices[id]?.change_pct ?? 0) > 0).length;
+                    const dn = allIds.filter(id => (prices[id]?.change_pct ?? 0) < 0).length;
+                    return (
+                      <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div className="metric-label">분석 종목</div>
+                        <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
+                          <span style={{ color: '#dc2626' }}>{up}▲</span>
+                          <span style={{ color: '#94a3b8', margin: '0 2px' }}> / </span>
+                          <span style={{ color: '#2563eb' }}>{dn}▼</span>
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
+                  )}
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최고</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#dc2626' }}>{s?.high52 ? `${fmt(s.high52)}${selectedStockId !== '000000' ? '원' : ''}` : '—'}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최저</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#2563eb' }}>{s?.low52 ? `${fmt(s.low52)}${selectedStockId !== '000000' ? '원' : ''}` : '—'}</div></div>
+                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? <>{s.per.toFixed(2)}<span style={{ fontSize: 10, fontWeight: 400 }}>배</span></> : <span style={{ fontSize: 12, color: '#94a3b8' }}>{selectedStockId === '000000' ? '—' : '적자'}</span>}</div></div>
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? <>{s.pbr.toFixed(2)}<span style={{ fontSize: 10, fontWeight: 400 }}>배</span></> : '—'}</div></div>
                 </div>
 
@@ -1096,8 +1276,8 @@ export default function DashboardPage() {
                     <div style={{ marginTop: 8 }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>52주 가격 위치</div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', marginBottom: 3 }}>
-                        <span>최저 {fmt(s.low52)}원</span>
-                        <span>최고 {fmt(s.high52)}원</span>
+                        <span>최저 {fmt(s.low52)}{selectedStockId !== '000000' ? '원' : ''}</span>
+                        <span>최고 {fmt(s.high52)}{selectedStockId !== '000000' ? '원' : ''}</span>
                       </div>
                       <div style={{ position: 'relative', height: 6, borderRadius: 3, background: 'linear-gradient(to right, #2563eb, #dc2626)' }}>
                         <div style={{ position: 'absolute', top: '50%', left: `${safePct}%`, transform: 'translate(-50%, -50%)', width: 11, height: 11, borderRadius: '50%', background: safePct >= 50 ? '#dc2626' : '#2563eb', border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
@@ -1114,13 +1294,49 @@ export default function DashboardPage() {
                     기준: 2026년 1분기 (분기 실적 시즌마다 수동 업데이트)
                     업데이트 방법: https://data.krx.co.kr → 주식 → 업종 → 업종PER/PBR
                 */}
-                {s?.per != null && cfg?.sector && (() => {
+                {/* 섹터별 등락 + 현재 국면 (KOSPI 전용) */}
+                {selectedStockId === '000000' && (() => {
+                  const regime = favDetail?.news?.[0];
+                  const isUp = regime?.direction === '상승';
+                  const dirColor = isUp ? '#dc2626' : '#2563eb';
+                  const ret = regime?.cum_return != null
+                    ? `${regime.cum_return >= 0 ? '+' : ''}${(regime.cum_return * 100).toFixed(1)}%`
+                    : null;
+                  return (
+                    <>
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>섹터별 등락</div>
+                        <div style={{ padding: '7px 0', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 0' }}>
+                          {STOCK_SECTORS.map(({ label, ids }, idx) => {
+                            const up = ids.filter(id => (prices[id]?.change_pct ?? 0) > 0).length;
+                            const dn = ids.filter(id => (prices[id]?.change_pct ?? 0) < 0).length;
+                            const allLoaded = ids.every(id => prices[id] != null);
+                            const isLeft = idx % 2 === 0;
+                            return (
+                              <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px', borderRight: isLeft ? '1px solid #e2e8f0' : 'none' }}>
+                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{label}</span>
+                                <span style={{ fontSize: 10 }}>
+                                  {allLoaded ? (
+                                    <><span style={{ color: '#dc2626', fontWeight: 700 }}>{up}▲</span><span style={{ color: '#94a3b8', margin: '0 2px' }}> / </span><span style={{ color: '#2563eb', fontWeight: 700 }}>{dn}▼</span></>
+                                  ) : '—'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+
+                {/* PER 업종 평균 비교 (주식) / KOSPI 평균 PER 비교 (지수) */}
+                {cfg?.sector ? (s?.per != null && (() => {
                   const SECTOR_PER = {
-                    '반도체': 23,  // KRX IT지수 구성종목 평균, 2026 Q1
-                    '자동차': 7,   // KRX 자동차지수 구성종목 평균, 2026 Q1
-                    '방산':   28,  // KRX 방산지수 구성종목 평균, 2026 Q1
-                    '금융':   8,   // KRX 은행지수 구성종목 평균, 2026 Q1
-                    '화학':   16,  // KRX 화학지수 구성종목 평균, 2026 Q1
+                    '반도체': 23,
+                    '자동차': 7,
+                    '방산':   28,
+                    '금융':   8,
+                    '화학':   16,
                   };
                   const avg = SECTOR_PER[cfg.sector];
                   if (!avg) return null;
@@ -1150,7 +1366,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   );
-                })()}
+                })()) : null}
               </>
             )}
             </>
@@ -1158,21 +1374,26 @@ export default function DashboardPage() {
           </div>
         </div>
           </div>
-          {cfg && !selectedFxId && (
-            <div className="ai-main-card">
-              <div className="ai-main-title" style={{ marginBottom: 10 }}>주가 변동 원인 분석</div>
-              {cfg.factors.map(f => (
-                <div key={f.label}>
-                  <div className="factor-row">
-                    <div className="factor-label">{f.label}</div>
-                    <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: f.color }} /></div>
-                    <div className={`factor-val ${f.val.startsWith('-') ? 'negative' : 'positive'}`}>{f.val}</div>
+          {(cfg && !selectedFxId) || selectedFxId ? (() => {
+            const factors = selectedFxId ? FX_INFO[selectedFxId]?.factors : cfg?.factors;
+            const title = selectedFxId ? '환율 변동 원인 분석' : selectedStockId === '000000' ? '지수 변동 원인 분석' : '주가 변동 원인 분석';
+            if (!factors?.length) return null;
+            return (
+              <div className="ai-main-card">
+                <div className="ai-main-title" style={{ marginBottom: 10 }}>{title}</div>
+                {factors.map(f => (
+                  <div key={f.label}>
+                    <div className="factor-row">
+                      <div className="factor-label">{f.label}</div>
+                      <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: f.color }} /></div>
+                      <div className={`factor-val ${f.val.startsWith('-') ? 'negative' : 'positive'}`}>{f.val}</div>
+                    </div>
+                    <div className="factor-desc">{f.desc}</div>
                   </div>
-                  <div className="factor-desc">{f.desc}</div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })() : null}
         </div>
 
         <div className="matrix-col" ref={matrixColRef}>
@@ -1407,34 +1628,41 @@ export default function DashboardPage() {
                     <span className="skeleton" style={{ width: '100%', height: 13, marginTop: 6 }} />
                   </div>
                 ))
-              ) : !favDetail || favDetail.news.length === 0 ? (
-                <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
-                  {selectedStockId && STOCK_CONFIG[selectedStockId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
-                </div>
-              ) : favNewsExpanded !== null ? (
-                (() => { const n = favDetail.news[favNewsExpanded]; return (
-                  <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
+              ) : (() => {
+                const newsList = selectedFxId ? fxNews : (favDetail?.news ?? []);
+                const isEmpty = newsList.length === 0;
+                if (isEmpty) return (
+                  <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
+                    {selectedStockId && STOCK_CONFIG[selectedStockId] ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
+                  </div>
+                );
+                if (favNewsExpanded !== null && !selectedFxId) {
+                  const n = newsList[favNewsExpanded];
+                  return (
+                    <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
+                      <div className="news-meta">
+                        <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                        <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
+                      </div>
+                      <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
+                      {n.vol_insight && (
+                        <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
+                          <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return newsList.map((n, i) => (
+                  <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => !selectedFxId && setFavNewsExpanded(i)}>
                     <div className="news-meta">
                       <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
                       <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
                     </div>
-                    <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
-                    {n.vol_insight && (
-                      <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
-                      </div>
-                    )}
+                    <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
                   </div>
-                ); })()
-              ) : favDetail.news.map((n, i) => (
-                <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(i)}>
-                  <div className="news-meta">
-                    <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                    <span className="news-date" style={{ marginLeft: 'auto' }}>{n.start_date} ~ {n.end_date}</span>
-                  </div>
-                  <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
         </div>
@@ -1453,7 +1681,7 @@ export default function DashboardPage() {
         <div className={`right-panel${rightOpen ? '' : ' right-panel-closed'}`} style={{ width: panelWidth }}>
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1, justifyContent: 'space-between' }}>
             <div>
-              <div className="panel-section-label">KOSPI 지수</div>
+              <div className="panel-section-label">지수</div>
               <div
                 className={`tk-card${kospiInChart ? ' in-chart' : ''}`}
                 onClick={() => toggleAsset('000000')}
@@ -1462,7 +1690,7 @@ export default function DashboardPage() {
                   <div className="tk-card-logo">
                     <img src="/assets/flags/kr.png" alt="KOSPI" />
                   </div>
-                  <div className="tk-card-name">KOSPI 지수</div>
+                  <div className="tk-card-name">KOSPI</div>
                   <div className="tk-card-acts">
                     <button
                       className={`tk-card-star${favs.has('000000') ? ' starred' : ''}`}
