@@ -73,5 +73,5 @@ export function buildPeriodData(period, ids) {
     });
   }
 
-  return { labels, d, closes };
+  return { labels, d, closes, isoLabels: sortedDates };
 }

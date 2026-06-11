@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, fetchAssetData, buildPeriodData } from '@/lib/data';
 import { STOCK_CONFIG } from '@/components/StockDetailModal';
@@ -178,7 +178,7 @@ function niceTicks(min, max, target) {
   return ticks;
 }
 
-function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
+function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, anomalies, onAnomalyHover, onAnomalyLeave, onAnomalyClick }) {
   const [tooltip, setTooltip] = useState(null);
   const [hoveredIdx, setHoveredIdx] = useState(null);
   const svgRef = useRef(null);
@@ -300,6 +300,22 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
           textAnchor="middle" fontSize={11} fill="#94a3b8"
           style={{ transformBox: 'fill-box', transformOrigin: 'center', transform: 'scaleY(0.75)' }}>{pd.labels[i]}</text>
       ))}
+
+      {/* anomaly markers */}
+      {anomalies?.map(a => {
+        const x = toX(a.idx, n);
+        const cy = MT + CH + 12;
+        return (
+          <g key={a.idx} style={{ cursor: 'pointer' }}
+            onMouseEnter={e => onAnomalyHover?.(a, e.clientX, e.clientY)}
+            onMouseLeave={onAnomalyLeave}
+            onClick={e => { e.stopPropagation(); onAnomalyClick?.(a, e.clientX, e.clientY); }}>
+            <circle cx={x.toFixed(1)} cy={cy} r={7} fill="#f59e0b" opacity={0.92} />
+            <text x={x.toFixed(1)} y={cy + 3.5} textAnchor="middle" fontSize={9} fontWeight="800"
+              fill="white" pointerEvents="none" style={{ userSelect: 'none' }}>!</text>
+          </g>
+        );
+      })}
 
       {/* crosshair */}
       {hoveredIdx !== null && (
@@ -517,6 +533,43 @@ function fmtChg(pct) {
   return { text: `${sign} ${Math.abs(pct).toFixed(2)}%`, cls };
 }
 
+const ANOMALY_MAX = { '1W': 2, '1M': 3, '3M': 4, '6M': 5, '1Y': 6, '3Y': 8, 'ALL': 8 };
+const ANOMALY_THRESH = id => (id === '000000' || id === 'USD') ? 1.0 : 2.0;
+
+function computeAnomalies(pd, activeAssets, period) {
+  if (!pd?.isoLabels || activeAssets.length < 2) return [];
+  const n = pd.isoLabels.length;
+  if (n < 2) return [];
+  const maxMarkers = ANOMALY_MAX[period] ?? 5;
+  const candidates = [];
+  for (let i = 1; i < n; i++) {
+    const movers = [];
+    for (const a of activeAssets) {
+      const c = pd.closes?.[a];
+      if (!c || c[i] == null || c[i - 1] == null) continue;
+      const chg = (c[i] - c[i - 1]) / c[i - 1] * 100;
+      if (Math.abs(chg) >= ANOMALY_THRESH(a)) movers.push({ id: a, chg });
+    }
+    if (movers.length >= 2) {
+      const totalAbs = movers.reduce((s, m) => s + Math.abs(m.chg), 0);
+      candidates.push({ idx: i, isoDate: pd.isoLabels[i], displayDate: pd.labels[i], movers, score: movers.length, totalAbs });
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score || b.totalAbs - a.totalAbs);
+  const minGap = Math.max(2, Math.floor(n / (maxMarkers * 3)));
+  const selected = [];
+  for (const c of candidates) {
+    if (selected.length >= maxMarkers) break;
+    if (!selected.some(s => Math.abs(s.idx - c.idx) < minGap)) selected.push(c);
+  }
+  return selected.sort((a, b) => a.idx - b.idx);
+}
+
+function findNewsForDate(newsArr, isoDate) {
+  if (!newsArr?.length || !isoDate) return null;
+  return newsArr.find(n => n.start_date <= isoDate && isoDate <= n.end_date) ?? null;
+}
+
 export default function DashboardPage() {
   const [activeAssets, setActiveAssets] = useState([]);
   const [period, setPeriod] = useState('1M');
@@ -537,6 +590,9 @@ export default function DashboardPage() {
   const [favDetail, setFavDetail] = useState(null);
   const [favDetailLoading, setFavDetailLoading] = useState(false);
   const [favNewsExpanded, setFavNewsExpanded] = useState(null);
+  const [allNewsMap, setAllNewsMap] = useState({});
+  const [anomalyPopup, setAnomalyPopup] = useState(null);
+  const [anomalyClick, setAnomalyClick] = useState(null);
   const [showMatrix, setShowMatrix] = useState(false);
   const [expandedPairKey, setExpandedPairKey] = useState(null);
   const matrixColRef = useRef(null);
@@ -626,6 +682,18 @@ export default function DashboardPage() {
     renderChart();
   }, [activeAssets, period, prices]);
 
+  useEffect(() => {
+    activeAssets.forEach(id => {
+      if (id in allNewsMap) return;
+      setAllNewsMap(prev => ({ ...prev, [id]: [] }));
+      fetchWithAuth(`/api/v1/news?ticker=${id}&days=365`)
+        .then(r => r.ok ? r.json() : [])
+        .then(news => setAllNewsMap(prev => ({ ...prev, [id]: news ?? [] })))
+        .catch(() => {});
+    });
+  }, [activeAssets]);
+
+  const anomalies = useMemo(() => computeAnomalies(chartPd, activeAssets, period), [chartPd, activeAssets, period]);
 
   async function loadLatestPrices() {
     try {
@@ -905,6 +973,87 @@ export default function DashboardPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} defaultTicker={selectedFxId || selectedStockId || ''} />
+      {anomalyPopup && !anomalyClick && (() => {
+        const { anomaly, clientX, clientY } = anomalyPopup;
+        return (
+          <div style={{
+            position: 'fixed',
+            left: Math.min(clientX + 12, window.innerWidth - 220),
+            top: Math.min(Math.max(8, clientY - 16), window.innerHeight - 200),
+            background: 'white',
+            border: '1.5px solid #f59e0b',
+            borderRadius: 10,
+            padding: '9px 13px',
+            boxShadow: '0 4px 16px rgba(15,23,42,0.12)',
+            zIndex: 500,
+            minWidth: 180,
+            pointerEvents: 'none',
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', marginBottom: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 5px', fontSize: 9, color: '#b45309' }}>!</span>
+              {fmtNewsDate(anomaly.isoDate)} 급변 포착
+            </div>
+            {anomaly.movers.map(m => (
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: ASSETS[m.id]?.color ?? '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
+                  {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+      {anomalyClick && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 498 }} onClick={() => setAnomalyClick(null)} />
+          {(() => {
+            const { anomaly, clientX, clientY } = anomalyClick;
+            const popW = 280;
+            const popH = Math.min(80 + anomaly.movers.length * 72, window.innerHeight - 32);
+            const left = Math.min(clientX + 12, window.innerWidth - popW - 8);
+            const top = Math.min(Math.max(8, clientY - 16), window.innerHeight - popH - 8);
+            return (
+              <div style={{
+                position: 'fixed', left, top,
+                background: 'white',
+                border: '1.5px solid #f59e0b',
+                borderRadius: 10,
+                padding: '10px 14px',
+                boxShadow: '0 6px 24px rgba(15,23,42,0.18)',
+                zIndex: 499,
+                width: popW,
+                maxHeight: popH,
+                overflowY: 'auto',
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', marginBottom: 9, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 5px', fontSize: 9, color: '#b45309' }}>!</span>
+                  {fmtNewsDate(anomaly.isoDate)} 급변 포착
+                  <button onClick={() => setAnomalyClick(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#94a3b8', lineHeight: 1, padding: 0 }}>✕</button>
+                </div>
+                {anomaly.movers.map(m => {
+                  const news = findNewsForDate(allNewsMap[m.id], anomaly.isoDate);
+                  return (
+                    <div key={m.id} style={{ marginBottom: 9, paddingBottom: 9, borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: news?.cause ? 4 : 0 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: ASSETS[m.id]?.color ?? '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
+                          {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
+                        </span>
+                      </div>
+                      {news?.cause && (
+                        <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.6, paddingLeft: 13 }}>{news.cause}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </>
+      )}
       {showMatrix && showComplex && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1052,7 +1201,11 @@ export default function DashboardPage() {
                 )}
                 <div className="chart-svg-wrap">
                   <LineChart activeAssets={activeAssets} pd={chartPd}
-                    hoveredAsset={hoveredAsset} onHoverAsset={setHoveredAsset} />
+                    hoveredAsset={hoveredAsset} onHoverAsset={setHoveredAsset}
+                    anomalies={anomalies}
+                    onAnomalyHover={(a, cx, cy) => setAnomalyPopup({ anomaly: a, clientX: cx, clientY: cy })}
+                    onAnomalyLeave={() => setAnomalyPopup(null)}
+                    onAnomalyClick={(a, cx, cy) => { setAnomalyClick({ anomaly: a, clientX: cx, clientY: cy }); setAnomalyPopup(null); }} />
                 </div>
                 {legend.length > 0 && (
                   <div className="chart-legend">
