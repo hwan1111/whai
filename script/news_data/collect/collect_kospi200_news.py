@@ -1,4 +1,4 @@
-﻿"""
+"""
 script/collect_kospi200_news.py
 코스피 200 뉴스 수집기 - 멀티 프로바이더 폴백 지원
 

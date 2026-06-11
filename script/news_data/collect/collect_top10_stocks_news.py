@@ -1,4 +1,4 @@
-﻿"""
+"""
 script/collect_top10_stocks_news.py
 대표 10개 종목 뉴스 수집기 (Requests + Playwright 통합 버전)
 

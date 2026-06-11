@@ -1,4 +1,4 @@
-﻿"""
+"""
 script/collect_usd_krw_news.py
 원달러(USD/KRW) 환율 뉴스 수집기 (Requests + Playwright 통합 버전)
 
