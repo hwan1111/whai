@@ -28,6 +28,8 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/../script:/opt/script
     - ${AIRFLOW_PROJ_DIR:-.}/../src:/opt/src
+    - ${AIRFLOW_PROJ_DIR:-.}/../data:/opt/data
+    - ${AIRFLOW_PROJ_DIR:-.}/../config/backend/certs:/opt/certs
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
     - whai-network
