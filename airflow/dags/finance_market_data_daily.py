@@ -1,7 +1,7 @@
 """
 Daily market data sync: KOSPI (1), stocks (10), exchange rates (1, KRW/USD), fundamentals (10).
 
-Schedule: 15:00 UTC (00:00 KST) every weekday.
+Schedule: 09:00 UTC (18:00 KST) every weekday.
 The 4 load tasks run in parallel, each doing incremental inserts.
 """
 
@@ -27,8 +27,8 @@ default_args = {
 dag = DAG(
     "finance_market_data_daily",
     default_args=default_args,
-    description="KOSPI, 주식 10종, 환율 6쌍, 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
-    schedule="0 15 * * 1-5",  # 00:00 KST 평일
+    description="KOSPI, 주식 10종, USD/KRW 환율, 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
+    schedule="0 9 * * 1-5",  # 18:00 KST 평일
     catchup=False,
     tags=["finance", "market-data", "price"],
 )

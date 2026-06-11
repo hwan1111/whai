@@ -258,9 +258,10 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
         return (
           <g key={v}>
             <line x1={ML} y1={y.toFixed(1)} x2={SW - MR} y2={y.toFixed(1)}
-              stroke={isZero ? '#94a3b8' : '#f1f5f9'} strokeWidth={isZero ? 1.5 : 1}
+              stroke={isZero ? '#94a3b8' : '#f1f5f9'} strokeWidth={1}
               />
-            <text x={ML - 5} y={(y + 4).toFixed(1)} textAnchor="end" fontSize={10}
+            <text x={ML - 5} y={(y + 4).toFixed(1)} textAnchor="end" fontSize={11}
+              style={{ transformBox: 'fill-box', transformOrigin: 'center', transform: 'scaleY(0.75)' }}
               fill={isZero ? '#94a3b8' : '#94a3b8'} fontWeight={isZero ? 600 : 400}>{label}</text>
           </g>
         );
@@ -269,7 +270,8 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset }) {
       {/* x축 라벨 */}
       {xLabelIndices.map(i => (
         <text key={i} x={toX(i, n).toFixed(1)} y={(MT + CH + 22).toFixed(1)}
-          textAnchor="middle" fontSize={10} fill="#94a3b8">{pd.labels[i]}</text>
+          textAnchor="middle" fontSize={11} fill="#94a3b8"
+          style={{ transformBox: 'fill-box', transformOrigin: 'center', transform: 'scaleY(0.75)' }}>{pd.labels[i]}</text>
       ))}
 
       {/* crosshair */}
