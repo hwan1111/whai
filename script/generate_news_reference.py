@@ -242,7 +242,7 @@ class NewsReferenceGenerator:
         tickers: list[str] | None = None
     ) -> None:
         """
-        MLflow evaluation dataset으로 레퍼런스 등록
+        MLflow evaluation dataset으로 레퍼런스 등록 (trace 포함)
 
         Args:
             experiment_name: MLflow 실험 이름
@@ -250,9 +250,20 @@ class NewsReferenceGenerator:
         """
         try:
             import mlflow
+            from datetime import datetime
 
             # MLflow 실험 설정
             self.mlflow_logger.set_experiment(experiment_name)
+
+            # MLflow run 시작
+            run_id = self.mlflow_logger.start_run(
+                experiment_name=experiment_name,
+                run_name=f"generate_reference_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                tags={
+                    "stage": "reference_generation",
+                    "sample_size": str(10)
+                }
+            )
 
             # 티커 목록 조회
             if tickers is None:
@@ -264,7 +275,15 @@ class NewsReferenceGenerator:
 
             logger.info(f"🔄 {len(tickers)}개 티커의 레퍼런스 생성 및 등록 시작")
 
+            # MLflow 파라미터 로깅
+            self.mlflow_logger.log_params({
+                "tickers": ",".join(tickers),
+                "sample_size": str(10),
+                "reference_prefix": REFERENCE_PREFIX
+            })
+
             # 각 티커별로 레퍼런스 생성 및 저장
+            ticker_metrics = {}
             for ticker in tickers:
                 logger.info(f"\n📝 {ticker} 처리 중...")
 
@@ -304,16 +323,33 @@ class NewsReferenceGenerator:
                         f"   위치: {s3_path}/{ticker}/"
                     )
 
+                    # 메트릭 기록
+                    total_news = sum(v.get("count", 0) for v in reference_data.values())
+                    ticker_metrics[f"reference_{ticker}_dates"] = len(reference_data)
+                    ticker_metrics[f"reference_{ticker}_news"] = total_news
+
                 except Exception as e:
                     logger.warning(f"⚠️ MLflow Dataset 등록 실패 ({ticker}): {str(e)}")
+
+            # 최종 메트릭 로깅
+            if ticker_metrics:
+                self.mlflow_logger.log_metrics(ticker_metrics)
 
             logger.info("\n✅ 모든 레퍼런스 생성 및 등록 완료")
             logger.info(f"\n📍 MLflow Web UI에서 확인:")
             logger.info(f"   http://52.78.237.104:5001")
-            logger.info(f"   → Datasets 탭에서 'news_reference_*' 검색")
+            logger.info(f"   → Experiments → {experiment_name} → Run 확인")
+
+            # MLflow run 종료
+            self.mlflow_logger.end_run(status="FINISHED")
 
         except Exception as e:
             logger.error(f"❌ 평가 데이터셋 등록 실패: {str(e)}")
+            # 에러 발생 시에도 run 종료
+            try:
+                self.mlflow_logger.end_run(status="FAILED")
+            except:
+                pass
             raise
 
 
