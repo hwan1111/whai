@@ -290,14 +290,21 @@ class NewsLLMSummarizer:
             logger.error(f"❌ 로컬 저장 실패 ({ticker}): {str(e)}")
             raise
 
-    def run_summarization(self, tickers: list[str] | None = None) -> None:
+    def run_summarization(
+        self,
+        tickers: list[str] | None = None,
+        use_registered_dataset: bool = True
+    ) -> None:
         """
         MLflow run으로 요약 프로세스 실행
 
         Args:
             tickers: 티커 목록 (None이면 S3에서 자동 조회)
+            use_registered_dataset: 등록된 evaluation dataset 사용 여부
         """
         try:
+            import mlflow
+
             # MLflow run 시작
             run_id = self.mlflow_logger.start_run(
                 experiment_name=EXPERIMENT_NAME,
@@ -305,7 +312,8 @@ class NewsLLMSummarizer:
                 tags={
                     "endpoint": self.endpoint_name,
                     "max_tokens": str(self.max_tokens),
-                    "date": datetime.now().isoformat()
+                    "date": datetime.now().isoformat(),
+                    "uses_registered_dataset": str(use_registered_dataset)
                 }
             )
 
@@ -330,7 +338,8 @@ class NewsLLMSummarizer:
                     "endpoint_name": self.endpoint_name,
                     "max_tokens": self.max_tokens,
                     "reference_prefix": REFERENCE_PREFIX,
-                    "summary_prefix": SUMMARIZED_PREFIX
+                    "summary_prefix": SUMMARIZED_PREFIX,
+                    "use_registered_dataset": str(use_registered_dataset)
                 })
 
                 # 각 티커별로 요약 처리
@@ -338,6 +347,24 @@ class NewsLLMSummarizer:
                     logger.info(f"\n[{idx}/{len(tickers)}] 📝 {ticker} 처리 중...")
 
                     try:
+                        # 등록된 evaluation dataset 로드 (선택사항)
+                        if use_registered_dataset:
+                            try:
+                                dataset = mlflow.data.load_dataset(
+                                    name=f"news_reference_{ticker}",
+                                    namespace=EXPERIMENT_NAME
+                                )
+                                mlflow.log_input(dataset, context=f"reference/{ticker}")
+                                logger.info(
+                                    f"✓ 등록된 evaluation dataset 로드: "
+                                    f"news_reference_{ticker}"
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    f"⚠️ evaluation dataset 로드 실패 ({ticker}), "
+                                    f"S3 직접 접근으로 진행: {str(e)}"
+                                )
+
                         # 요약 생성
                         summary_results = self.process_ticker(ticker)
 
@@ -367,6 +394,11 @@ class NewsLLMSummarizer:
                         continue
 
                 logger.info("\n✅ 모든 요약 생성 완료")
+                logger.info(f"\n📍 MLflow Web UI에서 확인:")
+                logger.info(f"   http://52.78.237.104:5001")
+                logger.info(f"   → Experiments → {EXPERIMENT_NAME} → 해당 Run")
+                logger.info(f"   → Input 탭에서 등록된 evaluation datasets 확인")
+
                 self.mlflow_logger.end_run(status="FINISHED")
 
             except Exception as e:

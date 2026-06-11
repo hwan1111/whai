@@ -281,6 +281,8 @@ class NewsReferenceGenerator:
             tickers: 티커 목록 (None이면 S3에서 자동 조회)
         """
         try:
+            import mlflow
+
             # MLflow 실험 설정
             self.mlflow_logger.set_experiment(experiment_name)
 
@@ -314,22 +316,34 @@ class NewsReferenceGenerator:
                 # S3 저장
                 self.save_reference_to_s3(ticker, reference_data)
 
-                # MLflow evaluation dataset 등록
+                # MLflow Dataset Registry에 등록
                 try:
-                    import mlflow
-                    dataset = mlflow.data.from_json(
-                        local_path,
-                        targets=None
+                    # 1. JSON 파일에서 Dataset 객체 생성
+                    dataset = mlflow.data.from_json(local_path)
+
+                    # 2. Dataset Registry에 영구 등록
+                    dataset.log_dataset(
+                        name=f"news_reference_{ticker}",
+                        namespace=experiment_name,
+                        description=f"{ticker}의 뉴스 요약 평가용 레퍼런스 ({len(reference_data)}개 날짜)"
                     )
-                    mlflow.log_input(
-                        dataset,
-                        context=f"reference/{ticker}"
+                    logger.info(
+                        f"✓ Dataset Registry 등록 완료: "
+                        f"news_reference_{ticker} (namespace: {experiment_name})"
                     )
-                    logger.info(f"✓ MLflow evaluation dataset 등록: {ticker}")
+
+                    # 3. 현재 run이 있으면 Input으로도 로깅 (선택사항)
+                    if mlflow.active_run():
+                        mlflow.log_input(dataset, context=f"reference/{ticker}")
+                        logger.debug(f"  ✓ Run Input으로도 로깅됨")
+
                 except Exception as e:
-                    logger.warning(f"⚠️ MLflow 등록 실패 ({ticker}): {str(e)}")
+                    logger.warning(f"⚠️ MLflow Dataset 등록 실패 ({ticker}): {str(e)}")
 
             logger.info("\n✅ 모든 레퍼런스 생성 및 등록 완료")
+            logger.info(f"\n📍 MLflow Web UI에서 확인:")
+            logger.info(f"   http://52.78.237.104:5001")
+            logger.info(f"   → Datasets 탭에서 'news_reference_*' 검색")
 
         except Exception as e:
             logger.error(f"❌ 평가 데이터셋 등록 실패: {str(e)}")
