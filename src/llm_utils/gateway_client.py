@@ -76,35 +76,11 @@ class GatewayClient:
             f"  ROUTE_NAME: {self.ROUTE_NAME}"
         )
 
-        if not (self.MLFLOW_TRACKING_USERNAME and self.MLFLOW_TRACKING_PASSWORD):
-            raise RuntimeError(
-                "❌ MLflow 인증 정보가 설정되지 않았습니다. "
-                ".env 파일에 다음을 확인하세요:\n"
-                "  - MLFLOW_TRACKING_USERNAME\n"
-                "  - MLFLOW_TRACKING_PASSWORD"
-            )
-
-        # httpx BasicAuth를 사용하여 Basic 인증 설정
-        from httpx import BasicAuth
-
-        logger.debug(
-            f"BasicAuth 설정: username={self.MLFLOW_TRACKING_USERNAME}"
-        )
-
         # OpenAI SDK를 사용하여 MLflow AI Gateway 호출
-        # httpx.BasicAuth를 사용한 Basic 인증
-        http_client = httpx.Client(
-            auth=BasicAuth(
-                self.MLFLOW_TRACKING_USERNAME,
-                self.MLFLOW_TRACKING_PASSWORD,
-            ),
-            timeout=30.0,
-        )
-
+        # MLflow Gateway는 API key 불필요 (server-side 설정)
         self.client = OpenAI(
             base_url=self.GATEWAY_BASE_URL,
-            api_key="not-needed",  # MLflow Gateway는 헤더로 인증
-            http_client=http_client,
+            api_key="",  # API key 불필요
         )
 
         if validate_connection:
