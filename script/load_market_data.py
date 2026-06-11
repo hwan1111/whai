@@ -24,12 +24,15 @@ from sqlalchemy import create_engine, text
 
 
 def get_engine():
-    url = os.getenv("SERVICE_DATABASE_URL")
-    if not url:
-        raise RuntimeError("SERVICE_DATABASE_URL이 .env.local에 없습니다.")
-    ca_path = ROOT / "config" / "certs" / "ca.pem"
-    base_url = url.split("?")[0]
-    db_url = f"{base_url}?charset=utf8mb4"
+    user     = os.getenv("BACKEND_DB_USER")
+    password = os.getenv("BACKEND_DB_PASSWORD")
+    if not user or not password:
+        raise RuntimeError("BACKEND_DB_USER / BACKEND_DB_PASSWORD가 .env.local에 없습니다.")
+    db_url   = (
+        f"mysql+pymysql://{user}:{password}"
+        "@mysql-12676458-whai.b.aivencloud.com:16935/whai_service?charset=utf8mb4"
+    )
+    ca_path  = ROOT / "config" / "certs" / "ca.pem"
     connect_args = {"ssl": {"ca": str(ca_path)}} if ca_path.exists() else {}
     return create_engine(db_url, connect_args=connect_args, pool_pre_ping=True)
 
@@ -44,7 +47,9 @@ def _latest_price_date(engine, ticker: str) -> date:
 
 def _latest_exchange_date(engine) -> date:
     with engine.connect() as conn:
-        row = conn.execute(text("SELECT MAX(date) FROM exchange_rate")).fetchone()
+        row = conn.execute(
+            text("SELECT MAX(date) FROM price WHERE ticker = 'USD'")
+        ).fetchone()
     return row[0] if row[0] else date(2020, 1, 1)
 
 
@@ -54,7 +59,7 @@ def _latest_fundamental_date(engine) -> date:
     return row[0] if row[0] else date(2020, 1, 1)
 
 
-def load_kospi(engine) -> int:
+def load_kospi(engine, since: date | None = None) -> int:
     """pykrx로 KOSPI 지수(000000) 증분 적재."""
     try:
         from pykrx import stock as krx
@@ -63,7 +68,7 @@ def load_kospi(engine) -> int:
         return 0
 
     last = _latest_price_date(engine, "000000")
-    start = last + timedelta(days=1)
+    start = since if since else last + timedelta(days=1)
     today = date.today()
 
     if start > today:
@@ -103,7 +108,7 @@ def load_kospi(engine) -> int:
     return len(rows)
 
 
-def load_stocks(engine) -> int:
+def load_stocks(engine, since: date | None = None) -> int:
     """pykrx로 company 테이블 KRW 종목(KOSPI 제외) 증분 적재."""
     try:
         from pykrx import stock as krx
@@ -115,12 +120,12 @@ def load_stocks(engine) -> int:
         tickers = {
             r.ticker: r.name
             for r in conn.execute(
-                text("SELECT ticker, name FROM company WHERE currency_code='KRW' AND ticker != '000000'")
+                text("SELECT ticker, name FROM asset WHERE ticker REGEXP '^[0-9]{6}$'")
             )
         }
 
     if not tickers:
-        print("[주식] company 테이블에 종목이 없습니다.")
+        print("[주식] asset 테이블에 종목이 없습니다.")
         return 0
 
     today_str = date.today().strftime("%Y%m%d")
@@ -128,7 +133,7 @@ def load_stocks(engine) -> int:
 
     for ticker, name in tickers.items():
         last = _latest_price_date(engine, ticker)
-        start_str = (last + timedelta(days=1)).strftime("%Y%m%d")
+        start_str = (since if since else last + timedelta(days=1)).strftime("%Y%m%d")
 
         if start_str > today_str:
             print(f"[{ticker} {name}] 최신 상태")
@@ -171,9 +176,9 @@ def load_stocks(engine) -> int:
 
 
 def load_exchange_rates(engine) -> int:
-    """BOK ECOS API로 6개 KRW 환율 증분 적재."""
+    """BOK ECOS API로 USD/KRW 환율 증분 적재 (price 테이블, ticker='USD')."""
+    sys.path.insert(0, str(ROOT / "src"))
     from exchange_rate_fetcher import fetch_bok, make_exchange_rate_df
-    from exchange_rate_loader import insert_exchange_rate
 
     last = _latest_exchange_date(engine)
     start = last + timedelta(days=1)
@@ -187,27 +192,41 @@ def load_exchange_rates(engine) -> int:
     end_str = today.strftime("%Y%m%d")
 
     try:
-        rows = fetch_bok(start_str, end_str)
+        raw_rows = fetch_bok(start_str, end_str)
     except Exception as e:
         print(f"[환율 ERROR] BOK API 호출 실패: {e}")
         return 0
 
-    if not rows:
+    if not raw_rows:
         print(f"[환율] 데이터 없음 ({start} ~ {today})")
         return 0
 
-    df = make_exchange_rate_df(rows)
+    df = make_exchange_rate_df(raw_rows)
     if df.empty:
         print(f"[환율] 파싱된 데이터 없음 ({start} ~ {today})")
         return 0
 
-    insert_exchange_rate(engine, df)
-    print(f"[환율] {len(df)}건 적재 ({start} ~ {today})")
-    return len(df)
+    rows = [
+        {"ticker": "USD", "date": r["date"], "close": round(r["rate"], 4), "volume": 0}
+        for r in df.to_dict(orient="records")
+    ]
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO price (ticker, date, close, volume)
+                VALUES (:ticker, :date, :close, :volume)
+                ON DUPLICATE KEY UPDATE close=VALUES(close)
+            """),
+            rows,
+        )
+
+    print(f"[환율] {len(rows)}건 적재 ({start} ~ {today})")
+    return len(rows)
 
 
 def load_fundamentals(engine) -> int:
-    """pykrx로 10개 종목 PER·PBR·시가총액 최신 스냅샷 적재."""
+    """pykrx로 개별 종목(10개) + KOSPI 지수 PER·PBR·시가총액 최신 스냅샷 적재."""
     try:
         from pykrx import stock as krx
     except ImportError:
@@ -215,15 +234,11 @@ def load_fundamentals(engine) -> int:
         return 0
 
     with engine.connect() as conn:
-        tickers = [
+        stock_tickers = [
             r.ticker for r in conn.execute(
-                text("SELECT ticker FROM company WHERE currency_code='KRW' AND ticker != '000000'")
+                text("SELECT ticker FROM asset WHERE ticker REGEXP '^[0-9]{6}$' AND ticker != '000000'")
             )
         ]
-
-    if not tickers:
-        print("[펀더멘털] 종목 없음")
-        return 0
 
     today = date.today()
     last = _latest_fundamental_date(engine)
@@ -231,13 +246,35 @@ def load_fundamentals(engine) -> int:
         print("[펀더멘털] 최신 상태")
         return 0
 
-    # 가장 최근 영업일 기준 (오늘 데이터 없으면 어제)
     today_str = today.strftime("%Y%m%d")
     yesterday_str = (today - timedelta(days=1)).strftime("%Y%m%d")
     today_iso = today.strftime("%Y-%m-%d")
 
     rows = []
-    for ticker in tickers:
+
+    # KOSPI 지수 PER/PBR (pykrx 인덱스 펀더멘털)
+    try:
+        df = krx.get_index_fundamental_by_date(yesterday_str, today_str, "1001")
+        if not df.empty:
+            valid = df[df["PER"] > 0]
+            frow = valid.iloc[-1] if not valid.empty else df.iloc[-1]
+            per_val = float(frow.get("PER", 0) or 0)
+            pbr_val = float(frow.get("PBR", 0) or 0)
+            rows.append({
+                "ticker": "000000",
+                "date": today_iso,
+                "per": per_val if per_val > 0 else None,
+                "pbr": pbr_val if pbr_val > 0 else None,
+                "market_cap": None,
+            })
+            print(f"[펀더멘털 000000 KOSPI] PER={per_val} PBR={pbr_val}")
+        else:
+            print("[펀더멘털 000000 KOSPI] 데이터 없음")
+    except Exception as e:
+        print(f"[펀더멘털 000000 KOSPI] 실패: {e}")
+
+    # 개별 종목
+    for ticker in stock_tickers:
         try:
             fd = krx.get_market_fundamental_by_date(yesterday_str, today_str, ticker)
             mc = krx.get_market_cap_by_date(yesterday_str, today_str, ticker)
@@ -277,12 +314,14 @@ def load_fundamentals(engine) -> int:
     return len(rows)
 
 
-def load_all(engine) -> dict[str, int]:
+def load_all(engine, since: date | None = None) -> dict[str, int]:
     """KOSPI, 주식, 환율 증분 적재 실행."""
     print("=== 일일 시장 데이터 적재 시작 ===\n")
+    if since:
+        print(f"  [강제 시작] --since {since} (기존 데이터 덮어쓰기 포함)\n")
     results = {
-        "kospi": load_kospi(engine),
-        "stocks": load_stocks(engine),
+        "kospi": load_kospi(engine, since=since),
+        "stocks": load_stocks(engine, since=since),
         "exchange_rates": load_exchange_rates(engine),
         "fundamentals": load_fundamentals(engine),
     }
@@ -296,4 +335,12 @@ def load_all(engine) -> dict[str, int]:
 
 
 if __name__ == "__main__":
-    load_all(get_engine())
+    import argparse
+    parser = argparse.ArgumentParser(description="일일 시장 데이터 적재")
+    parser.add_argument(
+        "--since", default=None,
+        help="강제 시작일 YYYY-MM-DD (지정 시 해당 날짜부터 재수집, 기본: DB 최신+1일)",
+    )
+    args = parser.parse_args()
+    since_date = date.fromisoformat(args.since) if args.since else None
+    load_all(get_engine(), since=since_date)

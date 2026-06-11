@@ -106,22 +106,25 @@ def preprocess_and_upload_file(filepath):
     )
     return True
 
-def main():
+def main(since: str | None = None) -> None:
     json_files = []
     for folder in TARGET_FOLDERS:
         folder_path = os.path.join(DATA_DIR, folder)
         if os.path.exists(folder_path):
-            json_files.extend(glob.glob(f"{folder_path}/**/*.json", recursive=True))
-            
+            files = glob.glob(f"{folder_path}/**/*.json", recursive=True)
+            if since:
+                files = [f for f in files if os.path.basename(f)[:10] >= since]
+            json_files.extend(files)
+
     total_files = len(json_files)
-    print(f"[시작] 총 {total_files}개의 뉴스 파일을 찾았습니다.")
+    since_msg = f" (since {since})" if since else ""
+    print(f"[시작] 총 {total_files}개의 뉴스 파일을 찾았습니다{since_msg}.")
     print(f"[{BUCKET_NAME}] 버킷의 preprocessed 경로로 병렬 업로드를 시작합니다...\n")
-    
+
     success_count = 0
-    # 병렬 처리 (10개 스레드)
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(preprocess_and_upload_file, fp) for fp in json_files]
-        
+
         for idx, future in enumerate(as_completed(futures), 1):
             try:
                 future.result()
@@ -130,8 +133,12 @@ def main():
                     print(f"진행 상황: {idx} / {total_files} 완료...")
             except Exception as e:
                 print(f"오류 발생: {e}")
-                
+
     print(f"\n[완료] S3 전처리 업로드 완료! (성공: {success_count}/{total_files}개)")
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="뉴스 전처리 및 S3 업로드")
+    parser.add_argument("--since", default=None, help="이 날짜 이후 파일만 처리 YYYY-MM-DD")
+    args = parser.parse_args()
+    main(since=args.since)

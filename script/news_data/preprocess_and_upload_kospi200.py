@@ -2,9 +2,16 @@ import os
 import re
 import glob
 import json
+import argparse
+from datetime import date
 import boto3
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+parser = argparse.ArgumentParser(description="KOSPI200 뉴스 전처리 후 S3 업로드")
+parser.add_argument("--since", default=None, help="이 날짜 이후 파일만 처리 YYYY-MM-DD")
+args = parser.parse_args()
+SINCE_DATE = date.fromisoformat(args.since) if args.since else None
 
 # 1. 환경변수 로드 (.env.local)
 load_dotenv('.env.local')
@@ -44,7 +51,13 @@ def clean_financial_news(text: str) -> str:
 json_files = []
 for folder in TARGET_FOLDERS:
     folder_path = os.path.join(DATA_DIR, folder)
-    json_files.extend(glob.glob(f"{folder_path}/**/*.json", recursive=True))
+    all_files = glob.glob(f"{folder_path}/**/*.json", recursive=True)
+    if SINCE_DATE:
+        all_files = [
+            f for f in all_files
+            if os.path.basename(f)[:10] >= SINCE_DATE.isoformat()
+        ]
+    json_files.extend(all_files)
 
 total_files = len(json_files)
 

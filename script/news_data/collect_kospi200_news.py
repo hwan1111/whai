@@ -24,7 +24,7 @@ DATA_DIR  = BASE_DIR / "data" / "news"
 LOG_PATH  = BASE_DIR / "data" / "kospi200_news_collect.log"
 
 START_DATE = date(2020, 1, 1)
-END_DATE   = date.today()
+END_DATE   = date.today() - timedelta(days=1)  # 자정 기준 전일까지
 
 REQUEST_DELAY_MIN     = 2.0
 REQUEST_DELAY_MAX     = 4.0
@@ -367,4 +367,13 @@ def collect_all():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="KOSPI200 뉴스 수집")
+    parser.add_argument("--start", default=None, help="수집 시작일 YYYY-MM-DD (기본: 2020-01-01)")
+    parser.add_argument("--end",   default=None, help="수집 종료일 YYYY-MM-DD (기본: 전일)")
+    args = parser.parse_args()
+    if args.start:
+        START_DATE = date.fromisoformat(args.start)
+    if args.end:
+        END_DATE = date.fromisoformat(args.end)
     collect_all()

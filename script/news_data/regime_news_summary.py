@@ -109,12 +109,19 @@ _USER_TMPL = """\
 # ── 국면 탐지 (test3.py 핵심 로직 인라인) ────────────────────────────
 
 def _fetch_price_volume(code: str, start: str, end: str) -> tuple[pd.Series, pd.Series]:
-    df = fdr.DataReader(code, start, end)
-    return df["Close"].pct_change().dropna(), df["Volume"]
+    # pct_change 계산에 이전 종가가 필요하므로 14일 앞에서부터 로드
+    start_adj = (pd.Timestamp(start) - pd.Timedelta(days=14)).strftime("%Y-%m-%d")
+    df = fdr.DataReader(code, start_adj, end)
+    returns = df["Close"].pct_change().dropna()
+    returns = returns[returns.index >= pd.Timestamp(start)]
+    volume  = df["Volume"][df.index >= pd.Timestamp(start)]
+    return returns, volume
 
 
 def _detect_price_regimes(returns: pd.Series) -> list[dict]:
     s = returns.dropna()
+    if s.empty:
+        return []
     dirs = s.map(lambda x: "상승" if x > 0 else "하락")
     regimes, cur_dir, cur_start, cur_dates = [], dirs.iloc[0], dirs.index[0], [dirs.index[0]]
     for date, d in dirs.iloc[1:].items():
@@ -334,11 +341,13 @@ def run(provider: str = "groq", model: str | None = None,
         ticker_code: str = TICKER_CODE,
         ticker_name: str = TICKER_NAME,
         sector: str = SECTOR,
-        s3_ticker: str | None = None) -> None:
+        s3_ticker: str | None = None,
+        fdr_ticker: str | None = None) -> None:
     rerun_ids  = rerun_ids or set()
     model      = model or DEFAULT_MODEL[provider]
     sleep_sec  = SLEEP_SEC[provider]
     s3_ticker  = s3_ticker or ticker_code
+    fdr_ticker = fdr_ticker or ticker_code
     output_path = Path(f"data/{ticker_code}/regime_news_summary_{ticker_code}.json")
 
     llm_client = None
@@ -365,18 +374,19 @@ def run(provider: str = "groq", model: str | None = None,
     s3_client = boto3.client("s3")
 
     # ── 국면 도출 ─────────────────────────────────────────────────────
-    log.info(f"가격 데이터 수집: {TICKER_NAME}({TICKER_CODE})  {start} ~ {end}")
-    returns, volume = _fetch_price_volume(TICKER_CODE, start, end)
+    log.info(f"가격 데이터 수집: {ticker_name}({ticker_code})  {start} ~ {end}")
+    returns, volume = _fetch_price_volume(fdr_ticker, start, end)
     raw_regimes     = _detect_price_regimes(returns)
     regimes         = _merge_noise(raw_regimes, returns)
     log.info(f"국면: {len(raw_regimes)}개 → 병합 후 {len(regimes)}개")
 
-    # ── 기존 결과 로드 ────────────────────────────────────────────────
+    # ── 기존 결과 로드 (분석 시작일 이전 데이터만 유지) ──────────────
     results: list[dict] = []
-    if OUTPUT_PATH.exists():
+    if output_path.exists():
         try:
-            results = json.loads(OUTPUT_PATH.read_text(encoding="utf-8"))
-            log.info(f"기존 결과 {len(results)}건 로드")
+            all_prev = json.loads(output_path.read_text(encoding="utf-8"))
+            results = [r for r in all_prev if r.get("end", "") < start]
+            log.info(f"기존 결과 {len(all_prev)}건 중 {len(results)}건 유지 ({start} 이전)")
         except Exception:
             pass
 
@@ -429,10 +439,10 @@ def run(provider: str = "groq", model: str | None = None,
 
         user_prompt = _USER_TMPL.format(
             start=start_str, end=end_str, days=reg["days"],
-            name=TICKER_NAME, code=TICKER_CODE,
+            name=ticker_name, code=ticker_code,
             dir_str=dir_str, cum_ret=cum_ret,
             direction=reg["direction"], vol_trend=vol_trend,
-            sector=SECTOR,
+            sector=sector,
             news_pre=NEWS_PRE, news_post=NEWS_POST,
             max_news_count=MAX_NEWS_COUNT,
             news_context=news_context,
@@ -461,8 +471,8 @@ def run(provider: str = "groq", model: str | None = None,
         results.append({
             "regime_id":    i,
             "regime_key":   regime_key,
-            "ticker":       TICKER_NAME,
-            "ticker_code":  TICKER_CODE,
+            "ticker":       ticker_name,
+            "ticker_code":  ticker_code,
             "start":        start_str,
             "end":          end_str,
             "days":         reg["days"],
@@ -476,15 +486,15 @@ def run(provider: str = "groq", model: str | None = None,
         })
         done_keys.add(regime_key)
 
-        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT_PATH.write_text(
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
             json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         time.sleep(sleep_sec)
 
     log.info(
         f"완료: {len(results)}건  "
-        f"토큰 합계 in={total_in:,}  out={total_out:,}  → {OUTPUT_PATH}"
+        f"토큰 합계 in={total_in:,}  out={total_out:,}  → {output_path}"
     )
 
 
@@ -497,7 +507,8 @@ if __name__ == "__main__":
     parser.add_argument("--ticker-code",  default=TICKER_CODE, help="종목 코드 (예: 105560)")
     parser.add_argument("--ticker-name",  default=TICKER_NAME, help="종목명 (예: KB금융)")
     parser.add_argument("--sector",       default=SECTOR,       help="섹터 (예: 금융)")
-    parser.add_argument("--s3-ticker",    default=None,          help="S3 폴더 티커명이 DB 티커와 다를 때 (예: usd_krx)")
+    parser.add_argument("--s3-ticker",    default=None,          help="S3 폴더 티커명이 DB 티커와 다를 때 (예: USD_KRW)")
+    parser.add_argument("--fdr-ticker",   default=None,          help="FDR 가격 데이터 티커가 DB 티커와 다를 때 (예: KS11, USD/KRW)")
     parser.add_argument("--dry-run",      action="store_true")
     parser.add_argument("--rerun-ids",    nargs="+", type=int, default=[],
                         metavar="ID", help="강제 재처리할 regime_id (예: --rerun-ids 21 22)")
@@ -506,4 +517,4 @@ if __name__ == "__main__":
         start=args.start, end=args.end,
         dry_run=args.dry_run, rerun_ids=set(args.rerun_ids),
         ticker_code=args.ticker_code, ticker_name=args.ticker_name, sector=args.sector,
-        s3_ticker=args.s3_ticker)
+        s3_ticker=args.s3_ticker, fdr_ticker=args.fdr_ticker)
