@@ -75,7 +75,7 @@ class NewsSummaryPipeline:
             prefix=PREPROCESSED_PREFIX
         )
         self.mlflow_logger = MLflowLogger()
-        self.gateway_client = GatewayClient(endpoint_name=endpoint_name)
+        self.gateway_client = GatewayClient()
         self.prompt_registry = PromptRegistry()
 
     def get_available_dates(self, ticker: str) -> list[str]:
@@ -176,9 +176,10 @@ class NewsSummaryPipeline:
                 "prompt_key": self.prompt_key,
             }
         ):
-            summary = self.gateway_client.invoke(
-                prompt=prompt,
-                max_tokens=self.max_tokens
+            summary = self.gateway_client.call(
+                text=prompt,
+                max_tokens=self.max_tokens,
+                model=self.endpoint_name
             )
             return summary.strip()
 
