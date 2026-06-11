@@ -3,9 +3,7 @@
 # =================================================================
 
 x-airflow-common: &airflow-common
-  build:
-    context: .
-    dockerfile: Dockerfile
+  image: 295447237396.dkr.ecr.ap-northeast-2.amazonaws.com/whai-airflow:latest
   env_file:
     - ../.env
   environment: &airflow-common-env

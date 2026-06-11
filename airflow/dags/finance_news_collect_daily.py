@@ -2,7 +2,7 @@
 Daily news collection and S3 upload for all financial assets.
 
 Collects one day of news per asset using {{ ds }} (previous day's date).
-Schedule: 15:00 UTC (00:00 KST) every weekday, same as finance_market_data_daily.
+Schedule: 14:00 UTC (23:00 KST) every weekday, same as finance_market_data_daily.
 3 tasks run in parallel (independent).
 
 S3 path: raw/{ticker}/{year}/{month:02d}/{date}.json
@@ -24,14 +24,14 @@ default_args = {
     "email_on_failure": True,
     "email_on_retry": False,
     "retries": 1,
-    "retry_delay": timedelta(minutes=10),
+    "retry_delay": timedelta(minutes=0),
 }
 
 dag = DAG(
     "finance_news_collect_daily",
     default_args=default_args,
     description="KOSPI200, Top10 종목, USD/KRW 뉴스 수집 및 S3 적재",
-    schedule="0 15 * * 1-5",
+    schedule="0 14 * * 1-5",
     catchup=False,
     tags=["finance", "news", "collect"],
 )
