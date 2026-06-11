@@ -20,6 +20,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from src.data.s3_news_loader import S3NewsDataLoader
 from src.llm_utils.gateway_client import GatewayClient
 from src.llm_utils.mlflow_logger import MLflowLogger
+from src.llm_utils.prompt_registry import PromptRegistry, log_prompt_metrics
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +43,7 @@ class NewsLLMSummarizer:
         region: str = "ap-northeast-2",
         endpoint_name: str = ENDPOINT_NAME,
         max_tokens: int = 200,
+        prompt_key: str = "news_summarization",
     ):
         """
         초기화
@@ -51,11 +53,13 @@ class NewsLLMSummarizer:
             region: AWS 리전
             endpoint_name: MLflow endpoint 이름
             max_tokens: 최대 토큰 수
+            prompt_key: MLflow Prompt Registry의 프롬프트 키
         """
         self.bucket = bucket
         self.region = region
         self.endpoint_name = endpoint_name
         self.max_tokens = max_tokens
+        self.prompt_key = prompt_key
 
         self.news_loader = S3NewsDataLoader(
             bucket=bucket,
@@ -64,6 +68,7 @@ class NewsLLMSummarizer:
         )
         self.mlflow_logger = MLflowLogger()
         self.gateway_client = GatewayClient(endpoint_name=endpoint_name)
+        self.prompt_registry = PromptRegistry()
 
     @retry(
         stop=stop_after_attempt(3),
@@ -71,7 +76,7 @@ class NewsLLMSummarizer:
     )
     def summarize_news(self, title: str, fulltext: str) -> str:
         """
-        뉴스 요약 생성
+        뉴스 요약 생성 (MLflow Prompt Registry 사용)
 
         Args:
             title: 뉴스 제목
@@ -80,17 +85,22 @@ class NewsLLMSummarizer:
         Returns:
             요약 텍스트
         """
-        prompt = f"""다음 뉴스 기사를 간결하게 요약하세요. 3-5 문장으로 요약하되, 핵심 내용만 포함하세요.
-
-제목: {title}
-
-본문:
-{fulltext}
-
-요약:"""
-
         try:
-            with mlflow.start_span(name="llm_summary", attributes={"endpoint": self.endpoint_name}):
+            # Prompt Registry에서 템플릿 로드 및 포맷팅
+            prompt = self.prompt_registry.format_prompt(
+                self.prompt_key,
+                title=title,
+                fulltext=fulltext
+            )
+
+            with mlflow.start_span(
+                name="llm_summary",
+                attributes={
+                    "endpoint": self.endpoint_name,
+                    "prompt_key": self.prompt_key,
+                    "model": "news_summarization"
+                }
+            ):
                 summary = self.gateway_client.invoke(
                     prompt=prompt,
                     max_tokens=self.max_tokens
@@ -332,14 +342,24 @@ class NewsLLMSummarizer:
                 summary_dir = Path("summaries")
                 summary_dir.mkdir(parents=True, exist_ok=True)
 
+                # Prompt Registry에 프롬프트 등록
+                try:
+                    self.prompt_registry.register_prompts()
+                    logger.info("✓ Prompt Registry 등록 완료")
+                except Exception as e:
+                    logger.warning(f"⚠️ Prompt Registry 등록 실패: {str(e)}")
+
                 # MLflow 파라미터 로깅
+                prompt_description = self.prompt_registry.get_prompt_description(self.prompt_key)
                 self.mlflow_logger.log_params({
                     "tickers": ",".join(tickers),
                     "endpoint_name": self.endpoint_name,
                     "max_tokens": self.max_tokens,
                     "reference_prefix": REFERENCE_PREFIX,
                     "summary_prefix": SUMMARIZED_PREFIX,
-                    "use_registered_dataset": str(use_registered_dataset)
+                    "use_registered_dataset": str(use_registered_dataset),
+                    "prompt_key": self.prompt_key,
+                    "prompt_description": prompt_description
                 })
 
                 # 각 티커별로 요약 처리
@@ -413,7 +433,8 @@ class NewsLLMSummarizer:
 
 def main():
     """메인 함수"""
-    summarizer = NewsLLMSummarizer()
+    # 사용할 프롬프트 선택: "news_summarization" 또는 "news_summarization_detailed"
+    summarizer = NewsLLMSummarizer(prompt_key="news_summarization")
     summarizer.run_summarization()
 
 
