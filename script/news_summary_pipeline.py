@@ -14,9 +14,14 @@ import argparse
 import json
 import logging
 import random
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+
+# 프로젝트 루트를 sys.path에 추가
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 import mlflow
 from tenacity import retry, stop_after_attempt, wait_exponential
