@@ -1,4 +1,4 @@
-"""
+﻿"""
 script/fill_gaps_kospi200.py
 ──────────────────────────────
 Playwright(실제 Chrome) 기반 코스피200 뉴스 빈 날짜 보완 수집기
@@ -21,7 +21,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 # ─────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 DATA_DIR = BASE_DIR / "data" / "news"
 LOG_PATH = BASE_DIR / "data" / "kospi200_gap_fill.log"
 

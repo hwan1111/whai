@@ -1,4 +1,4 @@
-"""
+﻿"""
 국면 요약 평가: LLM 생성 텍스트 vs 뉴스 원문 비교
 
 지표
@@ -36,7 +36,6 @@ from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 
 load_dotenv(".env")
-load_dotenv(".env.local", override=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)

@@ -1,4 +1,4 @@
-"""
+﻿"""
 script/collect_top10_stocks_news.py
 대표 10개 종목 뉴스 수집기 (Requests + Playwright 통합 버전)
 
@@ -12,8 +12,6 @@ import json
 import time
 import random
 import logging
-import argparse
-import boto3
 import requests
 from datetime import date, timedelta
 from pathlib import Path
@@ -23,7 +21,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 # ─────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────
-BASE_DIR  = Path(__file__).resolve().parent.parent.parent
+BASE_DIR  = Path(__file__).resolve().parent.parent.parent.parent
 DATA_DIR  = BASE_DIR / "data" / "news"
 LOG_PATH  = BASE_DIR / "data" / "collect_top10_stocks.log"
 
@@ -108,23 +106,6 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger(__name__)
-
-S3_BUCKET = "fisa-news-archive"
-
-def _upload_to_s3(ticker: str, pub_date: str, doc: dict) -> None:
-    if not doc.get("title"):
-        return
-    try:
-        dt  = date.fromisoformat(pub_date)
-        key = f"raw/{ticker}/{dt.year}/{dt.month:02d}/{pub_date}.json"
-        boto3.client("s3").put_object(
-            Bucket=S3_BUCKET,
-            Key=key,
-            Body=json.dumps(doc, ensure_ascii=False).encode("utf-8"),
-            ContentType="application/json; charset=utf-8",
-        )
-    except Exception as e:
-        logger.warning(f"  [S3] 업로드 실패 {ticker}/{pub_date}: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -340,7 +321,6 @@ def save_article(company_name: str, ticker: str, article: dict, fulltext: str | 
     }
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=2)
-    _upload_to_s3(ticker, article["pub_date"], doc)
     return filepath
 
 def date_range(start: date, end: date):
@@ -662,22 +642,16 @@ def fill_gaps_playwright():
 # 메인 통합 제어
 # ─────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description="대표 10개 종목 뉴스 수집")
-    parser.add_argument("--date", default=None, help="수집 날짜 YYYY-MM-DD (미지정 시 전체 범위)")
-    args = parser.parse_args()
-
-    if args.date:
-        global START_DATE, END_DATE
-        d = date.fromisoformat(args.date)
-        START_DATE = END_DATE = d
-
     logger.info("=========================================")
     logger.info("대표 10개 종목 뉴스 수집 및 보완 실행")
     logger.info("=========================================")
-
+    
+    # 1단계: Requests 기반 고속 수집
     collect_all_requests()
+    
+    # 2단계: Playwright 기반 누락 날짜 보완 수집
     fill_gaps_playwright()
-
+    
     logger.info("모든 뉴스 수집 및 보완 단계가 완료되었습니다.")
 
 if __name__ == "__main__":

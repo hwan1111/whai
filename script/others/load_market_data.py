@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from dotenv import load_dotenv
 
-load_dotenv(ROOT / ".env.local", override=True)
+load_dotenv(ROOT / ".env", override=True)
 
 from sqlalchemy import create_engine, text
 
@@ -26,7 +26,7 @@ from sqlalchemy import create_engine, text
 def get_engine():
     url = os.getenv("SERVICE_DATABASE_URL")
     if not url:
-        raise RuntimeError("SERVICE_DATABASE_URL이 .env.local에 없습니다.")
+        raise RuntimeError("SERVICE_DATABASE_URL이 .env에 없습니다.")
     ca_path = ROOT / "config" / "certs" / "ca.pem"
     base_url = url.split("?")[0]
     db_url = f"{base_url}?charset=utf8mb4"
