@@ -51,44 +51,41 @@ class GatewayClient:
 
     def __init__(self, validate_connection: bool = True):
         """
-        MLflow AI Gateway 클라이언트 초기화
+        LLM Gateway 클라이언트 초기화 (OpenRouter 또는 MLflow Gateway)
 
         Args:
             validate_connection: 초기화 시 연결 검증 여부
 
         Raises:
-            RuntimeError: MLflow Gateway에 연결할 수 없을 때
+            RuntimeError: Gateway에 연결할 수 없을 때
         """
-        # 환경 변수 로드 (인스턴스 생성 시점에 로드)
-        self.GATEWAY_BASE_URL = os.getenv(
-            "MLFLOW_GATEWAY_URL",
-            "http://52.78.237.104:5001/gateway/mlflow/v1",
+        # 환경 변수 로드
+        self.OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+        self.OPENROUTER_BASE_URL = os.getenv(
+            "OPENROUTER_BASE_URL",
+            "https://openrouter.ai/api/v1"
         )
-        self.MLFLOW_TRACKING_USERNAME = os.getenv("MLFLOW_TRACKING_USERNAME", "")
-        self.MLFLOW_TRACKING_PASSWORD = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
         self.ROUTE_NAME = os.getenv("MLFLOW_SUMMARIZE_URI", "mid_performance_llm")
 
         logger.debug(
             f"환경 변수 로드 확인:\n"
-            f"  MLFLOW_TRACKING_USERNAME: {self.MLFLOW_TRACKING_USERNAME}\n"
-            f"  MLFLOW_TRACKING_PASSWORD: {'*' * len(self.MLFLOW_TRACKING_PASSWORD) if self.MLFLOW_TRACKING_PASSWORD else '(empty)'}\n"
-            f"  GATEWAY_BASE_URL: {self.GATEWAY_BASE_URL}\n"
+            f"  OPENROUTER_BASE_URL: {self.OPENROUTER_BASE_URL}\n"
+            f"  OPENROUTER_API_KEY: {'*' * 10}...\n"
             f"  ROUTE_NAME: {self.ROUTE_NAME}"
         )
 
-        # OpenAI SDK를 사용하여 MLflow AI Gateway 호출
-        # MLflow Gateway는 API key 불필요 (server-side 설정)
+        # OpenAI SDK를 사용하여 OpenRouter 호출
         self.client = OpenAI(
-            base_url=self.GATEWAY_BASE_URL,
-            api_key="",  # API key 불필요
+            base_url=self.OPENROUTER_BASE_URL,
+            api_key=self.OPENROUTER_API_KEY,
         )
 
         if validate_connection:
             self._validate_connection()
 
         logger.info(
-            f"✓ MLflow AI Gateway 클라이언트 초기화 완료\n"
-            f"   Gateway URL: {self.GATEWAY_BASE_URL}\n"
+            f"✓ OpenRouter 클라이언트 초기화 완료\n"
+            f"   Base URL: {self.OPENROUTER_BASE_URL}\n"
             f"   Route: {self.ROUTE_NAME}"
         )
 
