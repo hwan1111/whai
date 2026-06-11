@@ -342,12 +342,9 @@ class NewsLLMSummarizer:
                 summary_dir = Path("summaries")
                 summary_dir.mkdir(parents=True, exist_ok=True)
 
-                # Prompt Registry에 프롬프트 등록
-                try:
-                    self.prompt_registry.register_prompts()
-                    logger.info("✓ Prompt Registry 등록 완료")
-                except Exception as e:
-                    logger.warning(f"⚠️ Prompt Registry 등록 실패: {str(e)}")
+                # MLflow Web UI의 프롬프트 로드 시도
+                prompt_source = self.prompt_registry.get_prompt_source(self.prompt_key)
+                logger.info(f"📝 프롬프트 출처: {prompt_source}")
 
                 # MLflow 파라미터 로깅
                 prompt_description = self.prompt_registry.get_prompt_description(self.prompt_key)
@@ -359,7 +356,8 @@ class NewsLLMSummarizer:
                     "summary_prefix": SUMMARIZED_PREFIX,
                     "use_registered_dataset": str(use_registered_dataset),
                     "prompt_key": self.prompt_key,
-                    "prompt_description": prompt_description
+                    "prompt_description": prompt_description,
+                    "prompt_source": prompt_source,
                 })
 
                 # 각 티커별로 요약 처리
