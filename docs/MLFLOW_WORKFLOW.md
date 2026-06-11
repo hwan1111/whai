@@ -91,9 +91,8 @@ python script/generate_news_reference.py
 
 **결과**:
 ```
-✓ reference/ 폴더에 {ticker}_reference.json 생성
-✓ S3에 reference/{ticker}/{year}/{month}/{date}.json 저장
-✓ MLflow Datasets에 news_reference_{ticker} 등록
+✓ S3 reference/{ticker}/{year}/{month}/{date}.json 저장 (로컬 저장 없음)
+✓ MLflow에 메타데이터 기록
 ```
 
 ### Step 2: 요약 생성 (MLflow 추적)
@@ -111,8 +110,7 @@ python script/summarize_news.py
 
 **결과**:
 ```
-✓ summarized/ 폴더에 {ticker}_summaries.json 생성
-✓ S3에 summarized/{ticker}/{year}/{month}/{date}.json 저장
+✓ S3 summarized/{ticker}/{year}/{month}/{date}.json 저장 (로컬 저장 없음)
 ✓ MLflow run 생성 (Parameters, Metrics, Traces 자동 기록)
 ✓ evaluation datasets 링크 기록
 ```

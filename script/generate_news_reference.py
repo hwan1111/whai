@@ -235,38 +235,6 @@ class NewsReferenceGenerator:
             logger.error(f"❌ S3 저장 실패 ({ticker}): {str(e)}")
             return False
 
-    def save_reference_to_local(
-        self,
-        ticker: str,
-        reference_data: dict[str, Any],
-        output_dir: str = "reference"
-    ) -> str:
-        """
-        레퍼런스 데이터를 로컬에 저장 (evaluation dataset용)
-
-        Args:
-            ticker: 종목코드
-            reference_data: 레퍼런스 데이터
-            output_dir: 출력 디렉토리
-
-        Returns:
-            저장된 파일 경로
-        """
-        try:
-            output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
-
-            file_path = output_path / f"{ticker}_reference.json"
-
-            content = json.dumps(reference_data, ensure_ascii=False, indent=2)
-            file_path.write_text(content, encoding="utf-8")
-
-            logger.info(f"✓ 로컬 레퍼런스 저장: {file_path}")
-            return str(file_path)
-
-        except Exception as e:
-            logger.error(f"❌ 로컬 저장 실패 ({ticker}): {str(e)}")
-            raise
 
     def register_evaluation_dataset(
         self,
@@ -296,9 +264,6 @@ class NewsReferenceGenerator:
 
             logger.info(f"🔄 {len(tickers)}개 티커의 레퍼런스 생성 및 등록 시작")
 
-            reference_dir = Path("reference")
-            reference_dir.mkdir(parents=True, exist_ok=True)
-
             # 각 티커별로 레퍼런스 생성 및 저장
             for ticker in tickers:
                 logger.info(f"\n📝 {ticker} 처리 중...")
@@ -310,32 +275,34 @@ class NewsReferenceGenerator:
                     logger.warning(f"⚠️ {ticker}: 레퍼런스 데이터 없음, 스킵")
                     continue
 
-                # 로컬 저장
-                local_path = self.save_reference_to_local(ticker, reference_data)
-
-                # S3 저장
+                # S3에만 저장 (로컬 저장 없음)
                 self.save_reference_to_s3(ticker, reference_data)
 
-                # MLflow Dataset Registry에 등록
+                # MLflow Dataset Registry에 등록 (S3 위치)
                 try:
-                    # 1. JSON 파일에서 Dataset 객체 생성
-                    dataset = mlflow.data.from_json(local_path)
+                    # S3에 저장된 참조 데이터 경로
+                    s3_path = f"s3://{self.bucket}/{REFERENCE_PREFIX}"
 
-                    # 2. Dataset Registry에 영구 등록
-                    dataset.log_dataset(
-                        name=f"news_reference_{ticker}",
-                        namespace=experiment_name,
-                        description=f"{ticker}의 뉴스 요약 평가용 레퍼런스 ({len(reference_data)}개 날짜)"
+                    # Dataset Registry에 영구 등록
+                    # (메타데이터로 등록, S3 경로 기록)
+                    dataset_name = f"news_reference_{ticker}"
+
+                    mlflow.log_dict(
+                        {
+                            "dataset_name": dataset_name,
+                            "s3_location": f"{s3_path}/{ticker}/",
+                            "description": f"{ticker}의 뉴스 요약 평가용 레퍼런스",
+                            "num_dates": len(reference_data),
+                            "total_news": sum(v.get("count", 0) for v in reference_data.values()),
+                        },
+                        artifact_file=f"datasets/{dataset_name}/metadata.json"
                     )
+
                     logger.info(
                         f"✓ Dataset Registry 등록 완료: "
-                        f"news_reference_{ticker} (namespace: {experiment_name})"
+                        f"{dataset_name}\n"
+                        f"   위치: {s3_path}/{ticker}/"
                     )
-
-                    # 3. 현재 run이 있으면 Input으로도 로깅 (선택사항)
-                    if mlflow.active_run():
-                        mlflow.log_input(dataset, context=f"reference/{ticker}")
-                        logger.debug(f"  ✓ Run Input으로도 로깅됨")
 
                 except Exception as e:
                     logger.warning(f"⚠️ MLflow Dataset 등록 실패 ({ticker}): {str(e)}")

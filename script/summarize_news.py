@@ -262,38 +262,6 @@ class NewsLLMSummarizer:
             logger.error(f"❌ S3 저장 실패 ({ticker}): {str(e)}")
             return False
 
-    def save_summaries_to_local(
-        self,
-        ticker: str,
-        summary_results: dict[str, Any],
-        output_dir: str = "summaries"
-    ) -> str:
-        """
-        요약 결과를 로컬에 저장
-
-        Args:
-            ticker: 종목코드
-            summary_results: 요약 결과
-            output_dir: 출력 디렉토리
-
-        Returns:
-            저장된 파일 경로
-        """
-        try:
-            output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
-
-            file_path = output_path / f"{ticker}_summaries.json"
-
-            content = json.dumps(summary_results, ensure_ascii=False, indent=2)
-            file_path.write_text(content, encoding="utf-8")
-
-            logger.info(f"✓ 로컬 요약 저장: {file_path}")
-            return str(file_path)
-
-        except Exception as e:
-            logger.error(f"❌ 로컬 저장 실패 ({ticker}): {str(e)}")
-            raise
 
     def run_summarization(
         self,
@@ -333,9 +301,6 @@ class NewsLLMSummarizer:
                     return
 
                 logger.info(f"🔄 {len(tickers)}개 티커의 요약 생성 시작")
-
-                summary_dir = Path("summaries")
-                summary_dir.mkdir(parents=True, exist_ok=True)
 
                 # MLflow 파라미터 로깅 (완전 동적 연동)
                 self.mlflow_logger.log_params({
@@ -379,10 +344,7 @@ class NewsLLMSummarizer:
                             logger.warning(f"⚠️ {ticker}: 요약 결과 없음, 스킵")
                             continue
 
-                        # 로컬 저장
-                        local_path = self.save_summaries_to_local(ticker, summary_results)
-
-                        # S3 저장
+                        # S3에만 저장 (로컬 저장 없음)
                         self.save_summaries_to_s3(ticker, summary_results)
 
                         # 메트릭 로깅
