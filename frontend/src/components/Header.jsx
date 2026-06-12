@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Cropper from 'react-easy-crop';
-import { getUser, getProfileImage, setProfileImage, logout, updateUserName, fetchWithAuth } from '@/lib/auth';
+import { getUser, setProfileImage, logout, updateUserName, fetchWithAuth } from '@/lib/auth';
 
 async function getCroppedBlob(imageSrc, pixelCrop) {
   const image = await new Promise((resolve, reject) => {
@@ -46,6 +46,7 @@ export default function Header({ updateTime }) {
   const [cropSrc, setCropSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
+  const [cropSize, setCropSize] = useState(null);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [showCrop, setShowCrop] = useState(false);
   const [withdrawPw, setWithdrawPw] = useState('');
@@ -56,23 +57,34 @@ export default function Header({ updateTime }) {
   const [profileImg, setProfileImg] = useState(null);
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
+  const profileBlobUrlRef = useRef(null);
 
   const user = getUser();
   const initial = user?.name?.charAt(0) || '?';
 
-  useEffect(() => {
-    const stored = getProfileImage();
-    if (stored) setProfileImg(stored);
-    // presigned URL은 1시간 만료 → 앱 로드 시 /me로 갱신
-    fetchWithAuth('/api/v1/auth/me').then(async res => {
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.profile_image_url) {
-        setProfileImage(data.profile_image_url);
-        setProfileImg(data.profile_image_url);
-      }
-    }).catch(() => {});
+  const loadProfileImage = useCallback(async (clearWhenMissing = true) => {
+    const res = await fetchWithAuth('/api/v1/auth/me/profile-image', { cache: 'no-store' });
+    if (!res.ok) {
+      if (clearWhenMissing) setProfileImg(null);
+      return false;
+    }
+
+    const blobUrl = URL.createObjectURL(await res.blob());
+    if (profileBlobUrlRef.current) URL.revokeObjectURL(profileBlobUrlRef.current);
+    profileBlobUrlRef.current = blobUrl;
+    setProfileImg(blobUrl);
+    return true;
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadProfileImage().catch(() => setProfileImg(null));
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      if (profileBlobUrlRef.current) URL.revokeObjectURL(profileBlobUrlRef.current);
+    };
+  }, [loadProfileImage]);
 
   useEffect(() => {
     function handleClick(e) {
@@ -164,6 +176,7 @@ export default function Header({ updateTime }) {
     setImgFile(null);
     setImgPreview(null);
     setCropSrc(null);
+    setCropSize(null);
     setShowCrop(false);
     setImgMsg({ text: '', type: '' });
   }
@@ -178,19 +191,27 @@ export default function Header({ updateTime }) {
       setCropSrc(ev.target.result);
       setCrop({ x: 0, y: 0 });
       setZoom(1);
+      setCropSize(null);
       setShowCrop(true);
     };
     reader.readAsDataURL(file);
   }
 
   const onCropComplete = useCallback((_, pixels) => setCroppedAreaPixels(pixels), []);
+  const onCropMediaLoaded = useCallback(({ width, height }) => {
+    const diameter = Math.min(width, height);
+    setCropSize({ width: diameter, height: diameter });
+  }, []);
 
   async function confirmCrop() {
     if (!croppedAreaPixels) return;
     const blob = await getCroppedBlob(cropSrc, croppedAreaPixels);
     const file = new File([blob], 'profile.jpg', { type: 'image/jpeg' });
     setImgFile(file);
-    setImgPreview(URL.createObjectURL(blob));
+    setImgPreview(current => {
+      if (current?.startsWith('blob:')) URL.revokeObjectURL(current);
+      return URL.createObjectURL(blob);
+    });
     setShowCrop(false);
   }
 
@@ -210,7 +231,12 @@ export default function Header({ updateTime }) {
         setImgMsg({ text: data.detail || '업로드에 실패했습니다.', type: 'err' });
       } else {
         setProfileImage(data.profile_image_url);
-        setProfileImg(imgPreview || data.profile_image_url);
+        setProfileImg(imgPreview);
+        const loaded = await loadProfileImage(false);
+        if (loaded) {
+          if (imgPreview?.startsWith('blob:')) URL.revokeObjectURL(imgPreview);
+          setImgPreview(null);
+        }
         setImgFile(null);
         setImgMsg({ text: '프로필 사진이 업데이트되었습니다.', type: 'ok' });
       }
@@ -229,6 +255,10 @@ export default function Header({ updateTime }) {
         setImgMsg({ text: '삭제에 실패했습니다.', type: 'err' });
       } else {
         setProfileImage(null);
+        if (profileBlobUrlRef.current) {
+          URL.revokeObjectURL(profileBlobUrlRef.current);
+          profileBlobUrlRef.current = null;
+        }
         setProfileImg(null);
         setImgPreview(null);
         setImgFile(null);
@@ -276,7 +306,14 @@ export default function Header({ updateTime }) {
   }
 
   const avatarContent = profileImg
-    ? <img src={profileImg} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setProfileImg(null)} alt="" />
+    ? (
+      <img
+        src={profileImg}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        onError={() => setProfileImg(current => current === profileImg ? null : current)}
+        alt=""
+      />
+    )
     : initial;
 
   const genderMap = { M: '남성', F: '여성', OTHER: '기타' };
@@ -445,11 +482,16 @@ export default function Header({ updateTime }) {
                     crop={crop}
                     zoom={zoom}
                     aspect={1}
+                    cropSize={cropSize || undefined}
                     cropShape="round"
+                    objectFit="contain"
+                    restrictPosition
+                    zoomSpeed={0.2}
                     showGrid={false}
                     onCropChange={setCrop}
                     onZoomChange={setZoom}
                     onCropComplete={onCropComplete}
+                    onMediaLoaded={onCropMediaLoaded}
                   />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>

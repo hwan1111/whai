@@ -5,7 +5,7 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
 from backend.limiter import limiter
 import bcrypt
 from jose import jwt
@@ -175,6 +175,31 @@ def _s3_delete(key: str) -> None:
         _s3_client().delete_object(Bucket=_S3_PROFILE_BUCKET, Key=key)
     except ClientError:
         pass
+
+
+@router.get("/me/profile-image")
+def get_profile_image(
+    user_id: str = Depends(_get_user_id),
+    db: Session = Depends(get_db),
+) -> Response:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if not user.profile_image_url or ".amazonaws.com/" not in user.profile_image_url:
+        raise HTTPException(status_code=404, detail="프로필 사진이 없습니다.")
+
+    key = user.profile_image_url.split(".amazonaws.com/", 1)[-1]
+    try:
+        obj = _s3_client().get_object(Bucket=_S3_PROFILE_BUCKET, Key=key)
+        content = obj["Body"].read()
+    except ClientError:
+        raise HTTPException(status_code=404, detail="프로필 사진을 불러오지 못했습니다.")
+
+    return Response(
+        content=content,
+        media_type=obj.get("ContentType") or "image/jpeg",
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.post("/me/profile-image")
