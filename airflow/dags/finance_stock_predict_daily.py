@@ -397,21 +397,30 @@ def finance_stock_predict_daily():
             start  = "2020-01-01"
             yfcode = f"{ticker}.KS"
 
+            def _col(raw_df, name: str):
+                """MultiIndex/단일 컬럼 모두에서 name을 1차원 Series로 추출.
+                (신버전 yfinance는 컬럼이 MultiIndex라 raw[name]이 DataFrame이 됨)"""
+                if isinstance(raw_df.columns, pd.MultiIndex):
+                    raw_df = raw_df.copy()
+                    raw_df.columns = raw_df.columns.get_level_values(0)
+                s = raw_df[name]
+                if isinstance(s, pd.DataFrame):
+                    s = s.iloc[:, 0]
+                s.index = pd.to_datetime(s.index).tz_localize(None)
+                return s
+
             raw = yf.download(
                 yfcode, start=start, auto_adjust=True, progress=False, timeout=60
             )
-            raw.index = pd.to_datetime(raw.index).tz_localize(None)
-
-            close  = raw["Close"].dropna().rename("close")
-            volume = raw["Volume"].rename("volume")
+            close  = _col(raw, "Close").dropna().rename("close")
+            volume = _col(raw, "Volume").rename("volume")
 
             exog = {}
             for col, sym in [("KOSPI200","^KS200"), ("USDKRW","KRW=X"),
                               ("WTI","CL=F"),       ("VIX","^VIX")]:
                 d = yf.download(sym, start=start, auto_adjust=True,
-                                progress=False, timeout=60)["Close"]
-                d.index = pd.to_datetime(d.index).tz_localize(None)
-                exog[col] = d.rename(col)
+                                progress=False, timeout=60)
+                exog[col] = _col(d, "Close").rename(col)
 
             return {"close": close, "volume": volume, "exog": exog}
 
@@ -423,7 +432,8 @@ def finance_stock_predict_daily():
                 raw = close
             lv   = _choi_last_vals(raw)
             trpp = _choi_preprocess(raw, pp)
-            mdl  = StatsARIMA(trpp, order=cfg["order"]).fit(disp=False)
+            # statsmodels 신버전 ARIMA.fit()은 disp 인자를 받지 않음 → 생략
+            mdl  = StatsARIMA(trpp, order=cfg["order"]).fit()
             pred = _choi_inverse(mdl.forecast(CHOI_FORECAST_STEPS).values, pp, lv)
             vol  = float(np.log(raw / raw.shift(1)).dropna().tail(VOL_DAYS).std())
             return pred, vol
@@ -462,7 +472,10 @@ def finance_stock_predict_daily():
             cols  = cfg.get("fixed_cols", ["close", "volume"]) + cfg.get("exog_cols", [])
             panel = panel[[c for c in cols if c in panel.columns]]
             det   = cfg.get("deterministic", "co")
-            rank  = max(select_coint_rank(panel, det=det, k_ar_diff=1).rank, 1)
+            try:
+                rank = max(select_coint_rank(panel, det=det, k_ar_diff=1).rank, 1)
+            except Exception:
+                rank = 1  # statsmodels 버전차로 select_coint_rank 실패 시 rank=1 기본
             mdl   = VECM(panel, deterministic=det, k_ar_diff=1, coint_rank=rank).fit()
             pred  = mdl.predict(steps=CHOI_FORECAST_STEPS)[:, 0]  # close 컬럼
             vol   = float(np.log(close / close.shift(1)).dropna().tail(VOL_DAYS).std())
@@ -695,10 +708,13 @@ def finance_stock_predict_daily():
             if df is None:
                 df = _fetch_su()
             cfg      = priority["config"]
-            n_feat   = cfg.get("features", 9)
-            feat_cols = [f for f in ALL_FEAT if f in df.columns][:n_feat]
-
             model, is_patchtst = _load_su_model(cfg)
+            # config의 features 수가 실제 모델과 다를 수 있어(예: 096770 config=11 vs 모델=9),
+            # sklearn 모델은 모델이 기대하는 피처 수(n_features_in_)를 신뢰한다.
+            n_feat   = cfg.get("features", 9)
+            if not is_patchtst and hasattr(model, "n_features_in_"):
+                n_feat = int(model.n_features_in_)
+            feat_cols = [f for f in ALL_FEAT if f in df.columns][:n_feat]
 
             vol        = float(df["ret_1d"].dropna().tail(VOL_DAYS).std())
             base_price = float(df["close"].iloc[-1])
