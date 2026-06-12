@@ -14,7 +14,14 @@
       "Bash(npx tsc *)",
       "Bash(git merge *)",
       "Bash(npm list *)",
-      "Bash(node_modules/.bin/next build *)"
+      "Bash(node_modules/.bin/next build *)",
+      "PowerShell(head -20)",
+      "Bash(curl -s http://127.0.0.1:8000/docs)",
+      "Bash(grep -v \"//\\\\|string\\\\|'.*SW\\\\|STOCK\\\\|SCHEMA\\\\|label\\\\|market_cap\\\\|market\\\\|DESCRIPTION\\\\|shortLabel\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(grep -v \"^$\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:3000/my-report\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)"
     ]
   }
 }

@@ -11,6 +11,28 @@ on:
       - 'config/**'
       - '.github/workflows/deploy.yml'
 
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: 'Build and deploy backend'
+        required: true
+        type: boolean
+        default: true
+      frontend:
+        description: 'Build and deploy frontend'
+        required: true
+        type: boolean
+        default: true
+      airflow:
+        description: 'Build and deploy airflow'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
 env:
   AWS_REGION: ap-northeast-2
   REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com
@@ -22,9 +44,10 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.changes.outputs.backend }}
-      frontend: ${{ steps.changes.outputs.frontend }}
-      airflow: ${{ steps.changes.outputs.airflow }}
+      backend: ${{ steps.changes.outputs.backend == 'true' || (github.event_name == 'workflow_dispatch' && inputs.backend) }}
+      frontend: ${{ steps.changes.outputs.frontend == 'true' || (github.event_name == 'workflow_dispatch' && inputs.frontend) }}
+      airflow: ${{ steps.changes.outputs.airflow == 'true' || (github.event_name == 'workflow_dispatch' && inputs.airflow) }}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,9 +74,6 @@ jobs:
   build-and-push:
     needs: detect-changes
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -104,6 +124,7 @@ jobs:
   deploy-to-ec2:
     needs: [build-and-push, detect-changes]
     runs-on: [self-hosted, ec2]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -131,9 +152,11 @@ jobs:
           if [ "${{ needs.detect-changes.outputs.backend }}" = "true" ]; then
             docker pull $ECR_REGISTRY/$IMAGE_NAME_BACKEND:latest
           fi
+
           if [ "${{ needs.detect-changes.outputs.frontend }}" = "true" ]; then
             docker pull $ECR_REGISTRY/$IMAGE_NAME_FRONTEND:latest
           fi
+
           if [ "${{ needs.detect-changes.outputs.airflow }}" = "true" ]; then
             docker pull $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:latest
           fi
@@ -144,11 +167,17 @@ jobs:
           FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
           AIRFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AIRFLOW }}:latest
         run: |
+          cd /opt/project/whai
           docker compose down
           docker compose up -d
 
       - name: Verify deployment
+        env:
+          BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:latest
+          FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
+          AIRFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AIRFLOW }}:latest
         run: |
+          cd /opt/project/whai
           sleep 5
           docker compose ps
           curl -f http://localhost:8000/health || true
