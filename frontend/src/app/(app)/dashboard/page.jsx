@@ -25,7 +25,7 @@ const STOCK_NAMES = {
 };
 
 const FX_INFO = {
-  'USD': { flag: '/assets/flags/us.png', desc: 'USD/KRW 환율',
+  'USD': { flag: '/assets/flags/us.png', label: 'USD/KRW', desc: '미국 환율',
     factors: [{ label: '미 연준 통화정책', pct: 55, color: '#2563eb', val: '+55%', desc: '연준 금리 결정이 달러 강세·약세 방향을 결정' },
               { label: '한미 금리차', pct: 25, color: '#7c3aed', val: '+25%', desc: '양국 금리 격차 확대로 달러 강세 지속' },
               { label: '무역수지', pct: 10, color: '#dc2626', val: '-10%', desc: '한국 무역수지 흑자가 원화 강세 요인으로 작용' }] },
@@ -1218,7 +1218,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '2px 10px' }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 10 }}>(최대 3개)</span></span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
                 {[...favs].filter(id => ASSETS[id]).length === 0 && (
@@ -1247,7 +1247,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', flex: 1, gap: 14, minHeight: 0 }}>
+          <div style={{ display: 'flex', flex: '3 1 0', gap: 14, minHeight: 0 }}>
         {/* LEFT: Chart */}
         <div className="chart-panel">
 
@@ -1309,14 +1309,15 @@ export default function DashboardPage() {
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
                     <img src={fxInfo.flag} alt={currency} style={{ width: 32, height: 22, borderRadius: 4, objectFit: 'cover', border: '1px solid #e8ecf0', flexShrink: 0 }} />
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{currency} <span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>{fxInfo.desc}</span></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap' }}>{fxInfo.label}</div>
+                      <div style={{ marginTop: 1, fontSize: 10, color: '#64748b', fontWeight: 500 }}>{fxInfo.desc}</div>
                     </div>
                     {fxPrice ? (
-                      <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                        <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}<span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>원</span></div>
+                      <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>{Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}<span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>원</span></div>
                         {fxChgPct != null && (
-                          <div style={{ fontSize: 11, fontWeight: 600, color: fxChgColor }}>{fxChgArrow} {fxChgAmt != null ? Math.abs(fxChgAmt).toFixed(2) : ''} ({Math.abs(fxChgPct).toFixed(2)}%)</div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: fxChgColor, whiteSpace: 'nowrap' }}>{fxChgArrow} {fxChgAmt != null ? Math.abs(fxChgAmt).toFixed(2) : ''} ({Math.abs(fxChgPct).toFixed(2)}%)</div>
                         )}
                       </div>
                     ) : (
@@ -1326,15 +1327,15 @@ export default function DashboardPage() {
                     )}
                   </div>
                   <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 8 }} />
-                  <div className="ai-main-title" style={{ marginBottom: 4 }}>환율 정보</div>
-                  <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div className="detail-section-title" style={{ marginBottom: 4 }}>주요 지표</div>
+                  <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 5 }}>
                     {[
                       { label: '52주 최고', value: fxStats?.high52 ? `${Number(fxStats.high52).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—', color: '#dc2626' },
                       { label: '52주 최저', value: fxStats?.low52 ? `${Number(fxStats.low52).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원` : '—', color: '#2563eb' },
                     ].map(({ label, value, color }) => (
-                      <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '10px 12px' }}>
+                      <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '6px 9px' }}>
                         <div className="metric-label">{label}</div>
-                        <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 14, marginTop: 4, ...(color ? { color } : {}) }}>
+                        <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 12, marginTop: 2, ...(color ? { color } : {}) }}>
                           {fxStatsLoading ? <span className="loading-dots">···</span> : value}
                         </div>
                       </div>
@@ -1344,14 +1345,14 @@ export default function DashboardPage() {
                     const fmt = v => `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
                     const col = v => v >= 0 ? '#dc2626' : '#2563eb';
                     return (
-                      <div className="grid g11" style={{ gap: 8, marginTop: 10 }}>
+                      <div className="grid g11" style={{ gap: 5, marginTop: 5 }}>
                         {[
                           { label: '월간 변동률', value: fxStats.change_30d },
                           { label: '연간 변동률', value: fxStats.change_1y },
                         ].map(({ label, value }) => (
-                          <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '10px 12px' }}>
+                          <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '6px 9px' }}>
                             <div className="metric-label">{label}</div>
-                            <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 14, marginTop: 4, color: value != null ? col(value) : undefined }}>{value != null ? fmt(value) : '—'}</div>
+                            <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 12, marginTop: 2, color: value != null ? col(value) : undefined }}>{value != null ? fmt(value) : '—'}</div>
                           </div>
                         ))}
                       </div>
@@ -1369,7 +1370,7 @@ export default function DashboardPage() {
                     return (
                       <div style={{ marginTop: 14 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>52주 환율 위치</span>
+                          <span className="detail-section-title">52주 환율 위치</span>
                           <span style={{ fontSize: 8, color: '#94a3b8' }}>BOK ECOS</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#64748b', marginBottom: 6 }}>
@@ -1383,7 +1384,7 @@ export default function DashboardPage() {
                         </div>
                         {safePct != null && (
                           <div style={{ position: 'relative', marginTop: 6, height: 14 }}>
-                            <span style={{ position: 'absolute', left: `${Math.min(Math.max(safePct, 6), 94)}%`, transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700, color: dotColor, whiteSpace: 'nowrap' }}>{safePct}%</span>
+                            <span style={{ position: 'absolute', left: `${Math.min(Math.max(safePct, 6), 94)}%`, transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: dotColor, whiteSpace: 'nowrap' }}>{safePct}%</span>
                           </div>
                         )}
                       </div>
@@ -1403,24 +1404,24 @@ export default function DashboardPage() {
                     if (!highest) return null;
                     const items = highest?.id === lowest?.id ? [highest] : [highest, lowest];
                     return (
-                      <div style={{ marginTop: 14 }}>
+                      <div style={{ marginTop: 6 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>분석 종목 상관관계</span>
+                          <span className="detail-section-title">분석 종목 상관관계</span>
                           <span style={{ fontSize: 8, color: '#94a3b8' }}>Pearson</span>
                         </div>
-                        <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ padding: '6px 9px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                         {items.map((item, idx) => {
                           const isPos = item.v >= 0;
                           const vColor = isPos ? '#dc2626' : '#2563eb';
                           const labelColor = idx === 0 ? '#2563eb' : '#dc2626';
                           const label = idx === 0 ? '최고' : '최저';
                           return (
-                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: idx > 0 ? 5 : 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: idx > 0 ? 3 : 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
                                 <span style={{ fontSize: 8, color: labelColor, fontWeight: 700, background: `${labelColor}18`, borderRadius: 3, padding: '1px 4px' }}>{label}</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: '#334155' }}>{STOCK_NAMES[item.id] || item.id}</span>
+                                <span style={{ fontSize: 10, lineHeight: 1.25, fontWeight: 700, color: '#334155' }}>{STOCK_NAMES[item.id] || item.id}</span>
                               </div>
-                              <span style={{ fontSize: 13, fontWeight: 800, color: vColor }}>{isPos ? '+' : ''}{item.v.toFixed(2)}</span>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: vColor, flexShrink: 0 }}>{isPos ? '+' : ''}{item.v.toFixed(2)}</span>
                             </div>
                           );
                         })}
@@ -1440,7 +1441,7 @@ export default function DashboardPage() {
                     <img src={cfg.logoSrc ?? `/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: cfg.name.length > 10 ? 10 : cfg.name.length > 7 ? 12 : 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name}</div>
+                    <div style={{ fontSize: cfg.name.length > 10 ? 11 : cfg.name.length > 7 ? 12.5 : 14, lineHeight: 1.2, fontWeight: 800, color: '#1e293b' }}>{cfg.name}</div>
                     {selectedStockId !== '000000' && <div style={{ fontSize: 10, color: '#64748b' }}>{selectedStockId} · {cfg.meta}</div>}
                   </div>
                   {favDetailLoading ? (
@@ -1459,10 +1460,16 @@ export default function DashboardPage() {
                 <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 4 }} />
               </>
             )}
-            <div className="ai-main-title" style={{ marginBottom: 6 }}>주요 지표</div>
+            <div className="detail-section-title" style={{ marginBottom: 6 }}>주요 지표</div>
             {favDetailLoading ? (
               <div className="grid g11" style={{ gap: 5 }}>
-                {['거래량', selectedStockId === '000000' ? '분석 종목' : '시가총액', '52주 최고', '52주 최저', 'PER', 'PBR'].map(label => (
+                {[
+                  '거래량',
+                  selectedStockId === '000000' ? '분석 종목' : '시가총액',
+                  '52주 최고',
+                  '52주 최저',
+                  ...(selectedStockId === '000000' ? [] : ['PER', 'PBR']),
+                ].map(label => (
                   <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     <div className="metric-label">{label}</div>
                     <div className="metric-value"><span className="loading-dots">···</span></div>
@@ -1494,8 +1501,12 @@ export default function DashboardPage() {
                   )}
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최고</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#dc2626' }}>{s?.high52 ? `${fmt(s.high52)}${selectedStockId !== '000000' ? '원' : ''}` : '—'}</div></div>
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최저</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#2563eb' }}>{s?.low52 ? `${fmt(s.low52)}${selectedStockId !== '000000' ? '원' : ''}` : '—'}</div></div>
-                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>{selectedStockId === '000000' ? '—' : '적자'}</span>}</div></div>
-                  <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
+                  {selectedStockId !== '000000' && (
+                    <>
+                      <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
+                      <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
+                    </>
+                  )}
                 </div>
 
                 {/* 52주 가격 위치 바 */}
@@ -1506,7 +1517,7 @@ export default function DashboardPage() {
                   const safePct = Math.max(0, Math.min(100, pct));
                   return (
                     <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>{selectedStockId === '000000' ? '52주 지수 위치' : '52주 가격 위치'}</div>
+                      <div className="detail-section-title" style={{ marginBottom: 3 }}>{selectedStockId === '000000' ? '52주 지수 위치' : '52주 가격 위치'}</div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#64748b', marginBottom: 3 }}>
                         <span>최저 {fmt(s.low52)}{selectedStockId !== '000000' ? '원' : ''}</span>
                         <span>최고 {fmt(s.high52)}{selectedStockId !== '000000' ? '원' : ''}</span>
@@ -1521,11 +1532,6 @@ export default function DashboardPage() {
                   );
                 })()}
 
-                {/* PER 업종 평균 비교
-                    출처: KRX 업종별 PER (한국거래소 정보데이터시스템 · fnguide.com)
-                    기준: 2026년 1분기 (분기 실적 시즌마다 수동 업데이트)
-                    업데이트 방법: https://data.krx.co.kr → 주식 → 업종 → 업종PER/PBR
-                */}
                 {/* 섹터별 등락 + 현재 국면 (KOSPI 전용) */}
                 {selectedStockId === '000000' && (() => {
                   const regime = favDetail?.news?.[0];
@@ -1537,7 +1543,7 @@ export default function DashboardPage() {
                   return (
                     <>
                       <div style={{ marginTop: 8 }}>
-                        <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>섹터별 등락</div>
+                        <div className="detail-section-title" style={{ marginBottom: 4 }}>섹터별 등락</div>
                         <div style={{ padding: '7px 0', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 0' }}>
                           {STOCK_SECTORS.map(({ label, ids }, idx) => {
                             const up = ids.filter(id => (prices[id]?.change_pct ?? 0) > 0).length;
@@ -1560,52 +1566,6 @@ export default function DashboardPage() {
                     </>
                   );
                 })()}
-
-                {/* PER 업종 평균 비교 (주식) / KOSPI 평균 PER 비교 (지수) */}
-                {cfg?.sector ? (() => {
-                  const SECTOR_PER = {
-                    '반도체': 23,
-                    '자동차': 7,
-                    '방산':   28,
-                    '금융':   8,
-                    '화학':   16,
-                  };
-                  const avg = SECTOR_PER[cfg.sector];
-                  if (!avg) return null;
-                  const isDeficit = s?.per == null;
-                  const diff = isDeficit ? null : s.per - avg;
-                  const isAbove = diff != null && diff > 0;
-                  const diffColor = isAbove ? '#dc2626' : '#2563eb';
-                  return (
-                    <div style={{ marginTop: 8, padding: '7px 10px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                        <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>PER 업종 평균 비교</span>
-                        <span style={{ fontSize: 8, color: '#94a3b8' }}>KRX 기준</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{ flex: 1, textAlign: 'center' }}>
-                          <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 2 }}>PER</div>
-                          {isDeficit
-                            ? <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8', lineHeight: 1 }}>적자</div>
-                            : <div style={{ fontSize: 15, fontWeight: 800, color: diffColor, lineHeight: 1 }}>{s.per.toFixed(1)}</div>}
-                        </div>
-                        <div style={{ width: 1, height: 28, background: '#e2e8f0', flexShrink: 0 }} />
-                        <div style={{ flex: 1, textAlign: 'center' }}>
-                          <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 2 }}>{cfg.sector} 업종 평균</div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: '#334155', lineHeight: 1 }}>{avg}</div>
-                        </div>
-                      </div>
-                      <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 5 }}>
-                        {isDeficit
-                          ? <><span style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>▼ 적자</span><span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>업종 평균 대비 낮음</span></>
-                          : <>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: diffColor }}>{isAbove ? '▲' : '▼'} {isAbove ? '+' : ''}{diff.toFixed(1)}</span>
-                              <span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>업종 평균 대비 {isAbove ? '높음' : '낮음'}</span>
-                            </>}
-                      </div>
-                    </div>
-                  );
-                })() : null}
               </>
             )}
             </>
@@ -1619,7 +1579,7 @@ export default function DashboardPage() {
             if (!factors?.length) return null;
             const maxPct = Math.max(...factors.map(f => f.pct));
             return (
-              <div className="ai-main-card" style={{ flexShrink: 0, overflow: 'visible' }}>
+              <div className="ai-main-card" style={{ flex: '2 1 0', minHeight: 0, overflowY: 'auto' }}>
                 <div className="ai-main-title" style={{ marginBottom: 10 }}>{title}</div>
                 {factors.map(f => {
                   const isNeg = f.val.startsWith('-');
