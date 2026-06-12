@@ -9,13 +9,13 @@
 
 사용법:
   평가:
-    python script/news_summary_pipeline.py \\
-      --mode evaluation \\
-      --tickers 005930 000660 \\
+    python script/llm/news_summary_pipeline.py \
+      --mode evaluation \
+      --tickers 005930 000660 \
       --sample-size 10
 
   프로덕션:
-    python script/news_summary_pipeline.py \\
+    python script/llm/news_summary_pipeline.py \\
       --mode production \\
       --tickers 005930 000660
 """
@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 # 프로젝트 루트를 sys.path에 추가
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import mlflow
@@ -41,6 +41,7 @@ from src.llm_utils.gateway_client import GatewayClient
 from src.llm_utils.mlflow_logger import MLflowLogger
 from src.llm_utils.prompt_registry import PromptRegistry
 from src.llm_utils.evaluation_engine import NewsEvaluator
+from src.llm_utils.token_tracker import TokenTracker, TokenUsage
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +87,7 @@ class NewsSummaryPipeline:
         self.mlflow_logger = MLflowLogger()
         self.prompt_registry = PromptRegistry()
         self.evaluator = NewsEvaluator(use_bert_score=True)
+        self.token_tracker = TokenTracker()
 
     def get_available_dates(self, ticker: str) -> list[str]:
         """티커별 사용 가능한 모든 날짜 조회"""
@@ -208,15 +210,39 @@ class NewsSummaryPipeline:
                     max_tokens=self.max_tokens,
                 )
 
+                # 토큰 사용량 추적 및 비용 계산
+                cost_info = self.token_tracker.track_usage(
+                    model=endpoint,
+                    input_tokens=input_token,
+                    output_tokens=output_token,
+                    endpoint=endpoint,
+                )
+
+                # Span에 토큰 정보 로깅
                 span.set_outputs({
                     "summary": summary.strip(),
                     "input_token": input_token,
                     "output_token": output_token,
+                    "total_tokens": input_token + output_token,
+                    "cost_usd": cost_info.total_cost,
+                })
+
+                # Span에 토큰 사용량 메타데이터 추가
+                span.set_usage(
+                    num_prompt_tokens=input_token,
+                    num_completion_tokens=output_token,
+                )
+
+                span.set_attributes({
+                    "cost_usd": cost_info.total_cost,
+                    "input_cost_usd": cost_info.input_cost,
+                    "output_cost_usd": cost_info.output_cost,
                 })
 
                 logger.info(
                     f"📥 LLM 응답 수신: {len(summary)}자 "
-                    f"(input_token={input_token}, output_token={output_token})"
+                    f"(input_token={input_token}, output_token={output_token}, "
+                    f"cost=${cost_info.total_cost:.6f})"
                 )
                 return summary.strip(), input_token, output_token
         except Exception as e:
@@ -470,7 +496,24 @@ class NewsSummaryPipeline:
                     self.save_summaries_to_s3(ticker, low_summaries, prefix=SUMMARIZED_PREFIX)
                     logger.info(f"✓ {ticker} 저장 완료")
 
+                # 토큰 사용량 요약 로깅
+                token_summary = self.token_tracker.get_summary()
+                self.mlflow_logger.log_metrics({
+                    "total_input_tokens": token_summary["total_usage"]["input_tokens"],
+                    "total_output_tokens": token_summary["total_usage"]["output_tokens"],
+                    "total_tokens": token_summary["total_usage"]["total_tokens"],
+                    "total_cost_usd": token_summary["total_cost"]["total_cost_usd"],
+                    "input_cost_usd": token_summary["total_cost"]["input_cost_usd"],
+                    "output_cost_usd": token_summary["total_cost"]["output_cost_usd"],
+                })
+                self.token_tracker.log_to_mlflow()
+
                 logger.info("\n✅ 평가 완료")
+                logger.info(f"📊 토큰 사용량 요약:")
+                logger.info(f"   → 총 토큰: {token_summary['total_usage']['total_tokens']} "
+                           f"(입력: {token_summary['total_usage']['input_tokens']}, "
+                           f"출력: {token_summary['total_usage']['output_tokens']})")
+                logger.info(f"   → 총 비용: ${token_summary['total_cost']['total_cost_usd']:.6f} USD")
                 logger.info(f"📍 MLflow Web UI: http://52.78.237.104:5001")
                 logger.info(f"   → Experiments → {EXPERIMENT_NAME}")
 
@@ -546,7 +589,24 @@ class NewsSummaryPipeline:
                 if ticker_metrics:
                     self.mlflow_logger.log_metrics(ticker_metrics)
 
+                # 토큰 사용량 요약 로깅
+                token_summary = self.token_tracker.get_summary()
+                self.mlflow_logger.log_metrics({
+                    "total_input_tokens": token_summary["total_usage"]["input_tokens"],
+                    "total_output_tokens": token_summary["total_usage"]["output_tokens"],
+                    "total_tokens": token_summary["total_usage"]["total_tokens"],
+                    "total_cost_usd": token_summary["total_cost"]["total_cost_usd"],
+                    "input_cost_usd": token_summary["total_cost"]["input_cost_usd"],
+                    "output_cost_usd": token_summary["total_cost"]["output_cost_usd"],
+                })
+                self.token_tracker.log_to_mlflow()
+
                 logger.info("\n✅ 모든 처리 완료")
+                logger.info(f"📊 토큰 사용량 요약:")
+                logger.info(f"   → 총 토큰: {token_summary['total_usage']['total_tokens']} "
+                           f"(입력: {token_summary['total_usage']['input_tokens']}, "
+                           f"출력: {token_summary['total_usage']['output_tokens']})")
+                logger.info(f"   → 총 비용: ${token_summary['total_cost']['total_cost_usd']:.6f} USD")
                 logger.info(f"📍 MLflow Web UI: http://52.78.237.104:5001")
                 logger.info(f"   → Experiments → {EXPERIMENT_NAME}")
 
