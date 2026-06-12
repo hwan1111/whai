@@ -168,6 +168,7 @@ class NewsSummaryPipeline:
         )
         return sorted(sampled)
 
+    @mlflow.trace
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10)
@@ -178,32 +179,33 @@ class NewsSummaryPipeline:
         fulltext: str,
         endpoint: str = "mid_performance_llm"
     ) -> tuple[str, int, int]:
-        """LLM으로 뉴스 요약"""
+        """
+        LLM으로 뉴스 요약
+
+        @mlflow.trace 데코레이터로 자동 추적됨
+        - 입력/출력 자동 기록
+        - Nested span 자동 생성
+        """
         try:
             article_content = f"제목: {title}\n\n내용: {fulltext}"
 
             with mlflow.start_span(name="llm_summary") as span:
-                # span 내부에서 프롬프트 로드 → linked prompts 자동 연결
+                # Span 입력 설정
+                span.set_inputs({
+                    "title": title,
+                    "fulltext": fulltext[:500],
+                    "endpoint": endpoint,
+                })
+
+                # 프롬프트 로드 및 포맷팅
                 prompt, prompt_uri = self.prompt_registry.format_prompt(
                     self.prompt_key,
                     article=article_content
                 )
 
-                span.set_inputs({
-                    "article_title": title,
-                    "article_content": fulltext[:1000],
-                    "endpoint": endpoint,
-                    "prompt_key": self.prompt_key,
-                    "prompt_uri": prompt_uri,
-                })
-                span.set_attributes({
-                    "mlflow.promptUri": prompt_uri,
-                    "endpoint": endpoint,
-                    "prompt_length": len(prompt),
-                })
+                logger.info(f"📤 LLM 호출: {endpoint} | 프롬프트: {len(prompt)}자")
 
-                logger.info(f"📤 LLM 프롬프트 전송: {len(prompt)}자")
-
+                # LLM 호출
                 gateway_client = GatewayClient(endpoint=endpoint, validate_connection=False)
                 summary, input_token, output_token = gateway_client.call_with_usage(
                     text=prompt,
@@ -218,42 +220,55 @@ class NewsSummaryPipeline:
                     endpoint=endpoint,
                 )
 
-                # Span에 토큰 정보 로깅
+                # Span 출력 설정
                 span.set_outputs({
                     "summary": summary.strip(),
-                    "input_token": input_token,
-                    "output_token": output_token,
-                    "total_tokens": input_token + output_token,
-                    "cost_usd": cost_info.total_cost,
                 })
 
                 # MLflow 3.12 표준 토큰 추적 attributes
+                # UI에서 자동으로 인식되고 표시됨
                 span.set_attributes({
                     "mlflow.genai.prompt_tokens": input_token,
                     "mlflow.genai.completion_tokens": output_token,
                     "mlflow.genai.input_cost": cost_info.input_cost,
                     "mlflow.genai.output_cost": cost_info.output_cost,
+                    "endpoint": endpoint,
+                    "prompt_uri": prompt_uri,
                 })
 
                 logger.info(
-                    f"📥 LLM 응답 수신: {len(summary)}자 "
-                    f"(input_token={input_token}, output_token={output_token}, "
-                    f"cost=${cost_info.total_cost:.6f})"
+                    f"📥 LLM 응답: {len(summary)}자 | "
+                    f"토큰: {input_token}+{output_token} | "
+                    f"비용: ${cost_info.total_cost:.6f}"
                 )
                 return summary.strip(), input_token, output_token
+
         except Exception as e:
             logger.error(f"❌ 요약 생성 실패: {str(e)}", exc_info=True)
             raise
 
+    @mlflow.trace
     def process_ticker(
         self,
         ticker: str,
         sampled_dates: list[str],
         endpoint: str = "mid_performance_llm"
     ) -> dict[str, Any]:
-        """티커별로 요약 생성"""
-        try:
-            logger.info(f"📋 {ticker} 요약 처리 시작 ({len(sampled_dates)}개 날짜, endpoint: {endpoint})")
+        """
+        티커별로 요약 생성
+
+        @mlflow.trace로 자동 추적되며, nested span으로 구성됨
+        """
+        with mlflow.start_span(name=f"process_{ticker}") as span:
+            logger.info(
+                f"📋 {ticker} 요약 처리: {len(sampled_dates)}개 날짜, {endpoint}"
+            )
+
+            span.set_inputs({
+                "ticker": ticker,
+                "date_count": len(sampled_dates),
+                "endpoint": endpoint,
+            })
 
             summary_results = {}
             processed_count = 0
@@ -282,8 +297,10 @@ class NewsSummaryPipeline:
                             if not title or not fulltext:
                                 continue
 
-                            # LLM으로 요약
-                            summary, input_token, output_token = self.summarize_news(title, fulltext, endpoint=endpoint)
+                            # LLM으로 요약 (자동으로 nested span 생성)
+                            summary, input_token, output_token = self.summarize_news(
+                                title, fulltext, endpoint=endpoint
+                            )
                             date_summaries[news_id] = {
                                 "summary": summary,
                                 "input_token": input_token,
@@ -293,11 +310,11 @@ class NewsSummaryPipeline:
                             processed_count += 1
 
                             if processed_count % 5 == 0:
-                                logger.info(f"  ✓ {processed_count}개 뉴스 처리")
+                                logger.info(f"  ✓ {processed_count}개 요약 생성")
 
                         except Exception as e:
                             error_count += 1
-                            logger.warning(f"  ⚠️ 뉴스 요약 실패: {str(e)}")
+                            logger.warning(f"  ⚠️ 요약 실패: {str(e)}")
                             continue
 
                     if date_summaries:
@@ -305,17 +322,25 @@ class NewsSummaryPipeline:
 
                 except Exception as e:
                     error_count += 1
-                    logger.warning(f"  ⚠️ {date_str} 처리 실패: {str(e)}")
+                    logger.warning(f"  ⚠️ {date_str} 실패: {str(e)}")
+
+            span.set_outputs({
+                "summary_count": processed_count,
+                "error_count": error_count,
+            })
+
+            span.set_attributes({
+                "processed_count": processed_count,
+                "error_count": error_count,
+                "success_rate": processed_count / (processed_count + error_count)
+                if (processed_count + error_count) > 0 else 0,
+            })
 
             logger.info(
-                f"✓ {ticker} 요약 완료: {processed_count}개 성공, {error_count}개 실패"
+                f"✓ {ticker}: {processed_count}개 성공, {error_count}개 실패"
             )
 
             return summary_results
-
-        except Exception as e:
-            logger.error(f"❌ {ticker} 처리 실패: {str(e)}")
-            raise
 
     def save_summaries_to_s3(
         self,
