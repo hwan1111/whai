@@ -10,14 +10,7 @@ class AivenConfig:
 
     def __init__(self):
         """Initialize with environment variables."""
-        # Load .env files
-        env_local = ".env.local"
-        env_file = ".env"
-
-        if os.path.exists(env_local):
-            load_dotenv(env_local)
-        elif os.path.exists(env_file):
-            load_dotenv(env_file)
+        load_dotenv(".env")
 
         self._service_db_url = os.getenv("SERVICE_DATABASE_URL")
         self._mlflow_db_url = os.getenv("MLFLOW_DATABASE_URL")

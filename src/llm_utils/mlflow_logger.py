@@ -102,7 +102,7 @@ class MLflowLogger:
                 f"   URI: {self.tracking_uri}\n"
                 f"   오류: {str(e)}\n\n"
                 f"   다음을 확인하세요:\n"
-                f"   1. .env.local에서 MLFLOW_TRACKING_URI 설정 확인\n"
+                f"   1. .env에서 MLFLOW_TRACKING_URI 설정 확인\n"
                 f"   2. 원격 서버가 실행 중인지 확인\n"
                 f"   3. 네트워크 연결 확인"
             )

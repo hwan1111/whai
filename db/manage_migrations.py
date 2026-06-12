@@ -20,19 +20,12 @@ logger = logging.getLogger(__name__)
 
 def load_env():
     """환경 변수 로드"""
-    # 현재 디렉토리의 .env.local 또는 프로젝트 루트의 .env 찾기
-    env_paths = [
-        Path(__file__).parent.parent / ".env.local",
-        Path(__file__).parent.parent / ".env",
-    ]
-
-    for env_path in env_paths:
-        if env_path.exists():
-            load_dotenv(env_path)
-            logger.info(f"Loaded environment from: {env_path}")
-            return
-
-    logger.warning("No .env or .env.local file found")
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+        logger.info(f"Loaded environment from: {env_path}")
+    else:
+        logger.warning("No .env file found")
 
 
 def cmd_status(args):

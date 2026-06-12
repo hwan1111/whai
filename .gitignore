@@ -50,6 +50,8 @@ dist/
 build/
 *.egg
 .eggs/
+.venv-model/
+.venv-model
 
 # pytest
 .pytest_cache/
@@ -115,6 +117,7 @@ whai/script/news_data/cache/
 # 대용량 데이터
 data/
 datasets/
+docs/
 *.h5
 *.pkl
 *.pickle
@@ -195,3 +198,5 @@ coverage/
 
 # 마운트 테스트용 로컬 파일
 .sshfs-test/
+
+model/

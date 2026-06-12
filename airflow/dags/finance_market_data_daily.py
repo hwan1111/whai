@@ -1,8 +1,8 @@
 """
-Daily market data sync: KOSPI, stocks, USD/KRW, and fundamentals.
+Daily market data sync: KOSPI (1), stocks (10), exchange rates (1, KRW/USD), fundamentals (10).
 
-Schedule: 15:00 UTC (00:00 KST) every day.
-All market datasets are synchronized by one task with the same completed-date cutoff.
+Schedule: 15:00 UTC (00:00 KST) every weekday.
+The 4 load tasks run in parallel, each doing incremental inserts.
 """
 
 import sys
@@ -27,8 +27,8 @@ default_args = {
 dag = DAG(
     "finance_market_data_daily",
     default_args=default_args,
-    description="KOSPI, 주식 10종, USD/KRW 환율, 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
-    schedule="0 15 * * *",  # 00:00 KST 매일 (뉴스 수집과 동시 시작)
+    description="KOSPI, 주식 10종, 환율 6쌍, 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
+    schedule="0 15 * * 1-5",  # 00:00 KST 평일
     catchup=False,
     tags=["finance", "market-data", "price"],
 )
@@ -40,19 +40,55 @@ def _setup():
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(ROOT / "src"))
     from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env.local", override=True)
-    from script.load_market_data import get_engine
+    load_dotenv(ROOT / ".env", override=True)
+    from script.others.load_market_data import get_engine
     return get_engine()
 
 
-def task_sync_market_data(**_):
+def task_load_kospi(**_):
     engine = _setup()
-    from script.load_market_data import load_all
-    load_all(engine)
+    from script.others.load_market_data import load_kospi
+    load_kospi(engine)
 
 
-sync_market_data = PythonOperator(
-    task_id="sync_market_data",
-    python_callable=task_sync_market_data,
+def task_load_stocks(**_):
+    engine = _setup()
+    from script.others.load_market_data import load_stocks
+    load_stocks(engine)
+
+
+def task_load_exchange_rates(**_):
+    engine = _setup()
+    from script.others.load_market_data import load_exchange_rates
+    load_exchange_rates(engine)
+
+
+def task_load_fundamentals(**_):
+    engine = _setup()
+    from script.others.load_market_data import load_fundamentals
+    load_fundamentals(engine)
+
+
+t_kospi = PythonOperator(
+    task_id="load_kospi",
+    python_callable=task_load_kospi,
     dag=dag,
 )
+t_stocks = PythonOperator(
+    task_id="load_stocks",
+    python_callable=task_load_stocks,
+    dag=dag,
+)
+t_rates = PythonOperator(
+    task_id="load_exchange_rates",
+    python_callable=task_load_exchange_rates,
+    dag=dag,
+)
+t_fundamentals = PythonOperator(
+    task_id="load_fundamentals",
+    python_callable=task_load_fundamentals,
+    dag=dag,
+)
+
+# 4개 task 병렬 실행 (서로 독립적)
+[t_kospi, t_stocks, t_rates, t_fundamentals]
