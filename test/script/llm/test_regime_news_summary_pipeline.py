@@ -329,14 +329,51 @@ def test_summarize_regime_renders_prompt_and_parses_response(pipeline, monkeypat
     result = pipeline.summarize_regime(_sample_regime(), ticker_info)
 
     assert result["ticker"] == "005930"
-    assert result["tokens_in"] == 123
-    assert result["tokens_out"] == 45
+    assert result["input_tokens"] == 123
+    assert result["output_tokens"] == 45
     assert result["llm_analysis"]["cause"] == "실적 호조"
 
     sent_text = pipeline._mocks["gateway_client"].call_with_usage.call_args[1]["text"]
     assert "005930" in sent_text
     assert "삼성전자" in sent_text
     assert "2024-01-01" in sent_text and "2024-01-10" in sent_text
+
+
+def test_summarize_regime_logs_mlflow_standard_token_usage_and_cost(pipeline, monkeypatch):
+    """MLflow Trace UI의 Tokens/Cost 컬럼이 읽는 표준 span attribute
+    (mlflow.chat.tokenUsage, mlflow.llm.cost)가 올바르게 설정되어야 한다."""
+    pipeline._mocks["news_loader"].load_news.return_value = []
+
+    fake_response = json.dumps({
+        "cause": "실적 호조",
+        "evidence": [],
+        "vol_insight": "변동성 증가",
+        "confidence": 0.7,
+        "reasoning": "근거 요약",
+    })
+    pipeline._mocks["gateway_client"].call_with_usage.return_value = (fake_response, 100, 50)
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "load_prompt",
+        MagicMock(return_value=("시스템 프롬프트", "{code} {name} {start} {end} {news_context}")),
+    )
+
+    mock_span = MagicMock()
+    mock_start_span = MagicMock()
+    mock_start_span.return_value.__enter__.return_value = mock_span
+    mock_start_span.return_value.__exit__.return_value = False
+    monkeypatch.setattr(pipeline_module.mlflow, "start_span", mock_start_span)
+
+    ticker_info = {"name": "삼성전자", "sector": "반도체"}
+    pipeline.summarize_regime(_sample_regime(), ticker_info)
+
+    attrs = mock_span.set_attributes.call_args[0][0]
+    assert attrs["mlflow.chat.tokenUsage"] == {
+        "input_tokens": 100, "output_tokens": 50, "total_tokens": 150,
+    }
+    assert attrs["mlflow.llm.cost"]["input_cost"] == pytest.approx(100 / 1_000_000 * 0.0005)
+    assert attrs["mlflow.llm.cost"]["output_cost"] == pytest.approx(50 / 1_000_000 * 0.0015)
 
 
 def test_summarize_regime_raises_after_retries_when_response_missing_keys(pipeline, monkeypatch):

@@ -279,11 +279,20 @@ class RegimeNewsSummaryPipeline:
             )
 
             span.set_outputs({"summary": parsed})
+            # MLflow Trace UI의 Tokens/Cost 컬럼은 아래 두 표준 span attribute 키를 읽어
+            # 트레이스 단위로 집계한다 (mlflow.tracing.constant.SpanAttributeKey 참고).
+            # "mlflow.genai.*" 같은 임의 키는 UI에서 인식되지 않으므로 사용하지 않는다.
             span.set_attributes({
-                "mlflow.genai.prompt_tokens": input_tokens,
-                "mlflow.genai.completion_tokens": output_tokens,
-                "mlflow.genai.input_cost": cost_info.input_cost,
-                "mlflow.genai.output_cost": cost_info.output_cost,
+                "mlflow.chat.tokenUsage": {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": input_tokens + output_tokens,
+                },
+                "mlflow.llm.cost": {
+                    "input_cost": cost_info.input_cost,
+                    "output_cost": cost_info.output_cost,
+                    "total_cost": cost_info.total_cost,
+                },
                 "endpoint": self.gateway_endpoint,
             })
 
@@ -343,7 +352,6 @@ class RegimeNewsSummaryPipeline:
 
     # ── 종목/전체 실행 ───────────────────────────────────────────────
 
-    @mlflow.trace
     def process_ticker(
         self,
         ticker: str,
@@ -351,38 +359,40 @@ class RegimeNewsSummaryPipeline:
         force: bool = False,
         dry_run: bool = False,
     ) -> dict[str, int]:
-        """종목의 국면 목록을 순회하며 요약 생성/저장"""
+        """종목의 국면 목록을 순회하며 요약 생성/저장
+
+        국면 1건당 LLM 요청 1회 = MLflow 트레이스 1개가 되도록, 여기서는
+        별도의 부모 span/trace를 만들지 않는다. 트레이스는 `summarize_regime`
+        (`@mlflow.trace`)에서 국면 단위로 개별 생성된다.
+        """
         ticker_info = self._get_ticker_info(ticker)
         processed = skipped = failed = 0
 
-        with mlflow.start_span(name=f"process_ticker_{ticker}") as span:
-            span.set_inputs({"ticker": ticker, "regime_count": len(regimes), "force": force})
+        logger.info(f"  [{ticker}] 처리 시작 (국면 {len(regimes)}개, force={force})")
 
-            for regime in regimes:
-                start_str = _date_str(regime["start"])
-                end_str = _date_str(regime["end"])
-                label = f"{ticker} [{start_str} ~ {end_str}] ({regime.get('days')}일, {regime.get('direction')})"
+        for regime in regimes:
+            start_str = _date_str(regime["start"])
+            end_str = _date_str(regime["end"])
+            label = f"{ticker} [{start_str} ~ {end_str}] ({regime.get('days')}일, {regime.get('direction')})"
 
-                if not force and self.summary_exists(ticker, start_str, end_str):
-                    logger.info(f"  → 스킵 (이미 존재): {label}")
-                    skipped += 1
-                    continue
+            if not force and self.summary_exists(ticker, start_str, end_str):
+                logger.info(f"  → 스킵 (이미 존재): {label}")
+                skipped += 1
+                continue
 
-                if dry_run:
-                    logger.info(f"  → [dry-run] 처리 대상: {label}")
-                    continue
+            if dry_run:
+                logger.info(f"  → [dry-run] 처리 대상: {label}")
+                continue
 
-                try:
-                    result = self.summarize_regime(regime, ticker_info)
-                    if self.save_summary_to_s3(ticker, start_str, end_str, result):
-                        processed += 1
-                    else:
-                        failed += 1
-                except Exception as e:
-                    logger.error(f"  ❌ 국면 처리 실패: {label} — {e}")
+            try:
+                result = self.summarize_regime(regime, ticker_info)
+                if self.save_summary_to_s3(ticker, start_str, end_str, result):
+                    processed += 1
+                else:
                     failed += 1
-
-            span.set_outputs({"processed": processed, "skipped": skipped, "failed": failed})
+            except Exception as e:
+                logger.error(f"  ❌ 국면 처리 실패: {label} — {e}")
+                failed += 1
 
         return {"processed": processed, "skipped": skipped, "failed": failed}
 

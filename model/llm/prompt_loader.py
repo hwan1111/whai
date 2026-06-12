@@ -7,6 +7,7 @@ MLflow 우선 로드 → 실패 시 로컬 YAML fallback.
 """
 
 import logging
+import re
 from pathlib import Path
 
 import yaml
@@ -17,7 +18,7 @@ _PROMPTS_DIR = Path(__file__).parent / "prompts"
 _DEFAULT_YAML = _PROMPTS_DIR / "regime_analysis.yaml"
 
 # MLflow prompt URI — UI에서 등록 후 버전 지정
-MLFLOW_PROMPT_URI = "prompts:/regime_analysis/latest"
+MLFLOW_PROMPT_URI = "prompts:/regime_news_summarys/3"
 
 
 def load_prompt(
@@ -57,8 +58,13 @@ def render(template: str, **kwargs: str) -> str:
     """
     템플릿 변수 치환
 
-    str.replace 방식 사용 — .format() 금지.
-    (JSON 스키마 예시의 { } 와 충돌 방지)
+    정규식 기반 치환 — .format() 금지.
+    (JSON 스키마 예시의 중괄호와 충돌 방지)
+
+    `{key}`, `{{key}}`, `{{ key }}` 등 중괄호 1~2개 + 선택적 공백을
+    모두 동일한 변수 placeholder로 인식하여 치환한다.
+    MLflow Prompt Registry의 `{{ var }}` (Jinja 스타일) 템플릿과
+    로컬 YAML의 `{{var}}` 템플릿을 모두 지원한다.
 
     Args:
         template: 유저 프롬프트 템플릿
@@ -69,7 +75,10 @@ def render(template: str, **kwargs: str) -> str:
     """
     result = template
     for key, value in kwargs.items():
-        result = result.replace(f"{{{key}}}", str(value))
+        pattern = r"\{{1,2}\s*" + re.escape(key) + r"\s*\}{1,2}"
+        # 치환 문자열에 re.sub의 백슬래시 escape 규칙(\1, \g<name> 등)이
+        # 적용되지 않도록 콜러블 형태로 전달한다 (news_context 등 자유 텍스트 안전).
+        result = re.sub(pattern, lambda _m, v=str(value): v, result)
     return result
 
 
