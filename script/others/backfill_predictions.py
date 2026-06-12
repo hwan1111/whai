@@ -254,7 +254,8 @@ def _predict_arima(close: pd.Series, cfg: dict, as_of: pd.Timestamp):
         raw = close
     lv   = _choi_last_vals(raw)
     trpp = _choi_preprocess(raw, pp)
-    mdl  = StatsARIMA(trpp, order=cfg["order"]).fit(disp=False)
+    # statsmodels 신버전 ARIMA.fit()은 disp 인자를 받지 않음 → 생략
+    mdl  = StatsARIMA(trpp, order=cfg["order"]).fit()
     pred = _choi_inverse(mdl.forecast(CHOI_FORECAST_STEPS).values, pp, lv)
     vol  = float(np.log(raw / raw.shift(1)).dropna().tail(VOL_DAYS).std())
     return pred, vol
@@ -292,7 +293,10 @@ def _predict_vecm(choi: dict, cfg: dict, as_of: pd.Timestamp):
     cols  = cfg.get("fixed_cols", ["close", "volume"]) + cfg.get("exog_cols", [])
     panel = panel[[c for c in cols if c in panel.columns]]
     det   = cfg.get("deterministic", "co")
-    rank  = max(select_coint_rank(panel, det=det, k_ar_diff=1).rank, 1)
+    try:
+        rank = max(select_coint_rank(panel, det=det, k_ar_diff=1).rank, 1)
+    except Exception:
+        rank = 1  # statsmodels 버전차로 select_coint_rank 실패 시 rank=1 기본
     mdl   = VECM(panel, deterministic=det, k_ar_diff=1, coint_rank=rank).fit()
     pred  = mdl.predict(steps=CHOI_FORECAST_STEPS)[:, 0]
     vol   = float(np.log(close / close.shift(1)).dropna().tail(VOL_DAYS).std())
@@ -503,9 +507,13 @@ def run_su(priority: dict, df_full: pd.DataFrame, as_of: pd.Timestamp):
     """as_of 시점 기준 SU 예측. df는 as_of까지로 잘라 사용."""
     df  = df_full[df_full.index <= as_of]
     cfg = priority["config"]
-    n_feat = cfg.get("features", 9)
-    feat_cols = [f for f in ALL_FEAT if f in df.columns][:n_feat]
     model, is_patchtst = load_su_model(cfg)
+    # config features 수가 실제 모델과 다를 수 있어(예: 096770 config=11 vs 모델=9),
+    # sklearn 모델은 모델이 기대하는 피처 수(n_features_in_)를 신뢰한다.
+    n_feat = cfg.get("features", 9)
+    if not is_patchtst and hasattr(model, "n_features_in_"):
+        n_feat = int(model.n_features_in_)
+    feat_cols = [f for f in ALL_FEAT if f in df.columns][:n_feat]
     vol = float(df["ret_1d"].dropna().tail(VOL_DAYS).std())
     base_price = float(df["close"].iloc[-1])
 
