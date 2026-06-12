@@ -490,20 +490,25 @@ def finance_stock_predict_daily():
             return d5_price, vol, prices
 
         def _build_choi_forecast(prices: np.ndarray, base: float, vol: float) -> list[dict]:
-            """D+1~D+20 forecast_json (CI는 sqrt(h)로 확장)."""
+            """D+1~D+5 forecast_json (HORIZON까지만; 차분 모델의 먼 horizon 음수 폭주 방지).
+            CI는 sqrt(h)로 확장. 음수/NaN 가격은 null 처리 (MySQL JSON 컬럼 보호)."""
             out = []
-            for h in range(1, 21):
+            for h in range(1, HORIZON + 1):
                 if h - 1 >= len(prices):
                     break
-                pp  = float(prices[h - 1])
-                lr  = float(np.log(pp / base)) if base > 0 else 0.0
+                pp = float(prices[h - 1])
+                if not np.isfinite(pp) or pp <= 0:
+                    out.append({"horizon": h, "date": str((today + BDay(h)).date()),
+                                "price": None, "ci_upper": None, "ci_lower": None})
+                    continue
+                lr   = float(np.log(pp / base)) if base > 0 else 0.0
                 u, l = _ci(base, lr, vol, h)
                 out.append({
                     "horizon":  h,
                     "date":     str((today + BDay(h)).date()),
                     "price":    round(pp, 2),
-                    "ci_upper": u,
-                    "ci_lower": l,
+                    "ci_upper": u if np.isfinite(u) else None,
+                    "ci_lower": l if np.isfinite(l) else None,
                 })
             return out
 
