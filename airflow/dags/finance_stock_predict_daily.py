@@ -245,7 +245,7 @@ default_args = {
 @dag(
     dag_id="finance_stock_predict_daily",
     default_args=default_args,
-    schedule="30 6 * * 1-5",   # 15:30 KST (06:30 UTC)
+    schedule="0 16 * * 1-5",    # 01:00 KST (16:00 UTC) — finance_market_data_daily(15:00) 이후
     catchup=False,
     max_active_tasks=4,         # 동시 종목 처리 수 제한 (API rate limit)
     tags=["finance", "prediction", "drift"],

@@ -1,4 +1,4 @@
-﻿"""
+"""
 가격 국면별 뉴스 LLM 요약
 
 test3.py 에서 도출한 가격 국면을 입력으로 받아
@@ -39,16 +39,24 @@ START_DATE = "2020-01-01"
 END_DATE   = "2026-05-28"
 
 TICKER_MAP: dict[str, tuple[str, str]] = {
-    "005930": ("삼성전자",                  "반도체"),
-    "000660": ("SK하이닉스",                "반도체"),
-    "005380": ("현대차",                    "자동차"),
-    "000270": ("기아",                      "자동차"),
-    "079550": ("LIG디펜스앤에어로스페이스", "방산"),
-    "051910": ("LG화학",                    "화학"),
-    "096770": ("SK이노베이션",              "에너지"),
-    "055550": ("신한지주",                  "금융"),
-    "105560": ("KB금융",                    "금융"),
-    "012450": ("한화에어로스페이스",        "방산"),
+    "005930":   ("삼성전자",                  "반도체"),
+    "000660":   ("SK하이닉스",                "반도체"),
+    "005380":   ("현대차",                    "자동차"),
+    "000270":   ("기아",                      "자동차"),
+    "079550":   ("LIG디펜스앤에어로스페이스", "방산"),
+    "051910":   ("LG화학",                    "화학"),
+    "096770":   ("SK이노베이션",              "에너지"),
+    "055550":   ("신한지주",                  "금융"),
+    "105560":   ("KB금융",                    "금융"),
+    "012450":   ("한화에어로스페이스",        "방산"),
+    "KOSPI200": ("코스피200",                 "시장지수"),
+    "USD_KRW":  ("원달러",                    "환율"),
+}
+
+# ticker_code와 FinanceDataReader 코드가 다른 경우
+FDR_CODE_MAP: dict[str, str] = {
+    "KOSPI200": "KS200",
+    "USD_KRW":  "USD/KRW",
 }
 
 S3_BUCKET = "fisa-news-archive"
@@ -369,7 +377,8 @@ def run(ticker_code: str,
 
     # ── 국면 도출 ─────────────────────────────────────────────────────
     log.info(f"가격 데이터 수집: {ticker_name}({ticker_code})  {start} ~ {end}")
-    returns, volume = _fetch_price_volume(ticker_code, start, end)
+    fdr_code = FDR_CODE_MAP.get(ticker_code, ticker_code)
+    returns, volume = _fetch_price_volume(fdr_code, start, end)
     raw_regimes     = _detect_price_regimes(returns)
     regimes         = _merge_noise(raw_regimes, returns)
     log.info(f"국면: {len(raw_regimes)}개 → 병합 후 {len(regimes)}개")
@@ -381,6 +390,19 @@ def run(ticker_code: str,
             results = json.loads(output_path.read_text(encoding="utf-8"))
             log.info(f"기존 결과 {len(results)}건 로드")
         except Exception:
+            pass
+    else:
+        # 로컬 파일 없으면 S3 백업에서 복구 (upload 후 삭제된 경우)
+        try:
+            s3_key = f"processed/{ticker_code}/regime_news_summary_{ticker_code}.json"
+            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            results = json.loads(obj["Body"].read().decode("utf-8"))
+            log.info(f"S3 백업에서 기존 결과 {len(results)}건 복구: {s3_key}")
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except ClientError:
             pass
 
     REQUIRED_KEYS = {"cause", "evidence", "vol_insight", "confidence", "reasoning"}

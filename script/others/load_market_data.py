@@ -9,7 +9,7 @@ Or via Airflow DAG: finance_market_data_daily
 
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,7 +64,7 @@ def load_kospi(engine) -> int:
 
     last = _latest_price_date(engine, "000000")
     start = last + timedelta(days=1)
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
 
     if start > today:
         print("[KOSPI] 최신 상태")
@@ -123,7 +123,7 @@ def load_stocks(engine) -> int:
         print("[주식] company 테이블에 종목이 없습니다.")
         return 0
 
-    today_str = date.today().strftime("%Y%m%d")
+    today_str = datetime.now(timezone.utc).date().strftime("%Y%m%d")
     total = 0
 
     for ticker, name in tickers.items():
@@ -177,7 +177,7 @@ def load_exchange_rates(engine) -> int:
 
     last = _latest_exchange_date(engine)
     start = last + timedelta(days=1)
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
 
     if start > today:
         print("[환율] 최신 상태")
@@ -225,7 +225,7 @@ def load_fundamentals(engine) -> int:
         print("[펀더멘털] 종목 없음")
         return 0
 
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     last = _latest_fundamental_date(engine)
     if last >= today:
         print("[펀더멘털] 최신 상태")
