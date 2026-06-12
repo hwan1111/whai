@@ -69,7 +69,7 @@ class NewsSummaryPipeline:
 ```python
 def summarize_news(self, ...):
     ...
-    # 토큰 사용량 추적
+    # 토큰 사용량 추적 및 비용 계산
     cost_info = self.token_tracker.track_usage(
         model=endpoint,
         input_tokens=input_token,
@@ -77,16 +77,12 @@ def summarize_news(self, ...):
         endpoint=endpoint,
     )
     
-    # Span에 토큰 메타데이터 추가
-    span.set_usage(
-        num_prompt_tokens=input_token,
-        num_completion_tokens=output_token,
-    )
-    
+    # MLflow 3.12 표준 토큰 추적 attributes
     span.set_attributes({
-        "cost_usd": cost_info.total_cost,
-        "input_cost_usd": cost_info.input_cost,
-        "output_cost_usd": cost_info.output_cost,
+        "mlflow.genai.prompt_tokens": input_token,
+        "mlflow.genai.completion_tokens": output_token,
+        "mlflow.genai.input_cost": cost_info.input_cost,
+        "mlflow.genai.output_cost": cost_info.output_cost,
     })
 ```
 
@@ -144,15 +140,17 @@ python script/llm/news_summary_pipeline.py \
 - `total_output_tokens`: 총 출력 토큰
 - `total_tokens`: 총 토큰
 - `total_cost_usd`: 총 비용 (USD)
+- `input_cost_usd`: 총 입력 비용
+- `output_cost_usd`: 총 출력 비용
 
-### 2. Span-level 메타데이터
-- `cost_usd`: 개별 요약의 비용
-- `input_cost_usd`: 입력 비용
-- `output_cost_usd`: 출력 비용
+### 2. Span-level 표준 attributes (MLflow 3.12)
+MLflow GenAI 표준 속성으로 자동 인식됩니다:
+- `mlflow.genai.prompt_tokens`: 입력 토큰 수
+- `mlflow.genai.completion_tokens`: 출력 토큰 수
+- `mlflow.genai.input_cost`: 입력 비용 (USD)
+- `mlflow.genai.output_cost`: 출력 비용 (USD)
 
-### 3. Span Usage
-- `num_prompt_tokens`: 입력 토큰 (span 표준)
-- `num_completion_tokens`: 출력 토큰 (span 표준)
+이 속성들은 MLflow UI의 Span detail에서 자동으로 표시되고 추적됩니다.
 
 ## 테스트
 
