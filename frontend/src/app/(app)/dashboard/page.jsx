@@ -64,7 +64,7 @@ const NEWS_TICKER_GROUPS = [
   },
 ];
 
-function NewsDrawer({ open, onClose, defaultTicker }) {
+function NewsDrawer({ open, onClose, defaultTicker, width }) {
   const [ticker, setTicker] = useState(defaultTicker || '');
   const [days, setDays] = useState('90');
   const [news, setNews] = useState([]);
@@ -96,7 +96,7 @@ function NewsDrawer({ open, onClose, defaultTicker }) {
   return (
     <>
       {open && <div className="news-drawer-backdrop" onClick={onClose} />}
-      <div className={`news-drawer${open ? ' open' : ''}`}>
+      <div className={`news-drawer${open ? ' open' : ''}`} style={width ? { width } : undefined}>
         <div className="news-drawer-header">
           <div className="news-drawer-title"><span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span> 뉴스 요약</div>
           <button className="news-drawer-close" onClick={onClose}>✕</button>
@@ -183,6 +183,17 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, anomalies, on
   const [tooltip, setTooltip] = useState(null);
   const [hoveredIdx, setHoveredIdx] = useState(null);
   const svgRef = useRef(null);
+  const [starYScale, setStarYScale] = useState(1);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) setStarYScale((width / SW) / (height / SH));
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
   if (!pd || activeAssets.length === 0) return null;
   const n = pd.labels.length;
 
@@ -306,6 +317,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, anomalies, on
       {anomalies?.map(a => {
         const x = toX(a.idx, n);
         const cy = MT + CH + 9;
+        const starColor = anomalyColor(a.movers.length, a.totalAssets).star;
         return (
           <g key={a.idx} style={{ cursor: 'pointer' }}
             onMouseEnter={e => onAnomalyHover?.(a, e.clientX, e.clientY)}
@@ -313,7 +325,8 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, anomalies, on
             onClick={e => { e.stopPropagation(); onAnomalyClick?.(a, e.clientX, e.clientY); }}>
             <circle cx={x.toFixed(1)} cy={cy} r={10} fill="transparent" />
             <text x={x.toFixed(1)} y={cy + 5} textAnchor="middle" fontSize={12}
-              fill="#f59e0b" pointerEvents="none" style={{ userSelect: 'none' }}>★</text>
+              fill={starColor} pointerEvents="none" style={{ userSelect: 'none' }}
+              transform={`translate(${x.toFixed(1)},${cy}) scale(1,${starYScale.toFixed(4)}) translate(${(-x).toFixed(1)},${(-cy)})`}>★</text>
           </g>
         );
       })}
@@ -541,10 +554,17 @@ function fmtChg(pct) {
 }
 
 const ANOMALY_MAX = { '1W': 2, '1M': 4, '3M': 6, '6M': 10, '1Y': 15, '3Y': 25, 'ALL': 45 };
-const ANOMALY_THRESH = id => (id === '000000' || id === 'USD') ? 1.0 : 2.0;
+const ANOMALY_THRESH = id => id === 'USD' ? 0.8 : id === '000000' ? 1.5 : 3.0;
+
+function anomalyColor(count, total) {
+  const ratio = count / Math.max(total, 1);
+  if (ratio >= 0.6) return { star: '#eab308', border: '#eab308', bg: '#fefce8', text: '#713f12', badge: '#854d0e' };
+  if (ratio >= 0.35) return { star: '#fbbf24', border: '#fbbf24', bg: '#fefce8', text: '#92400e', badge: '#a16207' };
+  return { star: '#fef08a', border: '#fde047', bg: '#fefce8', text: '#a16207', badge: '#a16207' };
+}
 
 function computeAnomalies(pd, activeAssets, period) {
-  if (!pd?.isoLabels || activeAssets.length < 2) return [];
+  if (!pd?.isoLabels || activeAssets.length < 1) return [];
   const n = pd.isoLabels.length;
   if (n < 2) return [];
   const maxMarkers = ANOMALY_MAX[period] ?? 5;
@@ -557,9 +577,10 @@ function computeAnomalies(pd, activeAssets, period) {
       const chg = (c[i] - c[i - 1]) / c[i - 1] * 100;
       if (Math.abs(chg) >= ANOMALY_THRESH(a)) movers.push({ id: a, chg });
     }
-    if (movers.length >= 2) {
+    if (movers.length >= 1) {
       const totalAbs = movers.reduce((s, m) => s + Math.abs(m.chg), 0);
-      candidates.push({ idx: i, isoDate: pd.isoLabels[i], displayDate: pd.labels[i], movers, score: movers.length, totalAbs });
+      const netChg = movers.reduce((s, m) => s + m.chg, 0);
+      candidates.push({ idx: i, isoDate: pd.isoLabels[i], displayDate: pd.labels[i], movers, score: movers.length, totalAbs, netChg, totalAssets: activeAssets.length });
     }
   }
   candidates.sort((a, b) => b.score - a.score || b.totalAbs - a.totalAbs);
@@ -979,16 +1000,17 @@ export default function DashboardPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-      <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} defaultTicker={selectedFxId || selectedStockId || ''} />
+      <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} defaultTicker={selectedFxId || selectedStockId || ''} width={panelWidth} />
       {anomalyPopup && !anomalyClick && (() => {
         const { anomaly, clientX, clientY } = anomalyPopup;
+        const { border: popColor, bg: popBg, text: popText, badge: popBadge } = anomalyColor(anomaly.movers.length, anomaly.totalAssets);
         return (
           <div style={{
             position: 'fixed',
             left: Math.min(clientX + 12, window.innerWidth - 220),
             top: Math.min(Math.max(8, clientY - 16), window.innerHeight - 200),
             background: 'white',
-            border: '1.5px solid #f59e0b',
+            border: `1.5px solid ${popColor}`,
             borderRadius: 10,
             padding: '9px 13px',
             boxShadow: '0 4px 16px rgba(15,23,42,0.12)',
@@ -996,8 +1018,8 @@ export default function DashboardPage() {
             minWidth: 180,
             pointerEvents: 'none',
           }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', marginBottom: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 5px', fontSize: 9, color: '#b45309' }}>!</span>
+            <div style={{ fontSize: 10, fontWeight: 700, color: popText, marginBottom: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ background: popBg, border: `1px solid ${popColor}`, borderRadius: 4, padding: '1px 5px', fontSize: 9, color: popBadge }}>!</span>
               {fmtNewsDate(anomaly.isoDate)} 급변 포착
             </div>
             {anomaly.movers.map(m => (
@@ -1017,24 +1039,26 @@ export default function DashboardPage() {
           style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
           onClick={() => setAnomalyClick(null)}
         >
-          <div
-            style={{ width: anomalyClick.anomaly.movers.length >= 9 ? 'min(1500px, 97vw)' : anomalyClick.anomaly.movers.length >= 4 ? 'min(1200px, 95vw)' : 'min(500px, 92vw)', maxHeight: '82vh', overflowY: 'auto', background: 'white', border: '1.5px solid #f59e0b', borderRadius: 14, padding: '16px 18px', boxShadow: '0 20px 60px rgba(15,23,42,0.28)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#92400e', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 5, padding: '1px 6px', fontSize: 10, color: '#b45309' }}>!</span>
-              {fmtNewsDate(anomalyClick.anomaly.isoDate)} 급변 포착
-              <button onClick={() => setAnomalyClick(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 17, color: '#94a3b8', lineHeight: 1, padding: 2 }}>✕</button>
-            </div>
-            {(() => {
-              const cnt = anomalyClick.anomaly.movers.length;
-              const cols = cnt >= 9 ? 3 : cnt >= 4 ? 2 : 1;
-              const isMultiCol = cols > 1;
-              return (
+          {(() => {
+            const anomaly = anomalyClick.anomaly;
+            const { border: clkColor, bg: clkBg, text: clkText, badge: clkBadge } = anomalyColor(anomaly.movers.length, anomaly.totalAssets);
+            const cnt = anomaly.movers.length;
+            const cols = cnt >= 9 ? 3 : cnt >= 4 ? 2 : 1;
+            const isMultiCol = cols > 1;
+            return (
+              <div
+                style={{ width: cnt >= 9 ? 'min(1500px, 97vw)' : cnt >= 4 ? 'min(1200px, 95vw)' : 'min(500px, 92vw)', maxHeight: '82vh', overflowY: 'auto', background: 'white', border: `1.5px solid ${clkColor}`, borderRadius: 14, padding: '16px 18px', boxShadow: '0 20px 60px rgba(15,23,42,0.28)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ fontSize: 13, fontWeight: 800, color: clkText, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ background: clkBg, border: `1px solid ${clkColor}`, borderRadius: 5, padding: '1px 6px', fontSize: 10, color: clkBadge }}>!</span>
+                  {fmtNewsDate(anomaly.isoDate)} 급변 포착
+                  <button onClick={() => setAnomalyClick(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 17, color: '#94a3b8', lineHeight: 1, padding: 2 }}>✕</button>
+                </div>
                 <div style={isMultiCol ? { display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 } : {}}>
-                  {anomalyClick.anomaly.movers.map((m, idx) => {
+                  {anomaly.movers.map((m, idx) => {
                     const newsList = allNewsMap[m.id];
-                    const news = findNewsForDate(newsList, anomalyClick.anomaly.isoDate);
+                    const news = findNewsForDate(newsList, anomaly.isoDate);
                     const isUp = news?.direction === '상승';
                     const isDown = news?.direction === '하락';
                     const boxBg = isUp
@@ -1083,9 +1107,9 @@ export default function DashboardPage() {
                     );
                   })}
                 </div>
-              );
-            })()}
-          </div>
+              </div>
+            );
+          })()}
         </div>,
         document.body
       )}
@@ -1197,6 +1221,9 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px' }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 10 }}>(최대 3개)</span></span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
+                {[...favs].filter(id => ASSETS[id]).length === 0 && (
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>+ 종목을 추가해보세요</span>
+                )}
                 {[...favs].filter(id => ASSETS[id]).map(id => {
                   const isFx = !!FX_INFO[id];
                   const isSelected = isFx ? id === selectedFxId : id === selectedStockId;
@@ -1479,7 +1506,7 @@ export default function DashboardPage() {
                   const safePct = Math.max(0, Math.min(100, pct));
                   return (
                     <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>52주 가격 위치</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>{selectedStockId === '000000' ? '52주 지수 위치' : '52주 가격 위치'}</div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#64748b', marginBottom: 3 }}>
                         <span>최저 {fmt(s.low52)}{selectedStockId !== '000000' ? '원' : ''}</span>
                         <span>최고 {fmt(s.high52)}{selectedStockId !== '000000' ? '원' : ''}</span>
@@ -1650,23 +1677,18 @@ export default function DashboardPage() {
               // 행 레이블 열은 데이터 셀보다 좁게 → 색상 셀이 더 왼쪽에서 시작
               const labelW = Math.max(20, Math.round(CW * 0.9));
               const labelStyle = { height: cellH, lineHeight: `${cellH}px`, width: labelW, minWidth: labelW, maxWidth: labelW };
-              const lbl = id => {
-                const l = shortLabel(id);
-                if (isCompact) return l.slice(0, 5);
-                return CW < 30 ? l.slice(0, 1) : CW < 38 ? l.slice(0, 2) : CW < 48 ? l.slice(0, 3) : CW < 60 ? l.slice(0, 5) : l;
-              };
               return (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                     <table className="matrix-table" style={{ tableLayout: 'fixed' }}>
                       <thead><tr>
                         <th className="mh" style={{ ...labelStyle, height: 'auto', lineHeight: 'normal', paddingBottom: 5 }} />
-                        {complexIds.map(id => <th key={id} className="mh" style={{ ...cellStyle, height: 'auto', lineHeight: 'normal', paddingBottom: 5 }}>{lbl(id)}</th>)}
+                        {complexIds.map(id => <th key={id} className="mh" title={shortLabel(id)} style={{ ...cellStyle, height: 'auto', lineHeight: 'normal', paddingBottom: 5 }}>{shortLabel(id)}</th>)}
                       </tr></thead>
                       <tbody>
                         {complexIds.map(row => (
                           <tr key={row}>
-                            <th className="mh" title={shortLabel(row)} style={{ ...labelStyle, textAlign: 'right', paddingRight: 5, textOverflow: 'clip' }}>{lbl(row)}</th>
+                            <th className="mh" title={shortLabel(row)} style={{ ...labelStyle, textAlign: 'right', paddingRight: 5 }}>{shortLabel(row)}</th>
                             {complexIds.map(col => {
                               if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
                               const v = calcPearson(complexData[row], complexData[col]);

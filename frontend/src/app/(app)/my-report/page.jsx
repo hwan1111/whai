@@ -347,7 +347,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
               <span style={{ fontSize: 11, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
             </div>
             <div style={{ height: barHeight, overflow: 'hidden', position: 'relative', borderRadius: 3 }}>
-              <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex' }}>
+              <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex', borderRadius: 3, overflow: 'hidden' }}>
                 {displaySorted.filter(h => h.curVal > 0).map(h => {
                   const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
                   return (

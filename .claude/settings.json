@@ -11,7 +11,8 @@
       "Bash(python -c ' *)",
       "Bash(git add *)",
       "Bash(git pull *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(git merge *)"
     ]
   }
 }
