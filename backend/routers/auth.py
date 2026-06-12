@@ -15,11 +15,24 @@ from backend.db import get_db
 from backend.models.user import User
 from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UpdateProfileRequest
 
-_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "whai-profile-images")
+_S3_PROFILE_BUCKET = os.getenv("AWS_S3_PROFILE_BUCKET", "whai-profile-images")
 _S3_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
 
 def _s3_client():
     return boto3.client("s3", region_name=_S3_REGION)
+
+def _presigned_profile_url(stored_url: str | None) -> str | None:
+    if not stored_url or ".amazonaws.com/" not in stored_url:
+        return stored_url
+    key = stored_url.split(".amazonaws.com/", 1)[-1]
+    try:
+        return _s3_client().generate_presigned_url(
+            "get_object",
+            Params={"Bucket": _S3_PROFILE_BUCKET, "Key": key},
+            ExpiresIn=3600,
+        )
+    except ClientError:
+        return stored_url
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -115,7 +128,7 @@ def me(user_id: str = Depends(_get_user_id), db: Session = Depends(get_db)) -> d
         "gender": user.gender.value if user.gender else None,
         "invest_type": user.invest_type,
         "created_at": user.created_at.strftime("%Y-%m-%d") if user.created_at else None,
-        "profile_image_url": user.profile_image_url,
+        "profile_image_url": _presigned_profile_url(user.profile_image_url),
     }
 
 
@@ -159,7 +172,7 @@ def _s3_key(user_id: str, ext: str) -> str:
 
 def _s3_delete(key: str) -> None:
     try:
-        _s3_client().delete_object(Bucket=_S3_BUCKET, Key=key)
+        _s3_client().delete_object(Bucket=_S3_PROFILE_BUCKET, Key=key)
     except ClientError:
         pass
 
@@ -191,7 +204,7 @@ async def upload_profile_image(
 
     try:
         _s3_client().put_object(
-            Bucket=_S3_BUCKET,
+            Bucket=_S3_PROFILE_BUCKET,
             Key=key,
             Body=content,
             ContentType=file.content_type,
@@ -199,12 +212,12 @@ async def upload_profile_image(
     except ClientError as e:
         raise HTTPException(status_code=500, detail=f"이미지 업로드에 실패했습니다: {e}")
 
-    image_url = f"https://{_S3_BUCKET}.s3.{_S3_REGION}.amazonaws.com/{key}"
+    image_url = f"https://{_S3_PROFILE_BUCKET}.s3.{_S3_REGION}.amazonaws.com/{key}"
     user.profile_image_url = image_url
     user.original_file_name = file.filename
     db.commit()
 
-    return {"profile_image_url": image_url}
+    return {"profile_image_url": _presigned_profile_url(image_url)}
 
 
 @router.delete("/me/profile-image", status_code=status.HTTP_204_NO_CONTENT)
@@ -262,5 +275,5 @@ def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)) -
         refresh_token=_make_refresh_token(user.user_id),
         name=user.name,
         user_id=user.user_id,
-        profile_image_url=user.profile_image_url,
+        profile_image_url=_presigned_profile_url(user.profile_image_url),
     )

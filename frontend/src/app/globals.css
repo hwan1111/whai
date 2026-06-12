@@ -53,7 +53,7 @@ html, body { height: 100%; overflow: hidden; }
 .header-report-btn:hover { background: #f8fafc; color: #1e293b; border-color: #cbd5e1; }
 .header-report-btn.active { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
 .header-right { display: flex; align-items: center; gap: 12px; }
-.avatar { width: 31px; height: 31px; border-radius: 50%; background: linear-gradient(135deg, #2563eb, #7c3aed); display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 700; cursor: pointer; overflow: hidden; flex-shrink: 0; }
+.avatar { width: 31px; height: 31px; border-radius: 50%; background: linear-gradient(135deg, #2563eb, #7c3aed); display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 700; cursor: pointer; overflow: hidden; flex-shrink: 0; border: 2px solid #e2e8f0; }
 .avatar:hover { opacity: 0.85; }
 
 /* ── User dropdown ── */
@@ -114,8 +114,8 @@ html, body { height: 100%; overflow: hidden; }
 .ai-box { background: linear-gradient(135deg, #ede9fe, #eef2ff); border: 1px solid #c4b5fd; border-radius: 9px; padding: 12px 14px; }
 .ai-header { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
 .ai-badge { background: var(--ai); color: white; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
-.ai-title { font-size: 12px; font-weight: 600; color: #4c1d95; }
-.ai-text { font-size: 12px; line-height: 1.7; color: #312e81; }
+.ai-title { font-size: 12px; font-weight: 600; color: #334155; }
+.ai-text { font-size: 12px; line-height: 1.7; color: #475569; }
 .ai-sources { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
 .ai-src-tag { font-size: 10px; background: white; border: 1px solid #c4b5fd; color: #7c3aed; padding: 2px 7px; border-radius: 4px; }
 .regime-direction { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
@@ -424,7 +424,7 @@ html, body { height: 100%; overflow: hidden; }
 .snapshot-summary-label { font-size: 11px; color: #64748b; margin-bottom: 3px; font-weight: 700; }
 .snapshot-summary-val { font-size: 16px; font-weight: 700; color: #1e293b; }
 
-.snapshot-ai { background: linear-gradient(160deg, #f5f3ff, #eef2ff); border: 1px solid #c4b5fd; border-radius: 10px; padding: 16px 18px; min-width: 200px; display: flex; flex-direction: column; overflow-y: hidden; height: 100%; box-sizing: border-box; }.snapshot-ai-header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.snapshot-ai { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 10px; padding: 16px 18px; min-width: 200px; display: flex; flex-direction: column; overflow-y: hidden; height: 100%; box-sizing: border-box; }.snapshot-ai-header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
 
 /* ── 자산 선택 카드 그리드 ── */
 .asset-pick-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }

@@ -12,7 +12,9 @@
       "Bash(git add *)",
       "Bash(git pull *)",
       "Bash(npx tsc *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(npm list *)",
+      "Bash(node_modules/.bin/next build *)"
     ]
   }
 }
