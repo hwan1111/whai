@@ -218,6 +218,13 @@ class NewsSummaryPipeline:
                     endpoint=endpoint,
                 )
 
+                # MLflow 3.12 공식 API: mlflow.log_token_usage()
+                mlflow.log_token_usage(
+                    model=endpoint,
+                    input_tokens=input_token,
+                    output_tokens=output_token,
+                )
+
                 # Span에 토큰 정보 로깅
                 span.set_outputs({
                     "summary": summary.strip(),
@@ -227,12 +234,7 @@ class NewsSummaryPipeline:
                     "cost_usd": cost_info.total_cost,
                 })
 
-                # Span에 토큰 사용량 메타데이터 추가
-                span.set_usage(
-                    num_prompt_tokens=input_token,
-                    num_completion_tokens=output_token,
-                )
-
+                # Span attributes에 비용 메타데이터 추가
                 span.set_attributes({
                     "cost_usd": cost_info.total_cost,
                     "input_cost_usd": cost_info.input_cost,

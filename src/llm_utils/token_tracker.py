@@ -126,43 +126,40 @@ class TokenTracker:
 
     def log_to_mlflow(self, run_id: Optional[str] = None) -> None:
         """
-        누적된 토큰 정보를 MLflow에 로깅
+        누적된 토큰 정보를 MLflow에 로깅 (MLflow 3.12 API)
 
         Args:
             run_id: MLflow Run ID (선택사항)
         """
         try:
-            with mlflow.start_span(name="token_usage_summary"):
-                # 토큰 사용량 로깅
-                mlflow.log_token_usage(
-                    model="aggregated",
-                    input_tokens=self.total_usage.input_tokens,
-                    output_tokens=self.total_usage.output_tokens,
-                )
+            # MLflow 3.12 공식 API: mlflow.log_token_usage()
+            mlflow.log_token_usage(
+                model="aggregated",
+                input_tokens=self.total_usage.input_tokens,
+                output_tokens=self.total_usage.output_tokens,
+            )
 
-                # 메트릭 로깅
-                mlflow.log_metrics({
-                    "total_input_tokens": self.total_usage.input_tokens,
-                    "total_output_tokens": self.total_usage.output_tokens,
-                    "total_tokens": self.total_usage.total_tokens,
-                    "total_cost_usd": self.total_cost.total_cost,
-                    "input_cost_usd": self.total_cost.input_cost,
-                    "output_cost_usd": self.total_cost.output_cost,
-                })
+            # 비용 메트릭 로깅
+            mlflow.log_metrics({
+                "total_tokens": self.total_usage.total_tokens,
+                "total_cost_usd": self.total_cost.total_cost,
+                "input_cost_usd": self.total_cost.input_cost,
+                "output_cost_usd": self.total_cost.output_cost,
+            })
 
-                logger.info(
-                    f"✓ Token usage logged to MLflow:\n"
-                    f"   Tokens: {self.total_usage.total_tokens} "
-                    f"(input: {self.total_usage.input_tokens}, "
-                    f"output: {self.total_usage.output_tokens})\n"
-                    f"   Cost: ${self.total_cost.total_cost:.6f} USD"
-                )
+            logger.info(
+                f"✓ Token usage logged to MLflow:\n"
+                f"   Tokens: {self.total_usage.total_tokens} "
+                f"(input: {self.total_usage.input_tokens}, "
+                f"output: {self.total_usage.output_tokens})\n"
+                f"   Cost: ${self.total_cost.total_cost:.6f} USD"
+            )
         except Exception as e:
             logger.warning(f"⚠️ Failed to log token usage to MLflow: {str(e)}")
 
     def log_span_usage(self, span_name: str, usage: TokenUsage, cost: CostInfo) -> None:
         """
-        개별 span에 토큰 정보 로깅
+        개별 span에 토큰 정보 로깅 (MLflow 3.12 API)
 
         Args:
             span_name: Span 이름
@@ -171,10 +168,14 @@ class TokenTracker:
         """
         try:
             with mlflow.start_span(name=span_name) as span:
-                span.set_usage(
-                    num_prompt_tokens=usage.input_tokens,
-                    num_completion_tokens=usage.output_tokens,
+                # MLflow 3.12 공식 API
+                mlflow.log_token_usage(
+                    model=span_name,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
                 )
+
+                # 비용 정보는 attributes로 기록
                 span.set_attributes({
                     "cost_usd": cost.total_cost,
                     "input_cost_usd": cost.input_cost,
