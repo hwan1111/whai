@@ -59,7 +59,7 @@ def _latest_fundamental_date(engine) -> date:
     return row[0] if row[0] else date(2020, 1, 1)
 
 
-def load_kospi(engine, since: date | None = None) -> int:
+def load_kospi(engine, since: date | None = None, as_of: date | None = None) -> int:
     """pykrx로 KOSPI 지수(000000) 증분 적재."""
     try:
         from pykrx import stock as krx
@@ -69,19 +69,19 @@ def load_kospi(engine, since: date | None = None) -> int:
 
     last = _latest_price_date(engine, "000000")
     start = since if since else last + timedelta(days=1)
-    today = date.today()
+    end = as_of or date.today() - timedelta(days=1)
 
-    if start > today:
+    if start > end:
         print("[KOSPI] 최신 상태")
         return 0
 
     df = krx.get_index_ohlcv_by_date(
         start.strftime("%Y%m%d"),
-        today.strftime("%Y%m%d"),
+        end.strftime("%Y%m%d"),
         "1001",  # KOSPI 지수 코드
     )
     if df.empty:
-        print(f"[KOSPI] 데이터 없음 ({start} ~ {today})")
+        print(f"[KOSPI] 데이터 없음 ({start} ~ {end})")
         return 0
 
     rows = [
@@ -104,11 +104,11 @@ def load_kospi(engine, since: date | None = None) -> int:
             rows,
         )
 
-    print(f"[KOSPI] {len(rows)}건 적재 ({start} ~ {today})")
+    print(f"[KOSPI] {len(rows)}건 적재 ({start} ~ {end})")
     return len(rows)
 
 
-def load_stocks(engine, since: date | None = None) -> int:
+def load_stocks(engine, since: date | None = None, as_of: date | None = None) -> int:
     """pykrx로 company 테이블 KRW 종목(KOSPI 제외) 증분 적재."""
     try:
         from pykrx import stock as krx
@@ -128,19 +128,19 @@ def load_stocks(engine, since: date | None = None) -> int:
         print("[주식] asset 테이블에 종목이 없습니다.")
         return 0
 
-    today_str = date.today().strftime("%Y%m%d")
+    end_str = (as_of or date.today() - timedelta(days=1)).strftime("%Y%m%d")
     total = 0
 
     for ticker, name in tickers.items():
         last = _latest_price_date(engine, ticker)
         start_str = (since if since else last + timedelta(days=1)).strftime("%Y%m%d")
 
-        if start_str > today_str:
+        if start_str > end_str:
             print(f"[{ticker} {name}] 최신 상태")
             continue
 
         try:
-            df = krx.get_market_ohlcv_by_date(start_str, today_str, ticker)
+            df = krx.get_market_ohlcv_by_date(start_str, end_str, ticker)
             if df.empty:
                 print(f"[{ticker} {name}] 데이터 없음")
                 continue
@@ -175,21 +175,22 @@ def load_stocks(engine, since: date | None = None) -> int:
     return total
 
 
-def load_exchange_rates(engine) -> int:
+def load_exchange_rates(engine, since: date | None = None,
+                        as_of: date | None = None) -> int:
     """BOK ECOS API로 USD/KRW 환율 증분 적재 (price 테이블, ticker='USD')."""
     sys.path.insert(0, str(ROOT / "src"))
     from exchange_rate_fetcher import fetch_bok, make_exchange_rate_df
 
     last = _latest_exchange_date(engine)
-    start = last + timedelta(days=1)
-    today = date.today()
+    start = since if since else last + timedelta(days=1)
+    end = as_of or date.today() - timedelta(days=1)
 
-    if start > today:
+    if start > end:
         print("[환율] 최신 상태")
         return 0
 
     start_str = start.strftime("%Y%m%d")
-    end_str = today.strftime("%Y%m%d")
+    end_str = end.strftime("%Y%m%d")
 
     try:
         raw_rows = fetch_bok(start_str, end_str)
@@ -198,12 +199,12 @@ def load_exchange_rates(engine) -> int:
         return 0
 
     if not raw_rows:
-        print(f"[환율] 데이터 없음 ({start} ~ {today})")
+        print(f"[환율] 데이터 없음 ({start} ~ {end})")
         return 0
 
     df = make_exchange_rate_df(raw_rows)
     if df.empty:
-        print(f"[환율] 파싱된 데이터 없음 ({start} ~ {today})")
+        print(f"[환율] 파싱된 데이터 없음 ({start} ~ {end})")
         return 0
 
     rows = [
@@ -221,11 +222,12 @@ def load_exchange_rates(engine) -> int:
             rows,
         )
 
-    print(f"[환율] {len(rows)}건 적재 ({start} ~ {today})")
+    print(f"[환율] {len(rows)}건 적재 ({start} ~ {end})")
     return len(rows)
 
 
-def load_fundamentals(engine) -> int:
+def load_fundamentals(engine, as_of: date | None = None,
+                      force: bool = False) -> int:
     """pykrx로 개별 종목(10개) + KOSPI 지수 PER·PBR·시가총액 최신 스냅샷 적재."""
     try:
         from pykrx import stock as krx
@@ -240,21 +242,21 @@ def load_fundamentals(engine) -> int:
             )
         ]
 
-    today = date.today()
+    end = as_of or date.today() - timedelta(days=1)
     last = _latest_fundamental_date(engine)
-    if last >= today:
+    if last >= end and not force:
         print("[펀더멘털] 최신 상태")
         return 0
 
-    today_str = today.strftime("%Y%m%d")
-    yesterday_str = (today - timedelta(days=1)).strftime("%Y%m%d")
-    today_iso = today.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y%m%d")
+    start_str = (end - timedelta(days=1)).strftime("%Y%m%d")
+    end_iso = end.strftime("%Y-%m-%d")
 
     rows = []
 
     # KOSPI 지수 PER/PBR (pykrx 인덱스 펀더멘털)
     try:
-        df = krx.get_index_fundamental_by_date(yesterday_str, today_str, "1001")
+        df = krx.get_index_fundamental_by_date(start_str, end_str, "1001")
         if not df.empty:
             valid = df[df["PER"] > 0]
             frow = valid.iloc[-1] if not valid.empty else df.iloc[-1]
@@ -262,7 +264,7 @@ def load_fundamentals(engine) -> int:
             pbr_val = float(frow.get("PBR", 0) or 0)
             rows.append({
                 "ticker": "000000",
-                "date": today_iso,
+                "date": end_iso,
                 "per": per_val if per_val > 0 else None,
                 "pbr": pbr_val if pbr_val > 0 else None,
                 "market_cap": None,
@@ -276,8 +278,8 @@ def load_fundamentals(engine) -> int:
     # 개별 종목
     for ticker in stock_tickers:
         try:
-            fd = krx.get_market_fundamental_by_date(yesterday_str, today_str, ticker)
-            mc = krx.get_market_cap_by_date(yesterday_str, today_str, ticker)
+            fd = krx.get_market_fundamental_by_date(start_str, end_str, ticker)
+            mc = krx.get_market_cap_by_date(start_str, end_str, ticker)
             if fd.empty:
                 print(f"[펀더멘털 {ticker}] 데이터 없음")
                 continue
@@ -289,7 +291,7 @@ def load_fundamentals(engine) -> int:
             market_cap = int(mc.iloc[-1]["시가총액"]) if not mc.empty else None
             rows.append({
                 "ticker": ticker,
-                "date": today_iso,
+                "date": end_iso,
                 "per": per,
                 "pbr": pbr,
                 "market_cap": market_cap,
@@ -314,16 +316,19 @@ def load_fundamentals(engine) -> int:
     return len(rows)
 
 
-def load_all(engine, since: date | None = None) -> dict[str, int]:
+def load_all(engine, since: date | None = None,
+             as_of: date | None = None) -> dict[str, int]:
     """KOSPI, 주식, 환율 증분 적재 실행."""
     print("=== 일일 시장 데이터 적재 시작 ===\n")
     if since:
         print(f"  [강제 시작] --since {since} (기존 데이터 덮어쓰기 포함)\n")
+    end = as_of or date.today() - timedelta(days=1)
+    print(f"  [기준일] {end}\n")
     results = {
-        "kospi": load_kospi(engine, since=since),
-        "stocks": load_stocks(engine, since=since),
-        "exchange_rates": load_exchange_rates(engine),
-        "fundamentals": load_fundamentals(engine),
+        "kospi": load_kospi(engine, since=since, as_of=end),
+        "stocks": load_stocks(engine, since=since, as_of=end),
+        "exchange_rates": load_exchange_rates(engine, since=since, as_of=end),
+        "fundamentals": load_fundamentals(engine, as_of=end, force=since is not None),
     }
     total = sum(results.values())
     print(
@@ -341,6 +346,11 @@ if __name__ == "__main__":
         "--since", default=None,
         help="강제 시작일 YYYY-MM-DD (지정 시 해당 날짜부터 재수집, 기본: DB 최신+1일)",
     )
+    parser.add_argument(
+        "--as-of", default=None,
+        help="수집 종료 기준일 YYYY-MM-DD (기본: 완료된 전일)",
+    )
     args = parser.parse_args()
     since_date = date.fromisoformat(args.since) if args.since else None
-    load_all(get_engine(), since=since_date)
+    as_of_date = date.fromisoformat(args.as_of) if args.as_of else None
+    load_all(get_engine(), since=since_date, as_of=as_of_date)

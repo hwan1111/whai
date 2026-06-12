@@ -57,19 +57,38 @@ def load(ticker_code: str, dry_run: bool = False, since: str | None = None,
 
     conn = get_conn()
     try:
-        # since 지정 시: 해당 날짜 이후 regime 삭제 후 재삽입
+        # since 지정 시: 마지막 열린 국면과 요약을 함께 삭제 후 재삽입
         if since:
             if dry_run:
-                log.info(f"[DRY] DELETE regime WHERE ticker={ticker_code} AND start_date >= {since}")
+                log.info(f"[DRY] REPLACE regime WHERE ticker={ticker_code} AND start_date >= {since}")
             else:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "DELETE FROM regime WHERE ticker = %s AND start_date >= %s",
-                        (ticker_code, since),
-                    )
-                    deleted = cur.rowcount
-                conn.commit()
-                log.info(f"DELETE 완료: {deleted}건 (start_date >= {since})")
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT id FROM regime WHERE ticker = %s AND start_date >= %s",
+                            (ticker_code, since),
+                        )
+                        regime_ids = [r["id"] for r in cur.fetchall()]
+                        deleted_summaries = 0
+                        if regime_ids:
+                            placeholders = ",".join(["%s"] * len(regime_ids))
+                            cur.execute(
+                                f"DELETE FROM regime_summary WHERE regime_pk IN ({placeholders})",
+                                regime_ids,
+                            )
+                            deleted_summaries = cur.rowcount
+                        cur.execute(
+                            "DELETE FROM regime WHERE ticker = %s AND start_date >= %s",
+                            (ticker_code, since),
+                        )
+                        deleted_regimes = cur.rowcount
+                except Exception:
+                    conn.rollback()
+                    raise
+                log.info(
+                    f"교체 대상 삭제: regime {deleted_regimes}건 / summary {deleted_summaries}건 "
+                    f"(start_date >= {since})"
+                )
 
         with conn.cursor() as cur:
             # 현재 DB에 있는 (start_date, end_date) 집합 조회 — 중복 방지
@@ -144,12 +163,16 @@ def load(ticker_code: str, dry_run: bool = False, since: str | None = None,
                         rec.get("tokens_out", 0),
                     ),
                 )
-            conn.commit()
             log.info(f"  삽입: regime_id={max_regime_id}  {start}~{end}  {rec['direction']}")
             inserted += 1
 
+        if not dry_run:
+            conn.commit()
         log.info(f"완료 — 삽입: {inserted}건  스킵(중복): {skipped}건")
 
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

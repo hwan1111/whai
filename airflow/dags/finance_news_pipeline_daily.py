@@ -1,14 +1,14 @@
 """
 Daily news pipeline: collect → preprocess/S3 → LLM regime summary → DB upload.
 
-Schedule: 01:00 UTC (10:00 KST) 평일
-  Stage 1. collect_news       — 전일 뉴스 크롤링 (10개 종목)
+Schedule: 15:00 UTC (00:00 KST) every day.
+News collection starts immediately, while regime analysis waits for market data.
+  Stage 1. collect_all_news   — 전일 뉴스 크롤링 (주식 10종 + USD/KRW + KOSPI200)
   Stage 2. preprocess_upload  — 전처리 후 S3 preprocessed/{ticker}/ 업로드
-  Stage 3. regime_summary_*   — 종목별 LLM 분석 (DB 마지막 end_date+1 ~ 7일 전)
-  Stage 4. load_db_*          — regime JSON → MySQL (중복 스킵)
+  Stage 3. regime_summary_*   — 마지막 국면 시작일 ~ S3 최신 전처리 날짜 재분석
+  Stage 4. load_db_*          — 마지막 국면 삭제 후 재삽입
 
-LLM 분석은 "닫힌 국면"만 처리하기 위해 --end를 7일 전으로 설정.
-새로운 국면이 없으면 자동 스킵.
+최신 국면은 새 전처리 데이터가 들어올 때마다 다시 열어 분석한다.
 """
 
 import os
@@ -16,11 +16,19 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, date
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+import boto3
 from airflow import DAG
+from airflow.exceptions import AirflowSkipException
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
+
+try:
+    from airflow.providers.standard.sensors.external_task import ExternalTaskSensor
+except ImportError:
+    from airflow.sensors.external_task import ExternalTaskSensor
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -40,7 +48,7 @@ TICKER_META = {
 # USD는 S3 폴더명이 다름 — 별도 처리
 USD_META = {
     "ticker_code": "USD",
-    "ticker_name": "달러/원 환율",
+    "ticker_name": "USD/KRW 환율",
     "sector":      "환율",
     "s3_ticker":   "USD_KRW",
 }
@@ -54,8 +62,8 @@ KOSPI_META = {
     "fdr_ticker":  "KS11",
 }
 
-LLM_BUFFER_DAYS = 7   # 현재 열린 국면 분석 방지용 버퍼
 LLM_PROVIDER    = "openrouter"
+S3_BUCKET       = "fisa-news-archive"
 
 default_args = {
     "owner":            "data-eng",
@@ -71,7 +79,7 @@ dag = DAG(
     "finance_news_pipeline_daily",
     default_args=default_args,
     description="뉴스 수집 → S3 전처리 → LLM 국면 분석 → DB 업로드 (일별)",
-    schedule="0 15 * * *",  # 15:00 UTC = 00:00 KST 매일 (주말 뉴스도 수집)
+    schedule="0 15 * * *",  # 15:00 UTC = 00:00 KST 매일
     catchup=False,
     tags=["finance", "news", "llm", "pipeline"],
 )
@@ -79,30 +87,34 @@ dag = DAG(
 dag.doc_md = __doc__
 
 
+# 시장 데이터와 뉴스 수집은 자정에 동시에 시작한다.
+# 국면 분석만 같은 logical date의 시장 데이터 적재 완료를 기다린다.
+wait_for_market_data = ExternalTaskSensor(
+    task_id="wait_for_market_data",
+    external_dag_id="finance_market_data_daily",
+    external_task_id="sync_market_data",
+    allowed_states=["success"],
+    failed_states=["failed", "skipped"],
+    mode="reschedule",
+    poke_interval=60,
+    timeout=60 * 60 * 3,
+    dag=dag,
+)
+
+
 # ──────────────────────────────────────────────
 # Stage 1: 전일 뉴스 수집
 # ──────────────────────────────────────────────
 
-task_collect = BashOperator(
-    task_id="collect_news",
+task_collect_all = BashOperator(
+    task_id="collect_all_news",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/news_collector.py "
+        ".venv/bin/python script/news_data/collect_all_news.py "
         "--start {{ ds }} --end {{ ds }}"
     ),
     dag=dag,
 )
-
-task_collect_kospi200 = BashOperator(
-    task_id="collect_kospi200_news",
-    bash_command=(
-        f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/collect_kospi200_news.py "
-        "--start {{ ds }} --end {{ ds }}"
-    ),
-    dag=dag,
-)
-
 
 # ──────────────────────────────────────────────
 # Stage 1.5: raw S3 업로드 (수집 완료 후, 전처리 전)
@@ -148,15 +160,50 @@ task_preprocess_kospi200 = BashOperator(
 # Stage 3 + 4: 종목별 LLM 분석 → DB 업로드
 # ──────────────────────────────────────────────
 
+def _latest_s3_date(prefix: str) -> date | None:
+    """S3 prefix 아래 날짜 JSON 중 최신 날짜를 반환한다."""
+    latest = None
+    paginator = boto3.client("s3").get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            filename = obj["Key"].rsplit("/", 1)[-1]
+            if not filename.endswith(".json"):
+                continue
+            try:
+                current = date.fromisoformat(filename[:-5])
+            except ValueError:
+                continue
+            if latest is None or current > latest:
+                latest = current
+    return latest
+
+
+def _latest_news_date(s3_ticker: str) -> date | None:
+    """뉴스 데이터가 존재하면 완료된 전일을 분석 종료일로 사용한다."""
+    candidates = [
+        _latest_s3_date(f"raw/{s3_ticker}/"),
+        _latest_s3_date(f"preprocessed/{s3_ticker}/"),
+    ]
+    valid = [current for current in candidates if current is not None]
+    if not valid:
+        return None
+    return datetime.now(ZoneInfo("Asia/Seoul")).date() - timedelta(days=1)
+
+
 def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
                          s3_ticker: str | None = None, fdr_ticker: str | None = None,
                          **context) -> None:
-    """마지막 regime의 start_date부터 7일 전까지 재분석 (마지막 국면 재오픈)."""
+    """마지막 국면 시작일부터 최신 전처리 날짜까지 재분석한다."""
     sys.path.insert(0, str(ROOT))
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env.local", override=True)
 
     import pymysql
+
+    news_ticker = s3_ticker or ticker_code
+    end_date = _latest_news_date(news_ticker)
+    if end_date is None:
+        raise AirflowSkipException(f"[{ticker_code}] 전처리 뉴스 없음 ({news_ticker})")
 
     ca_path = str(ROOT / "config" / "certs" / "ca.pem")
     conn = pymysql.connect(
@@ -176,7 +223,6 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
     finally:
         conn.close()
 
-    end_date = date.today() - timedelta(days=LLM_BUFFER_DAYS)
     end_str  = end_date.isoformat()
 
     if row is None:
@@ -185,14 +231,16 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
         last_start = row["start_date"]
         last_end   = row["end_date"]
         if last_end >= end_date:
-            print(f"[{ticker_code}] 이미 최신 (last_end={last_end}, buffer_end={end_str}) — 스킵")
-            return
+            raise AirflowSkipException(
+                f"[{ticker_code}] 이미 최신 (last_end={last_end}, preprocessed_end={end_str})"
+            )
         # 마지막 국면을 재오픈해서 start_date부터 재분석
         start_str = last_start.isoformat()
 
     if start_str > end_str:
-        print(f"[{ticker_code}] 분석 기간 없음 (start={start_str}, buffer_end={end_str}) — 스킵")
-        return
+        raise AirflowSkipException(
+            f"[{ticker_code}] 분석 기간 없음 (start={start_str}, preprocessed_end={end_str})"
+        )
 
     print(f"[{ticker_code}] LLM 분석: {start_str} ~ {end_str}")
 
@@ -220,12 +268,38 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
 def _load_db_task(ticker_code: str, **context) -> None:
     """regime JSON → MySQL 업로드 (마지막 국면 재삽입)."""
     sys.path.insert(0, str(ROOT))
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env.local", override=True)
+
+    import pymysql
+
+    ca_path = str(ROOT / "config" / "certs" / "ca.pem")
+    conn = pymysql.connect(
+        host="mysql-12676458-whai.b.aivencloud.com", port=16935,
+        db="whai_service",
+        user=os.environ["BACKEND_DB_USER"], password=os.environ["BACKEND_DB_PASSWORD"],
+        charset="utf8mb4", ssl={"ca": ca_path},
+        cursorclass=pymysql.cursors.DictCursor,
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT start_date FROM regime WHERE ticker = %s ORDER BY end_date DESC LIMIT 1",
+                (ticker_code,),
+            )
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
     cmd = [
         str(ROOT / ".venv" / "bin" / "python"),
         str(ROOT / "script" / "load_regime_to_db.py"),
         "--ticker", ticker_code,
-        "--auto-since",  # JSON 최초 start_date 이후 DB 삭제 후 재삽입
     ]
+    if row:
+        cmd += ["--since", row["start_date"].isoformat()]
+    else:
+        cmd += ["--auto-since"]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
     print(result.stdout)
     if result.returncode != 0:
@@ -253,7 +327,7 @@ for ticker_code, (ticker_name, sector) in TICKER_META.items():
         )
         t_summary >> t_load
 
-    task_preprocess >> tg
+    [task_preprocess, wait_for_market_data] >> tg
 
 # USD 태스크
 with TaskGroup(group_id="ticker_USD", dag=dag) as tg_usd:
@@ -271,7 +345,7 @@ with TaskGroup(group_id="ticker_USD", dag=dag) as tg_usd:
     )
     t_usd_summary >> t_usd_load
 
-task_preprocess >> tg_usd
+[task_preprocess, wait_for_market_data] >> tg_usd
 
 # KOSPI(000000) 태스크
 with TaskGroup(group_id="ticker_000000", dag=dag) as tg_kospi:
@@ -289,10 +363,10 @@ with TaskGroup(group_id="ticker_000000", dag=dag) as tg_kospi:
     )
     t_kospi_summary >> t_kospi_load
 
-task_preprocess_kospi200 >> tg_kospi
+[task_preprocess_kospi200, wait_for_market_data] >> tg_kospi
 
 # Stage 1 → Stage 1.5 → Stage 2
-# 두 수집 태스크가 모두 끝난 뒤 raw 한 번 업로드, 그 다음 각 전처리 실행
-[task_collect, task_collect_kospi200] >> task_upload_raw
+# 통합 수집이 끝난 뒤 raw 한 번 업로드, 그 다음 각 전처리 실행
+task_collect_all >> task_upload_raw
 task_upload_raw >> task_preprocess
 task_upload_raw >> task_preprocess_kospi200

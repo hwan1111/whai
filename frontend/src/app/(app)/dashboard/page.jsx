@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, fetchAssetData, buildPeriodData } from '@/lib/data';
 import { STOCK_CONFIG } from '@/components/StockDetailModal';
@@ -24,7 +25,7 @@ const STOCK_NAMES = {
 };
 
 const FX_INFO = {
-  'USD': { flag: '/assets/flags/us.png', desc: '미국 달러',
+  'USD': { flag: '/assets/flags/us.png', desc: 'USD/KRW 환율',
     factors: [{ label: '미 연준 통화정책', pct: 55, color: '#2563eb', val: '+55%', desc: '연준 금리 결정이 달러 강세·약세 방향을 결정' },
               { label: '한미 금리차', pct: 25, color: '#7c3aed', val: '+25%', desc: '양국 금리 격차 확대로 달러 강세 지속' },
               { label: '무역수지', pct: 10, color: '#dc2626', val: '-10%', desc: '한국 무역수지 흑자가 원화 강세 요인으로 작용' }] },
@@ -115,7 +116,7 @@ function NewsDrawer({ open, onClose, defaultTicker }) {
             <option value="180">최근 6개월</option>
             <option value="365">전체</option>
           </select>
-          <button className="btn btn-primary" onClick={fetchNews}>검색</button>
+          <button className="btn btn-primary" onClick={() => fetchNews()}>검색</button>
         </div>
         <div className="news-drawer-body">
           {loading ? (
@@ -139,7 +140,7 @@ function NewsDrawer({ open, onClose, defaultTicker }) {
                 <span className={`regime-direction ${isUp ? 'up' : isDown ? 'down' : 'neutral'}`}>
                   {n.direction || '혼조'}
                 </span>
-                <span className="news-date">{fmtNewsDate(n.start_date)} ~ {fmtNewsDate(n.end_date)}</span>
+                <span className="news-date">{fmtNewsPeriod(n.start_date, n.end_date)}</span>
               </div>
               <div
                 style={{ ...boxBg, marginTop: 6, padding: '10px 12px', borderRadius: 9, cursor: n.vol_insight ? 'pointer' : 'default' }}
@@ -411,7 +412,7 @@ const CORR_PAIR_DESCRIPTIONS = {
     neg: '메모리 시장 점유율 경쟁 심화로 이익률 방향이 엇갈려 역행',
   },
   'auto:auto': {
-    pos: '현대차그룹 완성차 계열사로 북미 수출 호조와 원/달러 환율 영향을 함께 반영',
+    pos: '현대차그룹 완성차 계열사로 북미 수출 호조와 USD/KRW 환율 영향을 함께 반영',
     neg: '차종 구성 및 생산 일정 차이로 분기 실적이 엇갈리는 구간 발생',
   },
   'defense:defense': {
@@ -525,6 +526,12 @@ function fmtNewsDate(d) {
   if (!d) return '';
   const [y, m, day] = d.split('-');
   return `${y}/${parseInt(m)}/${parseInt(day)}`;
+}
+
+function fmtNewsPeriod(start, end) {
+  if (!start) return '';
+  if (!end || start === end) return fmtNewsDate(start);
+  return `${fmtNewsDate(start)} ~ ${fmtNewsDate(end)}`;
 }
 
 function fmtChg(pct) {
@@ -685,11 +692,11 @@ export default function DashboardPage() {
   useEffect(() => {
     activeAssets.forEach(id => {
       if (id in allNewsMap) return;
-      setAllNewsMap(prev => ({ ...prev, [id]: [] }));
+      setAllNewsMap(prev => ({ ...prev, [id]: null }));
       fetchWithAuth(`/api/v1/news?ticker=${id}&days=365`)
         .then(r => r.ok ? r.json() : [])
         .then(news => setAllNewsMap(prev => ({ ...prev, [id]: news ?? [] })))
-        .catch(() => {});
+        .catch(() => setAllNewsMap(prev => ({ ...prev, [id]: [] })));
     });
   }, [activeAssets]);
 
@@ -733,7 +740,7 @@ export default function DashboardPage() {
 
   function shortLabel(id) {
     if (id === '000000') return 'KOSPI';
-    if (id === 'USD') return 'USD';
+    if (id === 'USD') return 'USD/KRW';
     return ASSETS[id]?.label || id;
   }
 
@@ -1005,54 +1012,45 @@ export default function DashboardPage() {
           </div>
         );
       })()}
-      {anomalyClick && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 498 }} onClick={() => setAnomalyClick(null)} />
-          {(() => {
-            const { anomaly, clientX, clientY } = anomalyClick;
-            const popW = 280;
-            const popH = Math.min(80 + anomaly.movers.length * 72, window.innerHeight - 32);
-            const left = Math.min(clientX + 12, window.innerWidth - popW - 8);
-            const top = Math.min(Math.max(8, clientY - 16), window.innerHeight - popH - 8);
-            return (
-              <div style={{
-                position: 'fixed', left, top,
-                background: 'white',
-                border: '1.5px solid #f59e0b',
-                borderRadius: 10,
-                padding: '10px 14px',
-                boxShadow: '0 6px 24px rgba(15,23,42,0.18)',
-                zIndex: 499,
-                width: popW,
-                maxHeight: popH,
-                overflowY: 'auto',
-              }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', marginBottom: 9, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 5px', fontSize: 9, color: '#b45309' }}>!</span>
-                  {fmtNewsDate(anomaly.isoDate)} 급변 포착
-                  <button onClick={() => setAnomalyClick(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#94a3b8', lineHeight: 1, padding: 0 }}>✕</button>
+      {anomalyClick && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={() => setAnomalyClick(null)}
+        >
+          <div
+            style={{ width: 'min(460px, 92vw)', maxHeight: '82vh', overflowY: 'auto', background: 'white', border: '1.5px solid #f59e0b', borderRadius: 14, padding: '16px 18px', boxShadow: '0 20px 60px rgba(15,23,42,0.28)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#92400e', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 5, padding: '1px 6px', fontSize: 10, color: '#b45309' }}>!</span>
+              {fmtNewsDate(anomalyClick.anomaly.isoDate)} 급변 포착
+              <button onClick={() => setAnomalyClick(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 17, color: '#94a3b8', lineHeight: 1, padding: 2 }}>✕</button>
+            </div>
+            {anomalyClick.anomaly.movers.map((m, idx) => {
+              const newsList = allNewsMap[m.id];
+              const news = findNewsForDate(newsList, anomalyClick.anomaly.isoDate);
+              return (
+                <div key={m.id} style={{ padding: '10px 0', borderTop: idx > 0 ? '1px solid #f1f5f9' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ASSETS[m.id]?.color ?? '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
+                      {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
+                    </span>
+                  </div>
+                  {newsList === null || newsList === undefined ? (
+                    <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6, paddingLeft: 15 }}>뉴스를 불러오는 중입니다.</div>
+                  ) : news?.cause ? (
+                    <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.65, paddingLeft: 15 }}>{news.cause}</div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6, paddingLeft: 15 }}>해당 날짜를 포함하는 국면 뉴스가 없습니다.</div>
+                  )}
                 </div>
-                {anomaly.movers.map(m => {
-                  const news = findNewsForDate(allNewsMap[m.id], anomaly.isoDate);
-                  return (
-                    <div key={m.id} style={{ marginBottom: 9, paddingBottom: 9, borderBottom: '1px solid #f1f5f9' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: news?.cause ? 4 : 0 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: ASSETS[m.id]?.color ?? '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
-                        <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
-                          {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
-                        </span>
-                      </div>
-                      {news?.cause && (
-                        <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.6, paddingLeft: 13 }}>{news.cause}</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-        </>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
       )}
       {showMatrix && showComplex && (
         <div
@@ -1205,7 +1203,7 @@ export default function DashboardPage() {
                     anomalies={anomalies}
                     onAnomalyHover={(a, cx, cy) => setAnomalyPopup({ anomaly: a, clientX: cx, clientY: cy })}
                     onAnomalyLeave={() => setAnomalyPopup(null)}
-                    onAnomalyClick={(a, cx, cy) => { setAnomalyClick({ anomaly: a, clientX: cx, clientY: cy }); setAnomalyPopup(null); }} />
+                    onAnomalyClick={a => { setAnomalyClick({ anomaly: a }); setAnomalyPopup(null); }} />
                 </div>
                 {legend.length > 0 && (
                   <div className="chart-legend">
@@ -1663,7 +1661,7 @@ export default function DashboardPage() {
                     const abs = Math.abs(v);
                     const desc = abs >= 0.3
                       ? getPairDesc(a, b, isPos, abs)
-                      : `|r|가 0.3 미만으로 통계적으로 유의미한 상관관계가 없습니다.`;
+                      : `|r|가 0.3 미만 → 통계적으로 유의미한 상관관계 없음`;
                     const pairKey = `${a}|${b}`;
                     const isExpanded = showFull || expandedPairKey === pairKey;
                     return (
@@ -1814,7 +1812,7 @@ export default function DashboardPage() {
                     <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
                       <div className="news-meta">
                         <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                        <span className="news-date" style={{ marginLeft: 'auto' }}>{fmtNewsDate(n.start_date)} ~ {fmtNewsDate(n.end_date)}</span>
+                        <span className="news-date" style={{ marginLeft: 'auto' }}>{fmtNewsPeriod(n.start_date, n.end_date)}</span>
                       </div>
                       <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
                       {n.vol_insight && (
@@ -1829,7 +1827,7 @@ export default function DashboardPage() {
                   <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => !selectedFxId && setFavNewsExpanded(i)}>
                     <div className="news-meta">
                       <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                      <span className="news-date" style={{ marginLeft: 'auto' }}>{fmtNewsDate(n.start_date)} ~ {fmtNewsDate(n.end_date)}</span>
+                      <span className="news-date" style={{ marginLeft: 'auto' }}>{fmtNewsPeriod(n.start_date, n.end_date)}</span>
                     </div>
                     <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
                   </div>

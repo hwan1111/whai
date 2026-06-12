@@ -51,8 +51,8 @@ export default function AppLayout({ children }) {
         const allSame = dates.every(d => d === dates[0]);
         setUpdateTime(
           allSame
-            ? `데이터 기준: ${dates[0]} (전일 종가)`
-            : `데이터 기준 · 주가 ${dates[0]} · 뉴스 ${dates[1]} · 펀더멘털 ${dates[2]}`
+            ? `최신 데이터 기준: ${dates[0]}`
+            : `최신 데이터 기준 · 주가 ${dates[0]} · 뉴스 ${dates[1]} · 펀더멘털 ${dates[2]}`
         );
       } catch { /* silent */ }
     }

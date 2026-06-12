@@ -12,7 +12,7 @@ export const ASSETS = {
   '055550':  { label: '신한지주',   color: '#5BADD1' },
   '051910':  { label: 'LG화학',     color: '#A50034' },
   '096770':  { label: 'SK이노베',   color: '#E86500' },
-  'USD': { label: 'USD',   color: '#3C3B6E' },
+  'USD': { label: 'USD/KRW', color: '#3C3B6E' },
 };
 
 const _cache = {};

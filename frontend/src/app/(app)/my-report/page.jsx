@@ -14,7 +14,7 @@ const ASSET_INFO = {
   '055550': { name: '신한지주',      color: ASSETS['055550'].color,  sector: '금융',   unit: '주' },
   '051910': { name: 'LG화학',        color: ASSETS['051910'].color,  sector: '화학',   unit: '주' },
   '096770': { name: 'SK이노베이션', color: ASSETS['096770'].color,  sector: '화학',   unit: '주' },
-  'USD': { name: 'USD 달러',    color: ASSETS['USD'].color, sector: '외화', unit: '달러' },
+  'USD': { name: 'USD/KRW', color: ASSETS['USD'].color, sector: '환율', unit: '원' },
 };
 
 const STOCK_IDS = ['005930','000660','005380','000270','079550','012450','105560','055550','051910','096770'];

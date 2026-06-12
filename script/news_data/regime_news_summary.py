@@ -25,12 +25,14 @@ import boto3
 import FinanceDataReader as fdr
 import numpy as np
 import pandas as pd
+import pymysql
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from scipy import stats
 
 load_dotenv(".env")
 load_dotenv(".env.local", override=True)
+ROOT = Path(__file__).resolve().parents[2]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -111,6 +113,41 @@ _USER_TMPL = """\
 def _fetch_price_volume(code: str, start: str, end: str) -> tuple[pd.Series, pd.Series]:
     # pct_change 계산에 이전 종가가 필요하므로 14일 앞에서부터 로드
     start_adj = (pd.Timestamp(start) - pd.Timedelta(days=14)).strftime("%Y-%m-%d")
+    if code == "USD/KRW":
+        # Yahoo 기반 USD/KRW는 날짜와 값이 서비스의 BOK 환율과 달라 DB 기준으로 맞춘다.
+        conn = pymysql.connect(
+            host="mysql-12676458-whai.b.aivencloud.com",
+            port=16935,
+            db="whai_service",
+            user=os.environ["BACKEND_DB_USER"],
+            password=os.environ["BACKEND_DB_PASSWORD"],
+            charset="utf8mb4",
+            ssl={"ca": str(ROOT / "config" / "certs" / "ca.pem")},
+            cursorclass=pymysql.cursors.DictCursor,
+        )
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT date, close, volume
+                    FROM price
+                    WHERE ticker = 'USD' AND date BETWEEN %s AND %s
+                    ORDER BY date
+                    """,
+                    (start_adj, end),
+                )
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+
+        index = pd.to_datetime([row["date"] for row in rows])
+        close = pd.Series([float(row["close"]) for row in rows], index=index)
+        volume = pd.Series([float(row["volume"] or 0) for row in rows], index=index)
+        returns = close.pct_change().dropna()
+        returns = returns[returns.index >= pd.Timestamp(start)]
+        volume = volume[volume.index >= pd.Timestamp(start)]
+        return returns, volume
+
     df = fdr.DataReader(code, start_adj, end)
     returns = df["Close"].pct_change().dropna()
     returns = returns[returns.index >= pd.Timestamp(start)]
@@ -412,15 +449,19 @@ def run(provider: str = "groq", model: str | None = None,
 
     # ── 국면 순회 ─────────────────────────────────────────────────────
     for i, reg in enumerate(regimes, 1):
-        regime_key = f"{reg['start'].strftime('%Y-%m-%d')}_{reg['end'].strftime('%Y-%m-%d')}"
+        effective_end = reg["end"]
+        if i == len(regimes):
+            effective_end = max(effective_end, pd.Timestamp(end))
+
+        regime_key = f"{reg['start'].strftime('%Y-%m-%d')}_{effective_end.strftime('%Y-%m-%d')}"
         start_str  = reg["start"].strftime("%Y-%m-%d")
-        end_str    = reg["end"].strftime("%Y-%m-%d")
+        end_str    = effective_end.strftime("%Y-%m-%d")
         cum_ret    = _cum_return(returns, reg["dates"])
         vol_trend  = _vol_trend(volume, reg["dates"])
         dir_str    = DIR_STR.get(reg["direction"], reg["direction"])
 
         news_articles = _fetch_regime_news(s3_client, s3_ticker,
-                                           reg["start"], reg["end"],
+                                           reg["start"], effective_end,
                                            NEWS_PRE, NEWS_POST)
 
         log.info(

@@ -25,6 +25,8 @@ DATA_DIR = ROOT / "data" / "news"
 # 폴더명 → S3 ticker 매핑 (폴더명의 마지막 _ 이후가 ticker)
 # 예: 삼성전자_005930 → 005930 / 코스피200_KOSPI200 → KOSPI200
 def folder_to_ticker(folder_name: str) -> str:
+    if folder_name.endswith("_USD_KRW"):
+        return "USD_KRW"
     return folder_name.rsplit("_", 1)[-1]
 
 

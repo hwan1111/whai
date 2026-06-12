@@ -25,7 +25,14 @@ TARGET_FOLDERS = [
     "LG화학_051910",
     "LIG디펜스앤에어로스페이스_079550",
     "SK이노베이션_096770",
-    "SK하이닉스_000660"
+    "SK하이닉스_000660",
+    "원달러환율_USD_KRW",
+]
+
+S3_TICKERS = [
+    "000270", "005930", "055550", "012450", "005380",
+    "105560", "051910", "079550", "096770", "000660",
+    "USD_KRW",
 ]
 
 # 4. Option B 전처리 함수 정의
@@ -72,7 +79,7 @@ def preprocess_and_upload_file(filepath):
     folder_name = os.path.basename(os.path.dirname(filepath))
     
     # 티커 추출 (예: 005930)
-    ticker = folder_name.split('_')[-1]
+    ticker = "USD_KRW" if folder_name.endswith("_USD_KRW") else folder_name.rsplit("_", 1)[-1]
     
     # 연도와 월 추출
     year = filename[:4]
@@ -106,6 +113,53 @@ def preprocess_and_upload_file(filepath):
     )
     return True
 
+
+def preprocess_and_upload_s3_key(raw_key):
+    """로컬 파일이 없어도 S3 raw를 기준으로 전처리 누락분을 복구한다."""
+    response = s3.get_object(Bucket=BUCKET_NAME, Key=raw_key)
+    data = json.loads(response["Body"].read().decode("utf-8"))
+    data["fulltext"] = preprocess_option_b(data.get("fulltext", ""))
+    data["fulltext_length"] = len(data["fulltext"])
+    data.pop("source", None)
+
+    preprocessed_key = raw_key.replace("raw/", "preprocessed/", 1)
+    body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=preprocessed_key,
+        Body=body,
+        ContentType="application/json; charset=utf-8",
+    )
+    return preprocessed_key
+
+
+def backfill_s3_raw(since: str | None = None) -> int:
+    raw_keys = []
+    paginator = s3.get_paginator("list_objects_v2")
+    for ticker in S3_TICKERS:
+        prefix = f"raw/{ticker}/"
+        for page in paginator.paginate(Bucket=BUCKET_NAME, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                filename = key.rsplit("/", 1)[-1]
+                if not filename.endswith(".json"):
+                    continue
+                if since and filename[:10] < since:
+                    continue
+                raw_keys.append(key)
+
+    if not raw_keys:
+        return 0
+
+    success_count = 0
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(preprocess_and_upload_s3_key, key) for key in raw_keys]
+        for future in as_completed(futures):
+            future.result()
+            success_count += 1
+    return success_count
+
+
 def main(since: str | None = None) -> None:
     json_files = []
     for folder in TARGET_FOLDERS:
@@ -135,6 +189,8 @@ def main(since: str | None = None) -> None:
                 print(f"오류 발생: {e}")
 
     print(f"\n[완료] S3 전처리 업로드 완료! (성공: {success_count}/{total_files}개)")
+    s3_count = backfill_s3_raw(since)
+    print(f"[완료] S3 raw 기반 전처리 복구: {s3_count}개")
 
 if __name__ == "__main__":
     import argparse

@@ -1,7 +1,7 @@
 """BOK ECOS API를 통한 KRW 환율 데이터 조회.
 
 통계표: 731Y001 (주요국통화의대원화환율)
-저장 형식: KRW/USD
+표시 형식: USD/KRW
 """
 
 import os
