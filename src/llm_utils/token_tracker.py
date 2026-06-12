@@ -126,22 +126,17 @@ class TokenTracker:
 
     def log_to_mlflow(self, run_id: Optional[str] = None) -> None:
         """
-        누적된 토큰 정보를 MLflow에 로깅 (MLflow 3.12 API)
+        누적된 토큰 정보를 MLflow에 로깅 (MLflow 3.12 표준 attributes)
 
         Args:
             run_id: MLflow Run ID (선택사항)
         """
         try:
-            # MLflow 3.12 공식 API: mlflow.log_token_usage()
-            mlflow.log_token_usage(
-                model="aggregated",
-                input_tokens=self.total_usage.input_tokens,
-                output_tokens=self.total_usage.output_tokens,
-            )
-
-            # 비용 메트릭 로깅
+            # 비용 및 토큰 메트릭 로깅
             mlflow.log_metrics({
                 "total_tokens": self.total_usage.total_tokens,
+                "total_input_tokens": self.total_usage.input_tokens,
+                "total_output_tokens": self.total_usage.output_tokens,
                 "total_cost_usd": self.total_cost.total_cost,
                 "input_cost_usd": self.total_cost.input_cost,
                 "output_cost_usd": self.total_cost.output_cost,
@@ -159,7 +154,7 @@ class TokenTracker:
 
     def log_span_usage(self, span_name: str, usage: TokenUsage, cost: CostInfo) -> None:
         """
-        개별 span에 토큰 정보 로깅 (MLflow 3.12 API)
+        개별 span에 토큰 정보 로깅 (MLflow 3.12 표준 attributes)
 
         Args:
             span_name: Span 이름
@@ -168,18 +163,12 @@ class TokenTracker:
         """
         try:
             with mlflow.start_span(name=span_name) as span:
-                # MLflow 3.12 공식 API
-                mlflow.log_token_usage(
-                    model=span_name,
-                    input_tokens=usage.input_tokens,
-                    output_tokens=usage.output_tokens,
-                )
-
-                # 비용 정보는 attributes로 기록
+                # MLflow 3.12 표준 토큰 추적 attributes
                 span.set_attributes({
-                    "cost_usd": cost.total_cost,
-                    "input_cost_usd": cost.input_cost,
-                    "output_cost_usd": cost.output_cost,
+                    "mlflow.genai.prompt_tokens": usage.input_tokens,
+                    "mlflow.genai.completion_tokens": usage.output_tokens,
+                    "mlflow.genai.input_cost": cost.input_cost,
+                    "mlflow.genai.output_cost": cost.output_cost,
                 })
         except Exception as e:
             logger.warning(f"⚠️ Failed to log span usage: {str(e)}")
