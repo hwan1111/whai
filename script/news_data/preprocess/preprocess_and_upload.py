@@ -111,7 +111,7 @@ def preprocess_and_upload_s3_key(raw_key):
     """로컬 파일이 없어도 S3 raw를 기준으로 전처리 누락분을 복구한다."""
     response = s3.get_object(Bucket=BUCKET_NAME, Key=raw_key)
     data = json.loads(response["Body"].read().decode("utf-8"))
-    data["fulltext"] = preprocess_option_b(data.get("fulltext", ""))
+    data["fulltext"] = clean_financial_news(data.get("fulltext", ""))
     data["fulltext_length"] = len(data["fulltext"])
     data.pop("source", None)
 
