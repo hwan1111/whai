@@ -107,6 +107,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Pull latest code from main
+        run: |
+          cd /opt/project/whai
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
