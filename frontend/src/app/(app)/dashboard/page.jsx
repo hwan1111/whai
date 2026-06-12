@@ -924,22 +924,25 @@ export default function DashboardPage() {
                 const n = complexIds.length;
                 const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
                 const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-                // 셀 크기: 뷰포트 기준 계산 + 최대 70px 상한 (종목 수 적어도 너무 커지지 않게)
-                const cellH = Math.max(22, Math.min(70, Math.floor((vh * 0.90 - 178 - n * 3) / n)));
-                const cellW = Math.max(44, Math.min(96, Math.floor((vw * 0.88 - 110 - n * 3) / n)));
-                const minDim = Math.min(cellW, cellH);
-                // 셀이 클수록 글자도 크게
-                const fs = minDim >= 60 ? 17 : minDim >= 50 ? 15 : minDim >= 40 ? 13 : 11;
-                const lbl = id => {
-                  const l = heatmapLabel(id);
-                  return cellW < 54 ? l.slice(0, 3) : l;
-                };
+                // 실제 모달 가용 영역 기준으로 셀 크기 계산
+                const modalW = Math.min(vw * 0.92, 1500);
+                const modalH = vh * 0.82;
+                const availW = modalW - 48 - 60 - n * 3; // 좌우 패딩 + 레이블 열 + 간격
+                const availH = modalH - 210 - n * 3;     // UI 크롬(헤더+푸터+패딩+테이블헤더) + 간격
+                const maxCellW = n >= 10 ? 86 : n >= 8 ? 96 : n >= 6 ? 110 : 150;
+                const cellW = Math.min(maxCellW, Math.max(44, Math.floor(availW / n)));
+                const cellH = Math.min(62, Math.max(28, Math.floor(availH / n)));
+                const fs = cellH >= 56 ? 17 : cellH >= 46 ? 15 : cellH >= 36 ? 13 : cellH >= 28 ? 11 : 10;
+                const MAX_LBL = n >= 8 ? 4 : cellW < 56 ? 3 : cellW < 76 ? 5 : cellW < 104 ? 7 : 10;
+                const lbl = id => heatmapLabel(id).slice(0, MAX_LBL);
+                const ROW_LABEL_W = Math.max(52, Math.min(120, Math.round(cellW * 0.9)));
+                const totalW = ROW_LABEL_W + (cellW + 3) * n;
                 return (
-                  <table style={{ borderCollapse: 'separate', borderSpacing: 3 }}>
+                  <table style={{ borderCollapse: 'separate', borderSpacing: 3, tableLayout: 'fixed', width: totalW, margin: '0 auto' }}>
                     <thead><tr>
-                      <th style={{ minWidth: 60 }} />
+                      <th style={{ width: ROW_LABEL_W }} />
                       {complexIds.map(id => (
-                        <th key={id} style={{ width: cellW, fontSize: fs - 1, fontWeight: 600, color: '#475569', textAlign: 'center', padding: '0 2px 8px', whiteSpace: 'nowrap' }}>
+                        <th key={id} style={{ width: cellW, maxWidth: cellW, fontSize: fs - 1, fontWeight: 600, color: '#475569', textAlign: 'center', padding: '0 4px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {lbl(id)}
                         </th>
                       ))}
@@ -947,14 +950,12 @@ export default function DashboardPage() {
                     <tbody>
                       {complexIds.map(row => (
                         <tr key={row}>
-                          <th style={{ fontSize: fs - 1, fontWeight: 600, color: '#475569', textAlign: 'right', paddingRight: 8, whiteSpace: 'nowrap' }}>
+                          <th style={{ width: ROW_LABEL_W, maxWidth: ROW_LABEL_W, fontSize: fs - 1, fontWeight: 600, color: '#475569', textAlign: 'right', paddingRight: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {lbl(row)}
                           </th>
                           {complexIds.map(col => {
                             if (row === col) return (
-                              <td key={col} style={{ width: cellW, height: cellH, background: '#f1f5f9', borderRadius: 6, textAlign: 'center', verticalAlign: 'middle' }}>
-                                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#cbd5e1', margin: '0 auto' }} />
-                              </td>
+                              <td key={col} style={{ width: cellW, height: cellH, background: '#f1f5f9', borderRadius: 6 }} />
                             );
                             const v = calcPearson(complexData[row], complexData[col]);
                             const { background, color } = corrStyle(v);
@@ -1400,7 +1401,6 @@ export default function DashboardPage() {
               const n = complexIds.length;
               const availW = Math.max(80, matrixColWidth - 28);
               const CW = Math.max(24, Math.floor(availW / (n + 1.5)));
-              // isTiny: 셀을 정사각형으로 만들어 넓어 보이게 / 그 외: 행 높이 ~90px 고정
               const cellH = isTiny ? CW : Math.max(16, Math.min(30, Math.floor(90 / n)));
               const mcFs = CW >= 50 ? 12 : CW >= 38 ? 11 : 10;
               const cellStyle = { height: cellH, lineHeight: `${cellH}px`, width: CW, minWidth: CW, maxWidth: CW };
