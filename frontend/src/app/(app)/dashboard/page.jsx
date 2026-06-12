@@ -1677,6 +1677,11 @@ export default function DashboardPage() {
               // 행 레이블 열은 데이터 셀보다 좁게 → 색상 셀이 더 왼쪽에서 시작
               const labelW = Math.max(20, Math.round(CW * 0.9));
               const labelStyle = { height: cellH, lineHeight: `${cellH}px`, width: labelW, minWidth: labelW, maxWidth: labelW };
+              const lbl = id => {
+                const l = shortLabel(id);
+                if (isCompact) return l.slice(0, 5);
+                return CW < 30 ? l.slice(0, 1) : CW < 38 ? l.slice(0, 2) : CW < 48 ? l.slice(0, 3) : CW < 60 ? l.slice(0, 5) : l;
+              };
               return (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
@@ -1688,7 +1693,7 @@ export default function DashboardPage() {
                       <tbody>
                         {complexIds.map(row => (
                           <tr key={row}>
-                            <th className="mh" title={shortLabel(row)} style={{ ...labelStyle, textAlign: 'right', paddingRight: 5 }}>{shortLabel(row)}</th>
+                            <th className="mh" title={shortLabel(row)} style={{ ...labelStyle, textAlign: 'right', paddingRight: 5, textOverflow: 'clip' }}>{lbl(row)}</th>
                             {complexIds.map(col => {
                               if (row === col) return <td key={col} className="mc" style={{ ...cellStyle, fontSize: mcFs, background: '#f1f5f9', border: '1px solid #e2e8f0' }} />;
                               const v = calcPearson(complexData[row], complexData[col]);
