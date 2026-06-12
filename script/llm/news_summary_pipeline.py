@@ -242,7 +242,6 @@ class NewsSummaryPipeline:
                     f"비용: ${cost_info.total_cost:.6f}"
                 )
                 return summary.strip(), input_token, output_token
-
         except Exception as e:
             logger.error(f"❌ 요약 생성 실패: {str(e)}", exc_info=True)
             raise
