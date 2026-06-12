@@ -319,96 +319,60 @@ function fmtChg(pct) {
 
 
 function FactorDonut({ factors, title }) {
-  const [activeIdx, setActiveIdx] = useState(null);
   if (!factors?.length) return null;
 
-  const R = 50, SW = 20, CX = 75, CY = 75;
+  const R = 28, SW = 10, CX = 36, CY = 36;
   const circumference = 2 * Math.PI * R;
-  const totalPct = factors.reduce((s, f) => s + Math.abs(f.pct), 0);
-  const remainder = Math.max(0, 100 - totalPct);
-  const items = remainder > 3
-    ? [...factors, { label: '기타', pct: remainder, color: '#e2e8f0', val: '' }]
-    : factors;
-  const total = items.reduce((s, f) => s + Math.abs(f.pct), 0);
-
-  let accumulated = 0;
-  const segments = items.map((f, i) => {
-    const arcLen = circumference * Math.abs(f.pct) / total;
-    const offset = circumference - circumference * accumulated / total;
-    accumulated += Math.abs(f.pct);
-    return { ...f, arcLen, dashoffset: offset, idx: i };
-  });
-
-  const active = activeIdx !== null ? factors[activeIdx] : null;
 
   return (
     <div className="ai-main-card" style={{ flex: '2 1 0', minHeight: 0, overflowY: 'auto' }}>
-      <div className="ai-main-title" style={{ marginBottom: 10 }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        {/* Donut SVG */}
-        <div style={{ position: 'relative', width: CX * 2, height: CY * 2 }}>
-          <svg width={CX * 2} height={CY * 2} style={{ transform: 'rotate(-90deg)' }}>
-            {segments.map(seg => (
-              <circle
-                key={seg.idx}
-                cx={CX} cy={CY} r={R}
-                fill="none"
-                stroke={seg.color}
-                strokeWidth={SW}
-                strokeDasharray={`${seg.arcLen} ${circumference - seg.arcLen}`}
-                strokeDashoffset={seg.dashoffset}
-                strokeLinecap="butt"
-                style={{
-                  cursor: seg.idx < factors.length ? 'pointer' : 'default',
-                  opacity: activeIdx !== null && activeIdx !== seg.idx ? 0.35 : 1,
-                  transition: 'opacity 0.2s',
-                }}
-                onClick={() => seg.idx < factors.length && setActiveIdx(activeIdx === seg.idx ? null : seg.idx)}
-              />
-            ))}
-          </svg>
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-            {active ? (
-              <>
-                <div style={{ fontSize: 14, fontWeight: 800, color: active.val.startsWith('-') ? '#1d4ed8' : '#b91c1c', lineHeight: 1 }}>{active.val}</div>
-                <div style={{ fontSize: 9, color: '#64748b', textAlign: 'center', maxWidth: 56, marginTop: 3, lineHeight: 1.3 }}>{active.label}</div>
-              </>
-            ) : (
-              <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', lineHeight: 1.4 }}>원인<br/>분석</div>
-            )}
-          </div>
-        </div>
-
-        {/* Legend chips */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px', justifyContent: 'center' }}>
-          {factors.map((f, i) => (
-            <div
-              key={i}
-              onClick={() => setActiveIdx(activeIdx === i ? null : i)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
-                padding: '3px 9px', borderRadius: 20,
-                background: activeIdx === i ? f.color + '1a' : '#f8fafc',
-                border: `1.5px solid ${activeIdx === i ? f.color : '#e2e8f0'}`,
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: f.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, fontWeight: 600, color: activeIdx === i ? f.color : '#475569' }}>{f.label}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: f.val.startsWith('-') ? '#1d4ed8' : '#b91c1c', marginLeft: 2 }}>{f.val}</span>
+      <div className="ai-main-title" style={{ marginBottom: 14 }}>{title}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+        {factors.map((factor, i) => {
+          const pct = Math.abs(factor.pct);
+          const arcLen = circumference * pct / 100;
+          const isNeg = factor.val.startsWith('-');
+          return (
+            <div key={i} style={{ display: 'contents' }}>
+              {i > 0 && (
+                <div style={{ width: 1, background: '#e2e8f0', alignSelf: 'stretch', flexShrink: 0, margin: '0 10px' }} />
+              )}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '0 4px' }}>
+                {/* 도넛 SVG */}
+                <div style={{ position: 'relative', width: CX * 2, height: CY * 2 }}>
+                  <svg width={CX * 2} height={CY * 2} style={{ transform: 'rotate(-90deg)' }}>
+                    <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e2e8f0" strokeWidth={SW} />
+                    <circle
+                      cx={CX} cy={CY} r={R}
+                      fill="none"
+                      stroke={factor.color}
+                      strokeWidth={SW}
+                      strokeDasharray={`${arcLen} ${circumference - arcLen}`}
+                      strokeDashoffset={0}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: isNeg ? '#1d4ed8' : '#b91c1c', lineHeight: 1 }}>{factor.val}</span>
+                  </div>
+                </div>
+                {/* 제목 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: factor.color, flexShrink: 0, display: 'inline-block' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textAlign: 'center', lineHeight: 1.3 }}>{factor.label}</span>
+                </div>
+                {/* 설명 */}
+                <div style={{ fontSize: 10, color: '#4c1d95', lineHeight: 1.55, textAlign: 'left', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '6px 8px', width: '100%', boxSizing: 'border-box' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                    <span className="ai-badge" style={{ fontSize: 9, flexShrink: 0 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#3b0764' }}>영향 포착</span>
+                  </div>
+                  {factor.desc}
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
-
-        {/* Description */}
-        {active && (
-          <div style={{
-            padding: '8px 12px', background: '#f8fafc', borderRadius: 8,
-            border: `1px solid ${active.color}44`, width: '100%', boxSizing: 'border-box',
-          }}>
-            <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.6 }}>{active.desc}</div>
-          </div>
-        )}
+          );
+        })}
       </div>
     </div>
   );
