@@ -1,5 +1,6 @@
 services:
   mlflow-server:
+    image: ${MLFLOW_IMAGE:-whai-mlflow:latest}
     build:
       context: ..
       dockerfile: mlflow/Dockerfile.mlflow
