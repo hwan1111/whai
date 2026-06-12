@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { handleUnauthorized, fetchWithAuth } from '@/lib/auth';
 import { ASSETS } from '@/lib/data';
+import StockDetailModal from '@/components/StockDetailModal';
 
 const ASSET_INFO = {
   '005930': { name: '삼성전자',      color: ASSETS['005930'].color,  sector: '반도체', unit: '주' },
@@ -295,7 +296,7 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   // 5. 메모
   lines.push(`<strong>📝 메모</strong>: 포트폴리오 AI는 대시보드 AI보다는 좀 더 포트폴리오 쪽에 치중하도록! 나이대, 성별, 투자성향은 여기에 반영하는게 맞을까?`);
 
-  return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:16px;color:#312e81">${l}</p>`).join('');
+  return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:16px;color:#334155">${l}</p>`).join('');
 }
 
 function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) {
@@ -347,9 +348,10 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
               <span style={{ fontSize: 11, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
             </div>
             <div style={{ height: barHeight, overflow: 'hidden', position: 'relative', borderRadius: 3 }}>
-              <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex' }}>
+              <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex', borderRadius: 3, overflow: 'hidden' }}>
                 {displaySorted.filter(h => h.curVal > 0).map(h => {
                   const w = totalVal > 0 ? h.curVal / totalVal * 100 : 0;
+                  const effectiveW = barWidthPct * w / 100;
                   return (
                     <div
                       key={h.id}
@@ -363,7 +365,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
                       }}
                       onMouseLeave={() => { setHoveredId(null); setTooltip(null); }}
                     >
-                      {w >= 10 && (
+                      {effectiveW >= 8 && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.9)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
                           {w.toFixed(0)}%
                         </span>
@@ -530,7 +532,9 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
   return (
     <>
     {drawerHolding && (
-      <AssetDrawer holding={drawerHolding} prices={prices} onClose={() => setDrawerHolding(null)} />
+      drawerHolding.id !== 'USD'
+        ? <StockDetailModal stockId={drawerHolding.id} holding={drawerHolding} snapshotDate={snap.datetime} onClose={() => setDrawerHolding(null)} />
+        : <AssetDrawer holding={drawerHolding} prices={prices} onClose={() => setDrawerHolding(null)} />
     )}
     <div className="snapshot-card">
       <div className="snapshot-card-header">
@@ -611,7 +615,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
         <div className="snapshot-ai">
           <div className="snapshot-ai-header">
             <span className="ai-badge" style={{ fontSize: 11 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-            <span style={{ fontSize: 13, color: '#6d28d9', fontWeight: 600 }}>포트폴리오 분석</span>
+            <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>포트폴리오 분석</span>
           </div>
           <div dangerouslySetInnerHTML={{ __html: aiHtml }} />
         </div>
