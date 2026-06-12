@@ -4,9 +4,7 @@ import { createPortal } from 'react-dom';
 import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, fetchAssetData, buildPeriodData } from '@/lib/data';
 import { STOCK_CONFIG } from '@/components/StockDetailModal';
-
-const SW = 860, SH = 300, ML = 52, MR = 16, MT = 22, MB = 38;
-const CW = SW - ML - MR, CH = SH - MT - MB;
+import LineChart, { anomalyColor, computeAnomalies, findNewsForDate } from '@/components/LineChart';
 
 const STOCK_SECTORS = [
   { label: '반도체', ids: ['005930', '000660'] },
@@ -165,240 +163,6 @@ function NewsDrawer({ open, onClose, defaultTicker, width }) {
 }
 
 
-function toX(i, n) { return ML + (i / (n - 1)) * CW; }
-function toY(v, minV, maxV) { return MT + ((maxV - v) / (maxV - minV)) * CH; }
-
-function niceTicks(min, max, target) {
-  const range = max - min || 1;
-  const raw = range / target;
-  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-  const step = [1, 2, 5, 10].map(s => s * mag).find(s => range / s <= target + 1) || mag;
-  const start = Math.ceil(min / step) * step;
-  const ticks = [];
-  for (let v = start; v <= max + 1e-9; v += step) ticks.push(Math.round(v * 1000) / 1000);
-  return ticks;
-}
-
-function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, anomalies, onAnomalyHover, onAnomalyLeave, onAnomalyClick }) {
-  const [tooltip, setTooltip] = useState(null);
-  const [hoveredIdx, setHoveredIdx] = useState(null);
-  const svgRef = useRef(null);
-  const [starYScale, setStarYScale] = useState(1);
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) setStarYScale((width / SW) / (height / SH));
-    });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-  if (!pd || activeAssets.length === 0) return null;
-  const n = pd.labels.length;
-
-  let allV = [0];
-  activeAssets.forEach(a => { if (pd.d[a]) allV.push(...pd.d[a].filter(v => v !== null)); });
-  let minV = Math.min(...allV), maxV = Math.max(...allV);
-  const pad = Math.max((maxV - minV) * 0.12, 3);
-  const lineAssets = [
-    ...activeAssets.filter(id => id !== '000000' && id !== 'USD'),
-    ...activeAssets.filter(id => id === '000000'),
-    ...activeAssets.filter(id => id === 'USD'),
-  ];
-  minV -= pad; maxV += pad;
-
-  const ticks = niceTicks(minV, maxV, 6);
-  const step = Math.max(1, Math.ceil(n / 4));
-  const xLabelIndices = [];
-  for (let i = 0; i < n; i += step) xLabelIndices.push(i);
-  if ((n - 1) % step !== 0) xLabelIndices.push(n - 1);
-
-  function getIdx(clientX) {
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return 0;
-    const svgX = (clientX - rect.left) / rect.width * SW;
-    return Math.max(0, Math.min(n - 1, Math.round((svgX - ML) / CW * (n - 1))));
-  }
-
-  function buildTooltip(a, clientX, clientY) {
-    const idx = getIdx(clientX);
-    const closes = pd.closes?.[a];
-    const close = closes?.[idx] ?? null;
-    const prevClose = idx > 0 ? closes?.[idx - 1] : null;
-    const dailyChgPct = close != null && prevClose != null
-      ? (close - prevClose) / prevClose * 100 : null;
-    return {
-      x: clientX, y: clientY,
-      name: ASSETS[a].label,
-      color: ASSETS[a].color,
-      date: pd.labels[idx],
-      close,
-      isFx: a === 'USD',
-      periodVal: pd.d[a]?.[idx] ?? 0,
-      dailyChgPct,
-    };
-  }
-
-  return (
-    <>
-    {tooltip && (
-      <div style={{
-        position: 'fixed',
-        left: Math.min(tooltip.x + 14, window.innerWidth - 210),
-        top: Math.max(10, tooltip.y - 120),
-        background: 'white', border: `1.5px solid ${tooltip.color}`, borderRadius: 10,
-        padding: '9px 14px', boxShadow: '0 4px 16px rgba(15,23,42,0.12)',
-        zIndex: 200, pointerEvents: 'none', minWidth: 200,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: tooltip.color, flexShrink: 0, display: 'inline-block' }} />
-          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>{tooltip.name}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
-          <span style={{ color: '#94a3b8' }}>날짜</span>
-          <span style={{ fontWeight: 600, color: '#374151' }}>{tooltip.date}</span>
-        </div>
-        {tooltip.close != null && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
-            <span style={{ color: '#94a3b8' }}>{tooltip.isFx ? '환율' : '주가'}</span>
-            <span style={{ fontWeight: 700, color: '#1e293b' }}>
-              {tooltip.isFx
-                ? tooltip.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })
-                : `${Number(tooltip.close).toLocaleString('ko-KR')}원`}
-            </span>
-          </div>
-        )}
-        {tooltip.dailyChgPct != null && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
-            <span style={{ color: '#94a3b8' }}>전일 대비</span>
-            <span style={{ fontWeight: 700, color: tooltip.dailyChgPct >= 0 ? '#dc2626' : '#2563eb' }}>
-              {tooltip.dailyChgPct >= 0 ? '▲' : '▼'} {Math.abs(tooltip.dailyChgPct).toFixed(2)}%
-            </span>
-          </div>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13 }}>
-          <span style={{ color: '#94a3b8' }}>기간 변동률</span>
-          <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#dc2626' : '#2563eb' }}>
-            {tooltip.periodVal >= 0 ? '+' : ''}{Number(tooltip.periodVal).toFixed(2)}%
-          </span>
-        </div>
-      </div>
-    )}
-    <svg ref={svgRef} viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none"
-      style={{ width: '100%', height: '100%', display: 'block' }}
-      onMouseLeave={() => { onHoverAsset(null); setTooltip(null); setHoveredIdx(null); }}>
-
-      {/* 그리드 + y축 라벨 */}
-      {ticks.map(v => {
-        const y = toY(v, minV, maxV);
-        const isZero = Math.abs(v) < 0.01;
-        const label = (v >= 0 ? '+' : '') + v.toFixed(v % 1 === 0 ? 0 : 1) + '%';
-        return (
-          <g key={v}>
-            <line x1={ML} y1={y.toFixed(1)} x2={SW - MR} y2={y.toFixed(1)}
-              stroke={isZero ? '#94a3b8' : '#f1f5f9'} strokeWidth={1}
-              />
-            <text x={ML - 5} y={(y + 4).toFixed(1)} textAnchor="end" fontSize={13}
-              style={{ transformBox: 'fill-box', transformOrigin: 'center', transform: 'scaleY(0.75)' }}
-              fill={isZero ? '#64748b' : '#64748b'} fontWeight={isZero ? 600 : 400}>{label}</text>
-          </g>
-        );
-      })}
-
-      {/* x축 라벨 */}
-      {xLabelIndices.map(i => (
-        <text key={i} x={toX(i, n).toFixed(1)} y={(MT + CH + 27).toFixed(1)}
-          textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} fontSize={13} fill="#64748b"
-          style={{ transformBox: 'fill-box', transformOrigin: 'center', transform: 'scaleY(0.75)' }}>{pd.labels[i]}</text>
-      ))}
-
-      {/* anomaly markers */}
-      {anomalies?.map(a => {
-        const x = toX(a.idx, n);
-        const cy = MT + CH + 9;
-        const starColor = anomalyColor(a.movers.length, a.totalAssets).star;
-        return (
-          <g key={a.idx} style={{ cursor: 'pointer' }}
-            onMouseEnter={e => onAnomalyHover?.(a, e.clientX, e.clientY)}
-            onMouseLeave={onAnomalyLeave}
-            onClick={e => { e.stopPropagation(); onAnomalyClick?.(a, e.clientX, e.clientY); }}>
-            <circle cx={x.toFixed(1)} cy={cy} r={10} fill="transparent" />
-            <text x={x.toFixed(1)} y={cy + 5} textAnchor="middle" fontSize={12}
-              fill={starColor} pointerEvents="none" style={{ userSelect: 'none' }}
-              transform={`translate(${x.toFixed(1)},${cy}) scale(1,${starYScale.toFixed(4)}) translate(${(-x).toFixed(1)},${(-cy)})`}>★</text>
-          </g>
-        );
-      })}
-
-      {/* crosshair */}
-      {hoveredIdx !== null && (
-        <line
-          x1={toX(hoveredIdx, n).toFixed(1)} y1={MT}
-          x2={toX(hoveredIdx, n).toFixed(1)} y2={MT + CH}
-          stroke="#cbd5e1" strokeWidth={1} strokeDasharray="3,3" pointerEvents="none"
-        />
-      )}
-
-      {/* 라인 */}
-      {lineAssets.map(a => {
-        const vals = pd.d[a];
-        if (!vals) return null;
-        const col = ASSETS[a].color;
-        const isFx = a === 'USD';
-        const isKospi = a === '000000';
-        const isDimmed = hoveredAsset !== null && hoveredAsset !== a;
-
-        const strokeDasharray = undefined;
-        const strokeLinecap = 'round';
-        const strokeWidth = isKospi ? 2.5 : isFx ? 1.8 : 2;
-
-        const segments = [];
-        let seg = [];
-        vals.forEach((v, i) => {
-          if (v === null) {
-            if (seg.length > 1) segments.push([...seg]);
-            seg = [];
-          } else {
-            seg.push(`${toX(i, n).toFixed(1)},${toY(v, minV, maxV).toFixed(1)}`);
-          }
-        });
-        if (seg.length > 1) segments.push(seg);
-
-        let lastIdx = vals.length - 1;
-        while (lastIdx >= 0 && vals[lastIdx] === null) lastIdx--;
-        if (lastIdx < 0) return null;
-        return (
-          <g key={a} style={{ opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' }}>
-            {segments.map((pts, si) => (
-              <polyline key={si} points={pts.join(' ')} fill="none" stroke={col}
-                strokeLinejoin="round" strokeDasharray={strokeDasharray}
-                strokeLinecap={strokeLinecap} strokeWidth={strokeWidth} />
-            ))}
-            {segments.map((pts, si) => (
-              <polyline key={`h${si}`} points={pts.join(' ')} fill="none" stroke="transparent"
-                strokeWidth={14} style={{ cursor: 'pointer' }}
-                onMouseEnter={e => {
-                  onHoverAsset(a);
-                  const idx = getIdx(e.clientX);
-                  setHoveredIdx(idx);
-                  setTooltip(buildTooltip(a, e.clientX, e.clientY));
-                }}
-                onMouseMove={e => {
-                  const idx = getIdx(e.clientX);
-                  setHoveredIdx(idx);
-                  setTooltip(buildTooltip(a, e.clientX, e.clientY));
-                }}
-                onMouseLeave={() => { onHoverAsset(null); setTooltip(null); setHoveredIdx(null); }} />
-            ))}
-          </g>
-        );
-      })}
-    </svg>
-    </>
-  );
-}
-
 async function fetchFavs() {
   try {
     const res = await fetchWithAuth('/api/v1/favorites');
@@ -553,49 +317,101 @@ function fmtChg(pct) {
   return { text: `${sign} ${Math.abs(pct).toFixed(2)}%`, cls };
 }
 
-const ANOMALY_MAX = { '1W': 2, '1M': 4, '3M': 6, '6M': 10, '1Y': 15, '3Y': 25, 'ALL': 45 };
-const ANOMALY_THRESH = id => id === 'USD' ? 0.8 : id === '000000' ? 1.5 : 3.0;
 
-function anomalyColor(count, total) {
-  const ratio = count / Math.max(total, 1);
-  if (ratio >= 0.6) return { star: '#eab308', border: '#eab308', bg: '#fefce8', text: '#713f12', badge: '#854d0e' };
-  if (ratio >= 0.35) return { star: '#fbbf24', border: '#fbbf24', bg: '#fefce8', text: '#92400e', badge: '#a16207' };
-  return { star: '#fef08a', border: '#fde047', bg: '#fefce8', text: '#a16207', badge: '#a16207' };
-}
+function FactorDonut({ factors, title }) {
+  const [activeIdx, setActiveIdx] = useState(null);
+  if (!factors?.length) return null;
 
-function computeAnomalies(pd, activeAssets, period) {
-  if (!pd?.isoLabels || activeAssets.length < 1) return [];
-  const n = pd.isoLabels.length;
-  if (n < 2) return [];
-  const maxMarkers = ANOMALY_MAX[period] ?? 5;
-  const candidates = [];
-  for (let i = 1; i < n; i++) {
-    const movers = [];
-    for (const a of activeAssets) {
-      const c = pd.closes?.[a];
-      if (!c || c[i] == null || c[i - 1] == null) continue;
-      const chg = (c[i] - c[i - 1]) / c[i - 1] * 100;
-      if (Math.abs(chg) >= ANOMALY_THRESH(a)) movers.push({ id: a, chg });
-    }
-    if (movers.length >= 1) {
-      const totalAbs = movers.reduce((s, m) => s + Math.abs(m.chg), 0);
-      const netChg = movers.reduce((s, m) => s + m.chg, 0);
-      candidates.push({ idx: i, isoDate: pd.isoLabels[i], displayDate: pd.labels[i], movers, score: movers.length, totalAbs, netChg, totalAssets: activeAssets.length });
-    }
-  }
-  candidates.sort((a, b) => b.score - a.score || b.totalAbs - a.totalAbs);
-  const minGap = Math.max(2, Math.floor(n / (maxMarkers * 3)));
-  const selected = [];
-  for (const c of candidates) {
-    if (selected.length >= maxMarkers) break;
-    if (!selected.some(s => Math.abs(s.idx - c.idx) < minGap)) selected.push(c);
-  }
-  return selected.sort((a, b) => a.idx - b.idx);
-}
+  const R = 50, SW = 20, CX = 75, CY = 75;
+  const circumference = 2 * Math.PI * R;
+  const totalPct = factors.reduce((s, f) => s + Math.abs(f.pct), 0);
+  const remainder = Math.max(0, 100 - totalPct);
+  const items = remainder > 3
+    ? [...factors, { label: '기타', pct: remainder, color: '#e2e8f0', val: '' }]
+    : factors;
+  const total = items.reduce((s, f) => s + Math.abs(f.pct), 0);
 
-function findNewsForDate(newsArr, isoDate) {
-  if (!newsArr?.length || !isoDate) return null;
-  return newsArr.find(n => n.start_date <= isoDate && isoDate <= n.end_date) ?? null;
+  let accumulated = 0;
+  const segments = items.map((f, i) => {
+    const arcLen = circumference * Math.abs(f.pct) / total;
+    const offset = circumference - circumference * accumulated / total;
+    accumulated += Math.abs(f.pct);
+    return { ...f, arcLen, dashoffset: offset, idx: i };
+  });
+
+  const active = activeIdx !== null ? factors[activeIdx] : null;
+
+  return (
+    <div className="ai-main-card" style={{ flex: '2 1 0', minHeight: 0, overflowY: 'auto' }}>
+      <div className="ai-main-title" style={{ marginBottom: 10 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        {/* Donut SVG */}
+        <div style={{ position: 'relative', width: CX * 2, height: CY * 2 }}>
+          <svg width={CX * 2} height={CY * 2} style={{ transform: 'rotate(-90deg)' }}>
+            {segments.map(seg => (
+              <circle
+                key={seg.idx}
+                cx={CX} cy={CY} r={R}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth={SW}
+                strokeDasharray={`${seg.arcLen} ${circumference - seg.arcLen}`}
+                strokeDashoffset={seg.dashoffset}
+                strokeLinecap="butt"
+                style={{
+                  cursor: seg.idx < factors.length ? 'pointer' : 'default',
+                  opacity: activeIdx !== null && activeIdx !== seg.idx ? 0.35 : 1,
+                  transition: 'opacity 0.2s',
+                }}
+                onClick={() => seg.idx < factors.length && setActiveIdx(activeIdx === seg.idx ? null : seg.idx)}
+              />
+            ))}
+          </svg>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            {active ? (
+              <>
+                <div style={{ fontSize: 14, fontWeight: 800, color: active.val.startsWith('-') ? '#1d4ed8' : '#b91c1c', lineHeight: 1 }}>{active.val}</div>
+                <div style={{ fontSize: 9, color: '#64748b', textAlign: 'center', maxWidth: 56, marginTop: 3, lineHeight: 1.3 }}>{active.label}</div>
+              </>
+            ) : (
+              <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', lineHeight: 1.4 }}>원인<br/>분석</div>
+            )}
+          </div>
+        </div>
+
+        {/* Legend chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 8px', justifyContent: 'center' }}>
+          {factors.map((f, i) => (
+            <div
+              key={i}
+              onClick={() => setActiveIdx(activeIdx === i ? null : i)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                padding: '3px 9px', borderRadius: 20,
+                background: activeIdx === i ? f.color + '1a' : '#f8fafc',
+                border: `1.5px solid ${activeIdx === i ? f.color : '#e2e8f0'}`,
+                transition: 'all 0.15s',
+              }}
+            >
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: f.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: activeIdx === i ? f.color : '#475569' }}>{f.label}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: f.val.startsWith('-') ? '#1d4ed8' : '#b91c1c', marginLeft: 2 }}>{f.val}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Description */}
+        {active && (
+          <div style={{
+            padding: '8px 12px', background: '#f8fafc', borderRadius: 8,
+            border: `1px solid ${active.color}44`, width: '100%', boxSizing: 'border-box',
+          }}>
+            <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.6 }}>{active.desc}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -763,6 +579,10 @@ export default function DashboardPage() {
     if (id === '000000') return 'KOSPI';
     if (id === 'USD') return 'USD/KRW';
     return ASSETS[id]?.label || id;
+  }
+
+  function heatmapLabel(id) {
+    return id === 'USD' ? 'USD' : shortLabel(id);
   }
 
   function calcPearson(d1, d2) {
@@ -1146,7 +966,10 @@ export default function DashboardPage() {
                 const minDim = Math.min(cellW, cellH);
                 // 셀이 클수록 글자도 크게
                 const fs = minDim >= 60 ? 17 : minDim >= 50 ? 15 : minDim >= 40 ? 13 : 11;
-                const lbl = id => { const l = shortLabel(id); return cellW < 54 ? l.slice(0, 3) : l; };
+                const lbl = id => {
+                  const l = heatmapLabel(id);
+                  return cellW < 54 ? l.slice(0, 3) : l;
+                };
                 return (
                   <table style={{ borderCollapse: 'separate', borderSpacing: 3 }}>
                     <thead><tr>
@@ -1184,19 +1007,24 @@ export default function DashboardPage() {
                 );
               })()}
             </div>
-
             {/* 컬러 스케일 (고정) */}
-            <div style={{ flexShrink: 0, marginTop: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#475569', fontWeight: 600 }}>
-                <span>-1.0</span>
-                <div style={{ flex: 1, height: 7, borderRadius: 4, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
-                <span>+1.0</span>
+            <div style={{ flexShrink: 0, marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#475569', fontWeight: 600 }}>
+                <span>-1</span>
+                <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
+                <span>+1</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 600, color: '#475569', marginTop: 5, padding: '0 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, fontSize: 9, color: '#64748b', fontWeight: 600 }}>
                 <span>강한 음의 상관관계</span>
                 <span>강한 양의 상관관계</span>
               </div>
+              <div className="corr-meaning-list corr-modal-note">
+                <div><span><strong className="positive">+1</strong>과 가까울수록 같은 방향으로 움직이는 경향이 강해요</span></div>
+                <div><span><strong className="neutral">0</strong>과 가까울수록 서로의 움직임에 뚜렷한 관계가 없어요</span></div>
+                <div><span><strong className="negative">-1</strong>과 가까울수록 반대 방향으로 움직이는 경향이 강해요</span></div>
+              </div>
             </div>
+
           </div>
         </div>
       )}
@@ -1576,29 +1404,7 @@ export default function DashboardPage() {
           {(cfg && !selectedFxId) || selectedFxId ? (() => {
             const factors = selectedFxId ? FX_INFO[selectedFxId]?.factors : cfg?.factors;
             const title = selectedFxId ? '환율 변동 원인 분석' : selectedStockId === '000000' ? '지수 변동 원인 분석' : '주가 변동 원인 분석';
-            if (!factors?.length) return null;
-            const maxPct = Math.max(...factors.map(f => f.pct));
-            return (
-              <div className="ai-main-card" style={{ flex: '2 1 0', minHeight: 0, overflowY: 'auto' }}>
-                <div className="ai-main-title" style={{ marginBottom: 10 }}>{title}</div>
-                {factors.map(f => {
-                  const isNeg = f.val.startsWith('-');
-                  const intensity = 0.4 + 0.6 * (f.pct / maxPct);
-                  const barColor = isNeg ? `rgba(29,78,216,${intensity.toFixed(2)})` : `rgba(185,28,28,${intensity.toFixed(2)})`;
-                  const textColor = '#475569';
-                  return (
-                  <div key={f.label}>
-                    <div className="factor-row">
-                      <div className="factor-label">{f.label}</div>
-                      <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: barColor }} /></div>
-                      <div className={`factor-val ${isNeg ? 'negative' : 'positive'}`}>{f.val}</div>
-                    </div>
-                    <div className="factor-desc" style={{ color: textColor }}>{f.desc}</div>
-                  </div>
-                  );
-                })}
-              </div>
-            );
+            return <FactorDonut key={title} factors={factors} title={title} />;
           })() : null}
         </div>
 
@@ -1638,7 +1444,7 @@ export default function DashboardPage() {
               const labelW = Math.max(20, Math.round(CW * 0.9));
               const labelStyle = { height: cellH, lineHeight: `${cellH}px`, width: labelW, minWidth: labelW, maxWidth: labelW };
               const lbl = id => {
-                const l = shortLabel(id);
+                const l = heatmapLabel(id);
                 if (isCompact) return l.slice(0, 5);
                 return CW < 30 ? l.slice(0, 1) : CW < 38 ? l.slice(0, 2) : CW < 48 ? l.slice(0, 3) : CW < 60 ? l.slice(0, 5) : l;
               };
@@ -1648,7 +1454,7 @@ export default function DashboardPage() {
                     <table className="matrix-table" style={{ tableLayout: 'fixed' }}>
                       <thead><tr>
                         <th className="mh" style={{ ...labelStyle, height: 'auto', lineHeight: 'normal', paddingBottom: 5 }} />
-                        {complexIds.map(id => <th key={id} className="mh" title={shortLabel(id)} style={{ ...cellStyle, height: 'auto', lineHeight: 'normal', paddingBottom: 5 }}>{shortLabel(id)}</th>)}
+                        {complexIds.map(id => <th key={id} className="mh" title={shortLabel(id)} style={{ ...cellStyle, height: 'auto', lineHeight: 'normal', paddingBottom: 5 }}>{heatmapLabel(id)}</th>)}
                       </tr></thead>
                       <tbody>
                         {complexIds.map(row => (
@@ -1665,15 +1471,16 @@ export default function DashboardPage() {
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ marginTop: isTiny ? 12 : 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#475569', fontWeight: 600 }}>
-                      <span>-1.0</span>
-                      <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'linear-gradient(to right,rgb(30,64,175),rgb(248,250,252),rgb(185,28,28))' }} />
-                      <span>+1.0</span>
+                  <div style={{ marginTop: isTiny ? 9 : 5 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: '#475569', fontWeight: 600 }}>
+                      <span>-1</span>
+                      <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'linear-gradient(to right,rgb(30,64,175),rgb(248,250,252),rgb(185,28,28))' }} />
+                      <span>+1</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 600, color: '#475569', marginTop: 4 }}>
-                      <span>강한 음의 상관관계</span>
-                      <span>강한 양의 상관관계</span>
+                    <div className="corr-meaning-list corr-compact-guide">
+                      <div><span><strong className="positive">+1</strong>과 가까울수록 같은 방향으로 움직여요</span></div>
+                      <div><span><strong className="neutral">0</strong>과 가까울수록 뚜렷한 관계가 없어요</span></div>
+                      <div><span><strong className="negative">-1</strong>과 가까울수록 반대 방향으로 움직여요</span></div>
                     </div>
                   </div>
                 </>
@@ -1683,7 +1490,7 @@ export default function DashboardPage() {
             /* ── 바 차트 JSX ── */
             const BarView = ({ pairs, maxAbs = globalMaxAbs, showFull = false }) => {
               return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: showFull ? 10 : 7 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: showFull ? 10 : 4 }}>
                   {pairs.map(({ a, b, v }, idx) => {
                     const barW = Math.abs(v) / maxAbs * 100;
                     const barCol = corrStyle(v).background;
@@ -1699,15 +1506,15 @@ export default function DashboardPage() {
                       <div key={idx}
                         onClick={showFull ? undefined : () => setExpandedPairKey(isExpanded ? null : pairKey)}
                         style={{ cursor: showFull ? 'default' : 'pointer' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: showFull ? 4 : 3 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: showFull ? 4 : 1 }}>
                           <span style={{ fontSize: showFull ? 12 : 11, color: '#312e81', fontWeight: 800, flex: 1, minWidth: 0 }}>{shortLabel(a)} · {shortLabel(b)}</span>
                           <span style={{ fontSize: showFull ? 12 : 11, fontWeight: 800, color: textCol, flexShrink: 0 }}>{isPos ? '▲' : '▼'} {v.toFixed(2)}</span>
                         </div>
-                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: showFull ? 4 : 3 }}>
+                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: showFull ? 4 : 1 }}>
                           <div style={{ width: `${barW}%`, height: '100%', borderRadius: 3, background: barCol, transition: 'width 0.3s' }} />
                         </div>
                         <div style={{
-                          fontSize: showFull ? 11 : 10, color: '#6d28d9', lineHeight: 1.5, fontWeight: 500,
+                          fontSize: showFull ? 11 : 10, color: '#6d28d9', lineHeight: showFull ? 1.5 : 1.35, fontWeight: 500,
                           ...(isExpanded ? {} : { overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }),
                         }}>{desc}</div>
                       </div>
@@ -1751,12 +1558,12 @@ export default function DashboardPage() {
                     </div>
                   );
                   const TopHeader = () => (
-                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, flexShrink: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 2, flexShrink: 0 }}>
                       <span style={{ color: '#2563eb' }}>▲ 높은 상관계수</span> TOP {pairCount}
                     </div>
                   );
                   const BottomHeader = () => (
-                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, flexShrink: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 2, flexShrink: 0 }}>
                       <span style={{ color: '#dc2626' }}>▼ 낮은 상관계수</span> TOP {pairCount}
                     </div>
                   );
@@ -1764,17 +1571,19 @@ export default function DashboardPage() {
                   const topSection = (
                     <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                       <TopHeader />
+                      <div className="corr-section-note">함께 움직이는 경향이 강해 분산 효과가 낮을 수 있어요.</div>
                       {topPairs.length > 0 ? <BarView pairs={topPairs} /> : <EmptySection isTop />}
                     </div>
                   );
                   const bottomSection = (
                     <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                       <BottomHeader />
+                      <div className="corr-section-note">서로 다르게 움직이지만, 반드시 분산 효과가 높다는 의미는 아니에요.</div>
                       {bottomPairs.length > 0 ? <BarView pairs={bottomPairs} /> : <EmptySection isTop={false} />}
                     </div>
                   );
 
-                  const divider = <div style={{ height: 1, background: '#e2e8f0', flexShrink: 0, margin: `${isCompact ? 14 : 8}px 0` }} />;
+                  const divider = <div style={{ height: 1, background: '#e2e8f0', flexShrink: 0, margin: `${isCompact ? 8 : 3}px 0` }} />;
 
                   return isTiny ? (
                     /* 3개 이하: 히트맵 + 전체 쌍 나열 (TOP N 없이, 설명 전체 표시) */

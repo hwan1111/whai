@@ -1,12 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
-
-function formatNewsPeriod(start, end) {
-  if (!start) return '';
-  if (!end || start === end) return start;
-  return `${start} ~ ${end}`;
-}
+import { ASSETS, fetchAssetData, buildPeriodData } from '@/lib/data';
+import LineChart, { computeAnomalies } from '@/components/LineChart';
 
 export const STOCK_CONFIG = {
   '000000': { name: 'KOSPI', sector: null, meta: '한국종합주가지수', logoSrc: '/assets/flags/kr.png', color: '#16a34a',
@@ -55,303 +51,303 @@ export const STOCK_CONFIG = {
               { label: '유가 변동 영향', pct: 8, color: '#dc2626', val: '-8%', desc: '원유 가격 하락 → 화학 부문 수익성 압박' }] },
 };
 
-const PERIOD_LABELS = { '1W': '1주', '1M': '1개월', '3M': '3개월', '6M': '6개월', '1Y': '1년', '3Y': '3년', 'ALL': '전체' };
-const PERIODS = ['1W', '1M', '3M', '6M', '1Y', '3Y', 'ALL'];
-
-function buildChartSvg(vals, color, labels = []) {
-  const W = 500, H = 220, ML = 38, MR = 8, MT = 10, MB = 18;
-  const CW = W - ML - MR, CH = H - MT - MB;
-  const n = vals.length;
-  let minV = Math.min(0, ...vals), maxV = Math.max(0, ...vals);
-  const pad = Math.max((maxV - minV) * 0.15, 2);
-  minV -= pad; maxV += pad;
-  const toX = i => ML + (i / (n - 1)) * CW;
-  const toY = v => MT + ((maxV - v) / (maxV - minV)) * CH;
-  const range = maxV - minV || 1;
-  const rawStep = range / 3;
-  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
-  const step = [1, 2, 5, 10].map(s => s * mag).find(s => range / s <= 4) || mag;
-  const ticks = [];
-  for (let v = Math.ceil(minV / step) * step; v <= maxV + 1e-9; v += step)
-    ticks.push(Math.round(v * 100) / 100);
-  let h = `<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="${color}" stop-opacity="0.18"/>
-    <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
-  </linearGradient></defs>`;
-  ticks.forEach(v => {
-    const y = toY(v).toFixed(1);
-    const isZero = Math.abs(v) < 0.01;
-    h += `<line x1="${ML}" y1="${y}" x2="${W - MR}" y2="${y}" stroke="${isZero ? '#94a3b8' : '#e8edf2'}" stroke-width="${isZero ? 2 : 1}" ${isZero ? '' : 'stroke-dasharray="3,3"'}/>`;
-    const lbl = (v >= 0 ? '+' : '') + v.toFixed(v % 1 === 0 ? 0 : 1) + '%';
-    h += `<text x="${ML - 3}" y="${(+y + 3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="${isZero ? '#94a3b8' : '#94a3b8'}" font-weight="${isZero ? 700 : 400}">${lbl}</text>`;
-  });
-  const pts = vals.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
-  const zeroY = toY(0).toFixed(1);
-  const x0 = toX(0).toFixed(1), xN = toX(n - 1).toFixed(1);
-  const lastY = toY(vals[n - 1]).toFixed(1);
-  h += `<polygon points="${pts} ${xN},${zeroY} ${x0},${zeroY}" fill="url(#sg)"/>`;
-  h += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-  if (labels.length === n && n > 1) {
-    const labelStep = Math.max(1, Math.ceil(n / 4));
-    const labelIndices = [];
-    for (let i = 0; i < n; i += labelStep) labelIndices.push(i);
-    if (labelIndices[labelIndices.length - 1] !== n - 1) labelIndices.push(n - 1);
-    const labelY = (MT + CH + 13).toFixed(1);
-    labelIndices.forEach((i, pos) => {
-      const anchor = pos === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
-      h += `<text x="${toX(i).toFixed(1)}" y="${labelY}" text-anchor="${anchor}" font-size="9" fill="#94a3b8">${labels[i]}</text>`;
-    });
-  }
-  return h;
+function fmt(v) { return v ? Number(v).toLocaleString('ko-KR') : '—'; }
+function fmtNewsPeriod(start, end) {
+  if (!start) return '';
+  if (!end || start === end) return start;
+  return `${start} ~ ${end}`;
 }
 
-export default function StockDetailModal({ stockId, onClose }) {
-  const [period, setPeriod] = useState('3M');
-  const [state, setState] = useState('loading');
-  const [stockData, setStockData] = useState(null);
-  const [chartSvg, setChartSvg] = useState('');
-  const [chartLabels, setChartLabels] = useState([]);
-  const [news, setNews] = useState([]);
-  const [expandedNews, setExpandedNews] = useState(null);
+export default function StockDetailModal({ stockId, onClose, holding, snapshotDate }) {
+  const [pd, setPd] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [anomalies, setAnomalies] = useState([]);
+  const [anomalyPopup, setAnomalyPopup] = useState(null);
+  const [period, setPeriod] = useState('1M');
 
   useEffect(() => {
-    setPeriod('3M');
-    loadStock(stockId, '3M');
-  }, [stockId]);
-
-  async function loadStock(id, p) {
-    setState('loading');
-    const cfg = STOCK_CONFIG[id];
-    if (!cfg) { setState('empty'); return; }
-    const [priceData, histData, newsData] = await Promise.all([
-      loadPrice(id), loadChart(id, p), loadNews(id),
-    ]);
-    setStockData({ cfg, ...priceData, chartPos: histData?.pos });
-    if (histData) {
-      setChartSvg(buildChartSvg(histData.vals, cfg.color, histData.labels));
-      setChartLabels(histData.labels);
-    }
-    setNews(newsData);
-    setState('content');
-  }
-
-  async function loadPrice(ticker) {
-    let price = null, changePct = null, stats = null;
-    try {
-      const res = await fetchWithAuth('/api/v1/prices/latest');
-      if (res.ok) {
-        const all = await res.json();
-        const row = all.find(r => r.ticker === ticker);
-        if (row) { price = row.close; changePct = row.change_pct; }
-      }
-    } catch { /* silent */ }
-    try {
-      const res = await fetchWithAuth(`/api/v1/prices/${ticker}/stats`);
-      if (res.ok) stats = await res.json();
-    } catch { /* silent */ }
-    return { price, changePct, stats };
-  }
-
-  async function loadChart(ticker, p) {
-    try {
-      const res = await fetchWithAuth(`/api/v1/prices/${ticker}/history?period=${p}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (!data.length) return null;
-      const vals = data.map(d => d.return_pct);
-      const labels = data.map(d => { const [, m, day] = d.date.split('-'); return `${+m}/${+day}`; });
-      const latest = data[data.length - 1].close;
-      const hi = Math.max(...data.map(d => d.close));
-      const lo = Math.min(...data.map(d => d.close));
-      const pos = hi > lo ? Math.round((latest - lo) / (hi - lo) * 100) : 50;
-      return { vals, labels, pos };
-    } catch { return null; }
-  }
-
-  async function loadNews(ticker) {
-    try {
-      const res = await fetchWithAuth(`/api/v1/news?ticker=${ticker}&days=90`);
-      return res.ok ? await res.json() : [];
-    } catch { return []; }
-  }
-
-  async function changePeriod(p) {
-    setPeriod(p);
-    const cfg = STOCK_CONFIG[stockId];
-    if (!cfg) return;
-    const histData = await loadChart(stockId, p);
-    if (histData) {
-      setChartSvg(buildChartSvg(histData.vals, cfg.color, histData.labels));
-      setChartLabels(histData.labels);
-      setStockData(prev => prev ? { ...prev, chartPos: histData.pos } : prev);
-    }
-  }
-
-  function fmt(v) { return v ? Number(v).toLocaleString('ko-KR') : '—'; }
-  function fmtVol(v) {
-    if (!v) return '—';
-    if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
-    if (v >= 1_000) return (v / 1_000).toFixed(0) + 'K';
-    return String(v);
-  }
-  function fmtCap(v) {
-    if (!v) return '—';
-    const jo = v / 1e12;
-    if (jo >= 1) return jo.toFixed(1) + '조원';
-    return (v / 1e8).toFixed(1) + '억원';
-  }
+    setLoading(true);
+    setPd(null);
+    setDetail(null);
+    Promise.all([
+      fetchAssetData(stockId, period).then(() => {
+        const data = buildPeriodData(period, [stockId]);
+        if (data) { setPd(data); setAnomalies(computeAnomalies(data, [stockId], period)); }
+      }),
+      fetchWithAuth('/api/v1/prices/latest')
+        .then(r => r.ok ? r.json() : [])
+        .then(all => {
+          const row = all.find(r => r.ticker === stockId);
+          return row ? { price: row.close, changePct: row.change_pct, change: row.change } : {};
+        }),
+      fetchWithAuth(`/api/v1/news?ticker=${stockId}&days=90`)
+        .then(r => r.ok ? r.json() : []),
+    ]).then(([, priceData, news]) => {
+      setDetail({ ...priceData, news: news ?? [] });
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [stockId, period]);
 
   const cfg = STOCK_CONFIG[stockId];
-  const s = stockData?.stats;
-  const chgAmt = s?.change;
-  const chgPct = stockData?.changePct;
-  const chgColor = (chgPct ?? 0) >= 0 ? '#16a34a' : '#dc2626';
+
+
+  // 스냅샷 날짜 → 차트 x 위치 (0~100%) + 변동률 계산
+  const snapshotInfo = (() => {
+    if (!snapshotDate || !pd?.isoLabels) return null;
+    const isoDay = snapshotDate.slice(0, 10);
+    const n = pd.isoLabels.length;
+    let idx = pd.isoLabels.lastIndexOf(isoDay);
+    if (idx < 0) idx = pd.isoLabels.filter(d => d <= isoDay).length - 1;
+    if (idx < 0) return null;
+    const ML = 52, MR = 16, SW = 860, CW = SW - ML - MR;
+    const xPct = ((ML + (idx / Math.max(n - 1, 1)) * CW) / SW * 100).toFixed(2);
+    const closes = pd.closes?.[stockId];
+    const snapClose = closes?.[idx];
+    const latestClose = closes?.[n - 1];
+    const changePct = snapClose && latestClose
+      ? ((latestClose - snapClose) / snapClose * 100)
+      : null;
+    return { xPct, changePct, snapClose, latestClose };
+  })();
+
+  const chgPct = detail?.changePct;
+  const chgAmt = detail?.change;
+  const chgColor = (chgPct ?? 0) >= 0 ? '#dc2626' : '#2563eb';
   const chgArrow = (chgPct ?? 0) >= 0 ? '▲' : '▼';
+  const newsList = detail?.news ?? [];
+
+  const holdingItems = holding ? (() => {
+    const pnl = holding.curVal - holding.cost;
+    const retPct = holding.cost > 0 ? pnl / holding.cost * 100 : 0;
+    const pc = pnl >= 0 ? '#dc2626' : '#2563eb';
+    const fmtN = v => Number(Math.round(v)).toLocaleString('ko-KR');
+    return [
+      { label: '보유 수량',   val: `${fmtN(holding.qty)}주` },
+      { label: '평균 매입가', val: `${fmtN(holding.avgPrice)}원` },
+      { label: '평가액',      val: `${fmtN(holding.curVal)}원` },
+      { label: '취득원가',    val: `${fmtN(holding.cost)}원` },
+      { label: '손익',        val: `${pnl >= 0 ? '+' : '-'}${fmtN(Math.abs(pnl))}원`, color: pc },
+      { label: '수익률',      val: `${retPct >= 0 ? '+' : ''}${retPct.toFixed(2)}%`, color: pc },
+    ];
+  })() : null;
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ width: 1240, maxWidth: '98vw', padding: 0 }}>
+      <div style={{
+        background: 'white',
+        borderRadius: 18,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+        width: 880,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
 
-        {/* 헤더 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #e2e8f0', borderRadius: '16px 16px 0 0' }}>
-          {cfg && (
+        {/* ── 헤더 ── */}
+        <div style={{ padding: '16px 20px 14px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: '#fff', border: '1px solid #e8ecf0', padding: 3, overflow: 'hidden' }}>
-                <img src={`/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              </div>
+              {cfg && (
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#f8fafc', border: '1px solid #e2e8f0', padding: 4, overflow: 'hidden', flexShrink: 0 }}>
+                  <img src={cfg.logoSrc ?? `/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
+              )}
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800 }}>{cfg.name} <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{stockId}</span></div>
-                <div style={{ fontSize: 10, color: '#94a3b8' }}>{cfg.meta}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', lineHeight: 1.2 }}>{cfg?.name ?? stockId}</div>
+                {stockId !== '000000' && <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{stockId} · {cfg?.meta}</div>}
               </div>
             </div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {state === 'content' && stockData?.price && (
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                <span style={{ fontSize: 20, fontWeight: 800 }}>
-                  {Number(stockData.price).toLocaleString('ko-KR')}
-                  <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>원</span>
-                </span>
-                {chgPct != null && (
-                  <>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: chgColor }}>
-                      {chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''}
-                    </span>
-                    <span style={{ fontSize: 12, color: chgColor }}>
-                      ({Math.abs(chgPct).toFixed(2)}%)
-                    </span>
-                  </>
-                )}
-              </div>
-            )}
-            <button className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: 13 }} onClick={onClose}>✕</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              {detail?.price != null && (
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', lineHeight: 1 }}>
+                    {fmt(detail.price)}
+                    <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400, marginLeft: 2 }}>원</span>
+                  </div>
+                  {chgPct != null && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: chgColor, marginTop: 2 }}>
+                      {chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''} ({Math.abs(chgPct).toFixed(2)}%)
+                    </div>
+                  )}
+                </div>
+              )}
+              <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#cbd5e1', lineHeight: 1, padding: 0 }}>✕</button>
+            </div>
           </div>
         </div>
 
-        {/* 바디: 좌(차트+지표+원인분석) | 우(뉴스) */}
-        <div style={{ padding: '20px' }}>
-          {state === 'loading' && (
-            <div style={{ textAlign: 'center', padding: '50px 0', color: '#94a3b8', fontSize: 14 }}>데이터를 불러오는 중...</div>
-          )}
+        {/* ── 중단: 미니 차트 + 보유 현황 ── */}
+        <div style={{ display: 'flex', gap: 14, padding: '16px 20px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
 
-          {state === 'content' && cfg && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 14 }}>
-
-              {/* 좌측: 차트+지표 + 원인분석 */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="grid g21">
-                  <div className="other-card">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700 }}>주가 차트 (변동률)</div>
-                      <div className="range-sel">
-                        {PERIODS.map(p => (
-                          <div key={p} className={`rbtn${period === p ? ' active' : ''}`} onClick={() => changePeriod(p)}>{PERIOD_LABELS[p]}</div>
-                        ))}
+          {/* 미니 차트 (왼쪽) */}
+          <div style={{ flex: '0 0 530px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 4 }}>
+              {['1W','1M','3M','6M','1Y','3Y','ALL'].map(p => (
+                <button key={p} onClick={() => setPeriod(p)} style={{
+                  fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+                  border: period === p ? '1.5px solid #1e293b' : '1.5px solid #e2e8f0',
+                  background: period === p ? '#1e293b' : 'white',
+                  color: period === p ? 'white' : '#475569',
+                  transition: 'all 0.13s',
+                }}>{p === '1W' ? '1주' : p === '1M' ? '1개월' : p === '3M' ? '3개월' : p === '6M' ? '6개월' : p === '1Y' ? '1년' : p === '3Y' ? '3년' : '전체'}</button>
+              ))}
+            </div>
+            <div style={{ height: 240, position: 'relative', background: '#fafafa', border: '1px solid #f1f5f9', borderRadius: 10, overflow: 'hidden' }}>
+              {loading ? (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 13 }}>···</div>
+              ) : pd ? (
+                <>
+                  <LineChart
+                    activeAssets={[stockId]}
+                    pd={pd}
+                    hoveredAsset={null}
+                    onHoverAsset={() => {}}
+                    anomalies={anomalies}
+                    onAnomalyHover={(a, cx, cy) => setAnomalyPopup({ anomaly: a, cx, cy })}
+                    onAnomalyLeave={() => setAnomalyPopup(null)}
+                    onAnomalyClick={null}
+                    showAssetName={false}
+                    labelFontSize={20}
+                  />
+                  {snapshotInfo && (() => {
+                    const { xPct, changePct } = snapshotInfo;
+                    const isUp = (changePct ?? 0) >= 0;
+                    const col = isUp ? '#dc2626' : '#2563eb';
+                    // MT=22, SH=300, CH=240 → 차트 영역만 커버
+                    return (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: `${22/300*100}%`,
+                          height: `${240/300*100}%`,
+                          left: `${xPct}%`,
+                          width: 20,
+                          transform: 'translateX(-50%)',
+                          cursor: 'crosshair',
+                          zIndex: 10,
+                        }}
+                      >
+                        {/* 실제 선 */}
+                        <div style={{
+                          position: 'absolute',
+                          top: 0, bottom: 0,
+                          left: '50%', transform: 'translateX(-50%)',
+                          width: 1.5,
+                          background: '#ef4444',
+                          opacity: 0.75,
+                          pointerEvents: 'none',
+                        }} />
                       </div>
-                    </div>
-                    <svg viewBox="0 0 500 220" width="100%" height={210} style={{ display: 'block' }} dangerouslySetInnerHTML={{ __html: chartSvg }} />
+                    );
+                  })()}
+                </>
+              ) : (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12 }}>데이터 없음</div>
+              )}
+            </div>
+          </div>
+
+          {/* 보유 현황 그리드 (오른쪽) */}
+          {holdingItems && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>내 보유 현황</div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gridTemplateRows: 'repeat(3, minmax(0, 1fr))',
+                gap: 5,
+                flex: 1,
+                minHeight: 0,
+              }}>
+                {holdingItems.map(({ label, val, color }) => (
+                  <div key={label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: color || '#1e293b' }}>{val}</div>
                   </div>
-
-                  <div className="other-card" style={{ display: 'flex', flexDirection: 'column' }}>
-                    <div className="other-card-title">주요 지표</div>
-                    <div className="grid g11" style={{ gap: 7, flex: 1, alignContent: 'space-between' }}>
-                      <div className="metric-box"><div className="metric-label">거래량</div><div className="metric-value">{fmtVol(s?.volume)}</div></div>
-                      <div className="metric-box"><div className="metric-label">시가총액</div><div className="metric-value" style={{ whiteSpace: 'nowrap' }}>{fmtCap(s?.market_cap)}</div></div>
-                      <div className="metric-box"><div className="metric-label">52주 최고</div><div className="metric-value positive" style={{ whiteSpace: 'nowrap' }}>{s?.high52 ? `${fmt(s.high52)}원` : '—'}</div></div>
-                      <div className="metric-box"><div className="metric-label">52주 최저</div><div className="metric-value negative" style={{ whiteSpace: 'nowrap' }}>{s?.low52 ? `${fmt(s.low52)}원` : '—'}</div></div>
-                      <div className="metric-box">
-                        <div className="metric-label">PER</div>
-                        <div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div>
+                ))}
+              </div>
+              {snapshotInfo?.changePct != null && holding?.qty && (() => {
+                const { changePct, snapClose, latestClose } = snapshotInfo;
+                const isZero = Math.abs(changePct) < 0.005;
+                const isUp = changePct > 0;
+                const col = isZero ? '#94a3b8' : isUp ? '#dc2626' : '#2563eb';
+                const bg = isZero ? '#f1f5f9' : isUp ? '#fff1f1' : '#eff6ff';
+                const border = isZero ? '#cbd5e1' : isUp ? '#fecaca' : '#bfdbfe';
+                const pnl = (latestClose - snapClose) * holding.qty;
+                const fmtN = v => Number(Math.round(Math.abs(v))).toLocaleString('ko-KR');
+                return (
+                  <div style={{ marginTop: 'auto', paddingTop: 5 }}>
+                    <div style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 8, minHeight: 68, padding: '11px 12px', boxSizing: 'border-box' }}>
+                      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 6 }}>지금까지 안 팔았다면?</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: col }}>
+                          {isZero ? '±' : isUp ? '▲' : '▼'} {Math.abs(changePct).toFixed(2)}%
+                        </span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: col }}>
+                          {isZero ? '±' : isUp ? '+' : '-'}{fmtN(pnl)}원
+                        </span>
                       </div>
-                      <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '-'}</div></div>
                     </div>
                   </div>
-                </div>
-
-                <div className="other-card">
-                  <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: '#374151' }}>주가 변동 원인 분석</div>
-                  {cfg.factors.map(f => (
-                    <div key={f.label}>
-                      <div className="factor-row">
-                        <div className="factor-label">{f.label}</div>
-                        <div className="factor-bar-bg"><div className="factor-fill" style={{ width: `${f.pct}%`, background: f.color }} /></div>
-                        <div className={`factor-val ${f.val.startsWith('-') ? 'negative' : 'positive'}`}>{f.val}</div>
-                      </div>
-                      <div className="factor-desc">{f.desc}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 우측: 뉴스 */}
-              <div className="other-card" style={{ display: 'flex', flexDirection: 'column' }}>
-                <div className="other-card-title">관련 뉴스</div>
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  {news.length === 0 ? (
-                    <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>관련 뉴스가 없습니다.</div>
-                  ) : expandedNews !== null ? (
-                    (() => {
-                      const n = news[expandedNews];
-                      return (
-                        <div className="news-item" style={{ cursor: 'pointer' }} onClick={() => setExpandedNews(null)}>
-                          <div className="news-meta">
-                            <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>
-                              {n.direction || '혼조'}
-                            </span>
-                            <span className="news-date">{formatNewsPeriod(n.start_date, n.end_date)}</span>
-                          </div>
-                          {n.cause && <div className="news-title" style={{ marginBottom: 8 }}>{n.cause}</div>}
-                          {(n.cause || n.vol_insight) && (
-                            <div className="ai-box" style={{ padding: '10px 12px' }}>
-                              <div className="ai-header" style={{ marginBottom: 6 }}>
-                                <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 장세 분석</span>
-                              </div>
-                              {n.cause && <div className="ai-text" style={{ fontSize: 11, marginBottom: 4 }}>{n.cause}</div>}
-                              {n.vol_insight && <div className="ai-text" style={{ fontSize: 11, color: '#4338ca' }}>{n.vol_insight}</div>}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    news.slice(0, 5).map((n, i) => (
-                      <div key={i} className="news-item" style={{ cursor: 'pointer' }} onClick={() => setExpandedNews(i)}>
-                        <div className="news-meta">
-                          <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>
-                            {n.direction || '혼조'}
-                          </span>
-                          <span className="news-date">{formatNewsPeriod(n.start_date, n.end_date)}</span>
-                        </div>
-                        {n.cause && <div className="news-title">{n.cause}</div>}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
+                );
+              })()}
             </div>
           )}
         </div>
+
+
+        {/* anomaly 팝업 */}
+        {anomalyPopup && (() => {
+          const { anomaly, cx, cy } = anomalyPopup;
+          return (
+            <div style={{
+              position: 'fixed',
+              left: Math.min(cx + 12, window.innerWidth - 210),
+              top: Math.min(Math.max(8, cy - 16), window.innerHeight - 140),
+              background: 'white', border: '1.5px solid #fbbf24', borderRadius: 10,
+              padding: '8px 12px', boxShadow: '0 4px 16px rgba(15,23,42,0.12)',
+              zIndex: 9999, minWidth: 170, pointerEvents: 'none',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>{anomaly.isoDate} 급변 포착</div>
+              {anomaly.movers.map(m => (
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
+                    {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* ── 하단: WHAi 뉴스 ── */}
+        <div style={{ flexShrink: 0, padding: '0 20px 18px', background: 'white' }}>
+          <div style={{ border: '1.5px solid #c4b5fd', borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(160deg,#f5f3ff 0%,#eef2ff 100%)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '12px 14px 14px' }}>
+              <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#4c1d95' }}>관련 뉴스</span>
+            </div>
+            <div style={{ padding: '0 14px' }}>
+              {loading ? (
+                <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', padding: '14px 0' }}>···</div>
+              ) : newsList.length === 0 ? (
+                <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', padding: '14px 0' }}>관련 뉴스가 없습니다.</div>
+              ) : (
+                newsList.slice(0, 3).map((n, i) => (
+                  <div key={i} className="news-preview-item" style={{ borderBottom: 'none', margin: 0, padding: '4px 0' }}>
+                    <div className="news-meta">
+                      <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
+                      <span className="news-date" style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>{fmtNewsPeriod(n.start_date, n.end_date)}</span>
+                    </div>
+                    <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );

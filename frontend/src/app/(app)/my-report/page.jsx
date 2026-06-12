@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { handleUnauthorized, fetchWithAuth } from '@/lib/auth';
 import { ASSETS } from '@/lib/data';
+import StockDetailModal from '@/components/StockDetailModal';
 
 const ASSET_INFO = {
   '005930': { name: '삼성전자',      color: ASSETS['005930'].color,  sector: '반도체', unit: '주' },
@@ -531,7 +532,9 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
   return (
     <>
     {drawerHolding && (
-      <AssetDrawer holding={drawerHolding} prices={prices} onClose={() => setDrawerHolding(null)} />
+      drawerHolding.id !== 'USD'
+        ? <StockDetailModal stockId={drawerHolding.id} holding={drawerHolding} snapshotDate={snap.datetime} onClose={() => setDrawerHolding(null)} />
+        : <AssetDrawer holding={drawerHolding} prices={prices} onClose={() => setDrawerHolding(null)} />
     )}
     <div className="snapshot-card">
       <div className="snapshot-card-header">
