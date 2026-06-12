@@ -2,45 +2,54 @@
 import { useState, useEffect } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
 
+function formatNewsPeriod(start, end) {
+  if (!start) return '';
+  if (!end || start === end) return start;
+  return `${start} ~ ${end}`;
+}
+
 export const STOCK_CONFIG = {
-  '000000': { name: 'KOSPI 지수', sector: null, meta: '한국종합주가지수', logoSrc: '/assets/flags/kr.png', color: '#16a34a', factors: [] },
-  '005930': { name: '삼성전자', sector: '반도체', meta: '코스피 · 반도체', logo: 'samsung.svg', color: '#034EA2',
+  '000000': { name: 'KOSPI', sector: null, meta: '한국종합주가지수', logoSrc: '/assets/flags/kr.png', color: '#16a34a',
+    factors: [{ label: '외국인 순매수', pct: 45, color: '#2563eb', val: '+45%', desc: '외국인 투자자 순매수가 지수 상승 방향을 주도' },
+              { label: '글로벌 증시 동조화', pct: 32, color: '#7c3aed', val: '+32%', desc: 'S&P500·나스닥 강세와 동반 상승 흐름' },
+              { label: 'USD/KRW 환율', pct: 8, color: '#dc2626', val: '-8%', desc: '원화 강세 → 수출 기업 실적 부담으로 지수 하방 압력' }] },
+  '005930': { name: '삼성전자', sector: '반도체', meta: '반도체', logo: 'samsung.svg', color: '#034EA2',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 38, color: '#2563eb', val: '+38%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: 'HBM 수요 증가', pct: 42, color: '#7c3aed', val: '+42%', desc: 'AI 서버향 HBM3E 수요 급증' },
               { label: '환율 영향', pct: 5, color: '#dc2626', val: '-5%', desc: '원화 강세 → 수출 수익 환산 감소' }] },
-  '000660': { name: 'SK하이닉스', sector: '반도체', meta: '코스피 · 반도체', logo: 'skhynix.svg', color: '#E31837',
+  '000660': { name: 'SK하이닉스', sector: '반도체', meta: '반도체', logo: 'skhynix.svg', color: '#E31837',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 28, color: '#2563eb', val: '+28%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: 'HBM 공급 선도', pct: 55, color: '#7c3aed', val: '+55%', desc: 'HBM 독점 공급 구조 확립' },
               { label: '환율 영향', pct: 8, color: '#dc2626', val: '-8%', desc: '원화 강세 → 반도체 수출 수익 감소' }] },
-  '005380': { name: '현대차', sector: '자동차', meta: '코스피 · 자동차', logo: 'hyundai.png', color: '#002C5F',
+  '005380': { name: '현대차', sector: '자동차', meta: '자동차', logo: 'hyundai.png', color: '#002C5F',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 42, color: '#2563eb', val: '+42%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: '전동화 전환 성과', pct: 38, color: '#7c3aed', val: '+38%', desc: 'EV 판매 증가 및 프리미엄화 전략' },
               { label: '환율 영향', pct: 12, color: '#dc2626', val: '-12%', desc: '원화 강세 → 수출 수익 환산 감소' }] },
-  '000270': { name: '기아', sector: '자동차', meta: '코스피 · 자동차', logo: 'kia.png', color: '#C8102E',
+  '000270': { name: '기아', sector: '자동차', meta: '자동차', logo: 'kia.png', color: '#C8102E',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 44, color: '#2563eb', val: '+44%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: 'EV9 판매 호조', pct: 38, color: '#7c3aed', val: '+38%', desc: '북미·유럽 전기 SUV 수요 급증' },
               { label: '환율 영향', pct: 10, color: '#dc2626', val: '-10%', desc: '원화 강세 → 수출 수익 환산 감소' }] },
-  '079550': { name: 'LIG디펜스앤에어로스페이스', sector: '방산', meta: '코스피 · 방산', logo: 'lignex1.svg', color: '#0077C8',
+  '079550': { name: 'LIG디펜스앤에어로스페이스', sector: '방산', meta: '방산', logo: 'lignex1.svg', color: '#0077C8',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 18, color: '#2563eb', val: '+18%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: '방산 수주 확대', pct: 68, color: '#7c3aed', val: '+68%', desc: 'K2 전차·K9 자주포 수출 계약 증가' },
               { label: '환율 영향', pct: 5, color: '#dc2626', val: '-5%', desc: '원화 강세 → 수출 수익 환산 감소' }] },
-  '012450': { name: '한화에어로스페이스', sector: '방산', meta: '코스피 · 방산', logo: 'hanwha.svg', color: '#ED7100',
+  '012450': { name: '한화에어로스페이스', sector: '방산', meta: '방산', logo: 'hanwha.svg', color: '#ED7100',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 32, color: '#2563eb', val: '+32%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: '방산 수주 이슈', pct: 52, color: '#7c3aed', val: '+52%', desc: '폴란드·루마니아 수출 계약 뉴스 영향' },
               { label: '환율 영향', pct: 6, color: '#dc2626', val: '-6%', desc: '원화 강세 → 수출 수익 환산 시 감소' }] },
-  '105560': { name: 'KB금융', sector: '금융', meta: '코스피 · 금융', logo: 'kb.svg', color: '#D4960A',
+  '105560': { name: 'KB금융', sector: '금융', meta: '금융', logo: 'kb.svg', color: '#D4960A',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 48, color: '#2563eb', val: '+48%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: '금리 상승 수혜', pct: 38, color: '#7c3aed', val: '+38%', desc: '순이자마진(NIM) 개선 효과' },
               { label: '대손충당금 증가', pct: 8, color: '#dc2626', val: '-8%', desc: '부동산 PF 리스크 반영' }] },
-  '055550': { name: '신한지주', sector: '금융', meta: '코스피 · 금융', logo: 'shinhan.svg', color: '#5BADD1',
+  '055550': { name: '신한지주', sector: '금융', meta: '금융', logo: 'shinhan.svg', color: '#5BADD1',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 45, color: '#2563eb', val: '+45%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: '금리 상승 수혜', pct: 35, color: '#7c3aed', val: '+35%', desc: '이자이익 증가 효과' },
               { label: '대출 부실 위험', pct: 9, color: '#dc2626', val: '-9%', desc: '기업 구조조정 관련 충당금 부담' }] },
-  '051910': { name: 'LG화학', sector: '화학', meta: '코스피 · 화학', logo: 'lgchem.svg', color: '#A50034',
+  '051910': { name: 'LG화학', sector: '화학', meta: '화학', logo: 'lgchem.svg', color: '#A50034',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 42, color: '#2563eb', val: '+42%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: '배터리 사업 부진', pct: 48, color: '#dc2626', val: '-48%', desc: 'EV 배터리 수요 둔화 및 가격 하락' },
               { label: '글로벌 수요 약세', pct: 18, color: '#dc2626', val: '-18%', desc: '화학 제품 수요 둔화' }] },
-  '096770': { name: 'SK이노베이션', sector: '화학', meta: '코스피 · 화학', logo: 'skinnovation.svg', color: '#F46F19',
+  '096770': { name: 'SK이노베이션', sector: '화학', meta: '화학', logo: 'skinnovation.svg', color: '#F46F19',
     factors: [{ label: '시장 전체 (KOSPI)', pct: 38, color: '#2563eb', val: '+38%', desc: 'KOSPI와 함께 움직인 비율' },
               { label: '배터리 수주 증가', pct: 45, color: '#7c3aed', val: '+45%', desc: '북미 배터리 공장 가동률 상승' },
               { label: '유가 변동 영향', pct: 8, color: '#dc2626', val: '-8%', desc: '원유 가격 하락 → 화학 부문 수익성 압박' }] },
@@ -309,7 +318,7 @@ export default function StockDetailModal({ stockId, onClose }) {
                             <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>
                               {n.direction || '혼조'}
                             </span>
-                            <span className="news-date">{n.start_date} ~ {n.end_date}</span>
+                            <span className="news-date">{formatNewsPeriod(n.start_date, n.end_date)}</span>
                           </div>
                           {n.cause && <div className="news-title" style={{ marginBottom: 8 }}>{n.cause}</div>}
                           {(n.cause || n.vol_insight) && (
@@ -331,7 +340,7 @@ export default function StockDetailModal({ stockId, onClose }) {
                           <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>
                             {n.direction || '혼조'}
                           </span>
-                          <span className="news-date">{n.start_date} ~ {n.end_date}</span>
+                          <span className="news-date">{formatNewsPeriod(n.start_date, n.end_date)}</span>
                         </div>
                         {n.cause && <div className="news-title">{n.cause}</div>}
                       </div>

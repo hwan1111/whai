@@ -3,15 +3,53 @@ name: Deploy to ECR & EC2
 on:
   push:
     branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'airflow/**'
+      - 'src/**'
+      - 'config/**'
+      - '.github/workflows/deploy.yml'
 
 env:
   AWS_REGION: ap-northeast-2
   REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com
   IMAGE_NAME_BACKEND: whai-backend
   IMAGE_NAME_FRONTEND: whai-frontend
+  IMAGE_NAME_AIRFLOW: whai-airflow
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.changes.outputs.backend }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+      airflow: ${{ steps.changes.outputs.airflow }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: changes
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'src/**'
+              - 'config/**'
+            frontend:
+              - 'frontend/**'
+              - 'src/**'
+              - 'config/**'
+            airflow:
+              - 'airflow/**'
+              - 'src/**'
+              - 'config/**'
+
   build-and-push:
+    needs: detect-changes
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -31,6 +69,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push backend image
+        if: needs.detect-changes.outputs.backend == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -41,6 +80,7 @@ jobs:
           docker push $ECR_REGISTRY/$IMAGE_NAME_BACKEND:latest
 
       - name: Build and push frontend image
+        if: needs.detect-changes.outputs.frontend == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -50,11 +90,29 @@ jobs:
           docker push $ECR_REGISTRY/$IMAGE_NAME_FRONTEND:$IMAGE_TAG
           docker push $ECR_REGISTRY/$IMAGE_NAME_FRONTEND:latest
 
+      - name: Build and push airflow image
+        if: needs.detect-changes.outputs.airflow == 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f airflow/Dockerfile -t $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:$IMAGE_TAG $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:latest
+          docker push $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:latest
+
   deploy-to-ec2:
-    needs: build-and-push
+    needs: [build-and-push, detect-changes]
     runs-on: [self-hosted, ec2]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Pull latest code from main
+        run: |
+          cd /opt/project/whai
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -70,13 +128,21 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          docker pull $ECR_REGISTRY/$IMAGE_NAME_BACKEND:latest
-          docker pull $ECR_REGISTRY/$IMAGE_NAME_FRONTEND:latest
+          if [ "${{ needs.detect-changes.outputs.backend }}" = "true" ]; then
+            docker pull $ECR_REGISTRY/$IMAGE_NAME_BACKEND:latest
+          fi
+          if [ "${{ needs.detect-changes.outputs.frontend }}" = "true" ]; then
+            docker pull $ECR_REGISTRY/$IMAGE_NAME_FRONTEND:latest
+          fi
+          if [ "${{ needs.detect-changes.outputs.airflow }}" = "true" ]; then
+            docker pull $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:latest
+          fi
 
       - name: Deploy with docker-compose
         env:
           BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:latest
           FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
+          AIRFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AIRFLOW }}:latest
         run: |
           docker compose down
           docker compose up -d

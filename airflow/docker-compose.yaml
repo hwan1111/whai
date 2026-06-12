@@ -3,10 +3,14 @@
 # =================================================================
 
 x-airflow-common: &airflow-common
-  image: 295447237396.dkr.ecr.ap-northeast-2.amazonaws.com/whai-airflow:latest
+  image: ${AIRFLOW_IMAGE:-whai-airflow:latest}
+  build:
+    context: ..
+    dockerfile: airflow/Dockerfile
   env_file:
     - ../.env
   environment: &airflow-common-env
+    TZ: UTC
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@whai_postgres/airflow_db
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@whai_postgres/airflow_db
@@ -28,6 +32,8 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/../script:/opt/script
     - ${AIRFLOW_PROJ_DIR:-.}/../src:/opt/src
+    - ${AIRFLOW_PROJ_DIR:-.}/../data:/opt/data
+    - ${AIRFLOW_PROJ_DIR:-.}/../config/certs:/opt/certs
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
     - whai-network
