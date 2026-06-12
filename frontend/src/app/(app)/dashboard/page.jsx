@@ -198,7 +198,7 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, anomalies, on
   minV -= pad; maxV += pad;
 
   const ticks = niceTicks(minV, maxV, 6);
-  const step = Math.max(1, Math.ceil(n / 8));
+  const step = Math.max(1, Math.ceil(n / 4));
   const xLabelIndices = [];
   for (let i = 0; i < n; i += step) xLabelIndices.push(i);
   if ((n - 1) % step !== 0) xLabelIndices.push(n - 1);
@@ -288,32 +288,32 @@ function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset, anomalies, on
             <line x1={ML} y1={y.toFixed(1)} x2={SW - MR} y2={y.toFixed(1)}
               stroke={isZero ? '#94a3b8' : '#f1f5f9'} strokeWidth={1}
               />
-            <text x={ML - 5} y={(y + 4).toFixed(1)} textAnchor="end" fontSize={11}
+            <text x={ML - 5} y={(y + 4).toFixed(1)} textAnchor="end" fontSize={13}
               style={{ transformBox: 'fill-box', transformOrigin: 'center', transform: 'scaleY(0.75)' }}
-              fill={isZero ? '#94a3b8' : '#94a3b8'} fontWeight={isZero ? 600 : 400}>{label}</text>
+              fill={isZero ? '#64748b' : '#64748b'} fontWeight={isZero ? 600 : 400}>{label}</text>
           </g>
         );
       })}
 
       {/* x축 라벨 */}
       {xLabelIndices.map(i => (
-        <text key={i} x={toX(i, n).toFixed(1)} y={(MT + CH + 22).toFixed(1)}
-          textAnchor="middle" fontSize={11} fill="#94a3b8"
+        <text key={i} x={toX(i, n).toFixed(1)} y={(MT + CH + 27).toFixed(1)}
+          textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} fontSize={13} fill="#64748b"
           style={{ transformBox: 'fill-box', transformOrigin: 'center', transform: 'scaleY(0.75)' }}>{pd.labels[i]}</text>
       ))}
 
       {/* anomaly markers */}
       {anomalies?.map(a => {
         const x = toX(a.idx, n);
-        const cy = MT + CH + 12;
+        const cy = MT + CH + 9;
         return (
           <g key={a.idx} style={{ cursor: 'pointer' }}
             onMouseEnter={e => onAnomalyHover?.(a, e.clientX, e.clientY)}
             onMouseLeave={onAnomalyLeave}
             onClick={e => { e.stopPropagation(); onAnomalyClick?.(a, e.clientX, e.clientY); }}>
-            <circle cx={x.toFixed(1)} cy={cy} r={7} fill="#f59e0b" opacity={0.92} />
-            <text x={x.toFixed(1)} y={cy + 3.5} textAnchor="middle" fontSize={9} fontWeight="800"
-              fill="white" pointerEvents="none" style={{ userSelect: 'none' }}>!</text>
+            <circle cx={x.toFixed(1)} cy={cy} r={10} fill="transparent" />
+            <text x={x.toFixed(1)} y={cy + 5} textAnchor="middle" fontSize={12}
+              fill="#f59e0b" pointerEvents="none" style={{ userSelect: 'none' }}>★</text>
           </g>
         );
       })}
@@ -540,7 +540,7 @@ function fmtChg(pct) {
   return { text: `${sign} ${Math.abs(pct).toFixed(2)}%`, cls };
 }
 
-const ANOMALY_MAX = { '1W': 2, '1M': 3, '3M': 4, '6M': 5, '1Y': 6, '3Y': 8, 'ALL': 8 };
+const ANOMALY_MAX = { '1W': 2, '1M': 4, '3M': 6, '6M': 10, '1Y': 15, '3Y': 25, 'ALL': 45 };
 const ANOMALY_THRESH = id => (id === '000000' || id === 'USD') ? 1.0 : 2.0;
 
 function computeAnomalies(pd, activeAssets, period) {
@@ -693,7 +693,7 @@ export default function DashboardPage() {
     activeAssets.forEach(id => {
       if (id in allNewsMap) return;
       setAllNewsMap(prev => ({ ...prev, [id]: null }));
-      fetchWithAuth(`/api/v1/news?ticker=${id}&days=365`)
+      fetchWithAuth(`/api/v1/news?ticker=${id}&days=9999`)
         .then(r => r.ok ? r.json() : [])
         .then(news => setAllNewsMap(prev => ({ ...prev, [id]: news ?? [] })))
         .catch(() => setAllNewsMap(prev => ({ ...prev, [id]: [] })));
@@ -1018,7 +1018,7 @@ export default function DashboardPage() {
           onClick={() => setAnomalyClick(null)}
         >
           <div
-            style={{ width: 'min(460px, 92vw)', maxHeight: '82vh', overflowY: 'auto', background: 'white', border: '1.5px solid #f59e0b', borderRadius: 14, padding: '16px 18px', boxShadow: '0 20px 60px rgba(15,23,42,0.28)' }}
+            style={{ width: anomalyClick.anomaly.movers.length >= 9 ? 'min(1500px, 97vw)' : anomalyClick.anomaly.movers.length >= 4 ? 'min(1200px, 95vw)' : 'min(500px, 92vw)', maxHeight: '82vh', overflowY: 'auto', background: 'white', border: '1.5px solid #f59e0b', borderRadius: 14, padding: '16px 18px', boxShadow: '0 20px 60px rgba(15,23,42,0.28)' }}
             onClick={e => e.stopPropagation()}
           >
             <div style={{ fontSize: 13, fontWeight: 800, color: '#92400e', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -1026,28 +1026,65 @@ export default function DashboardPage() {
               {fmtNewsDate(anomalyClick.anomaly.isoDate)} 급변 포착
               <button onClick={() => setAnomalyClick(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 17, color: '#94a3b8', lineHeight: 1, padding: 2 }}>✕</button>
             </div>
-            {anomalyClick.anomaly.movers.map((m, idx) => {
-              const newsList = allNewsMap[m.id];
-              const news = findNewsForDate(newsList, anomalyClick.anomaly.isoDate);
+            {(() => {
+              const cnt = anomalyClick.anomaly.movers.length;
+              const cols = cnt >= 9 ? 3 : cnt >= 4 ? 2 : 1;
+              const isMultiCol = cols > 1;
               return (
-                <div key={m.id} style={{ padding: '10px 0', borderTop: idx > 0 ? '1px solid #f1f5f9' : 'none' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ASSETS[m.id]?.color ?? '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
-                      {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
-                    </span>
-                  </div>
-                  {newsList === null || newsList === undefined ? (
-                    <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6, paddingLeft: 15 }}>뉴스를 불러오는 중입니다.</div>
-                  ) : news?.cause ? (
-                    <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.65, paddingLeft: 15 }}>{news.cause}</div>
-                  ) : (
-                    <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6, paddingLeft: 15 }}>해당 날짜를 포함하는 국면 뉴스가 없습니다.</div>
-                  )}
+                <div style={isMultiCol ? { display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 } : {}}>
+                  {anomalyClick.anomaly.movers.map((m, idx) => {
+                    const newsList = allNewsMap[m.id];
+                    const news = findNewsForDate(newsList, anomalyClick.anomaly.isoDate);
+                    const isUp = news?.direction === '상승';
+                    const isDown = news?.direction === '하락';
+                    const boxBg = isUp
+                      ? { background: '#fef2f2', border: '1px solid #fecaca' }
+                      : isDown
+                      ? { background: '#eff6ff', border: '1px solid #bfdbfe' }
+                      : { background: '#f8fafc', border: '1px solid #e2e8f0' };
+                    return (
+                      <div key={m.id} style={isMultiCol
+                        ? { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px' }
+                        : { padding: '10px 0', borderTop: idx > 0 ? '1px solid #f1f5f9' : 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, flexWrap: 'wrap' }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: ASSETS[m.id]?.color ?? '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
+                            {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
+                          </span>
+                        </div>
+                        {newsList === null || newsList === undefined ? (
+                          <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>뉴스를 불러오는 중입니다.</div>
+                        ) : news ? (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginBottom: 7 }}>
+                              <span className="ai-badge" style={{ fontSize: 10 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+                              {news.direction && (
+                                <span className={`regime-direction ${isUp ? 'up' : isDown ? 'down' : 'neutral'}`}>
+                                  {isUp ? '▲ 상승' : isDown ? '▼ 하락' : news.direction}
+                                </span>
+                              )}
+                              {news.start_date && !isMultiCol && (
+                                <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
+                                  {fmtNewsPeriod(news.start_date, news.end_date)}
+                                </span>
+                              )}
+                            </div>
+                            {news.cause && (
+                              <div style={{ ...boxBg, padding: '8px 10px', borderRadius: 9, fontSize: isMultiCol ? 12 : 13, fontWeight: 700, color: '#374151', lineHeight: 1.55 }}>
+                                {news.cause}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>해당 날짜를 포함하는 국면 뉴스가 없습니다.</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
-            })}
+            })()}
           </div>
         </div>,
         document.body
@@ -1376,8 +1413,8 @@ export default function DashboardPage() {
                     <img src={cfg.logoSrc ?? `/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: cfg.name.length > 8 ? 11 : 14, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cfg.name}</div>
-                    {selectedStockId !== '000000' && <div style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedStockId} · {cfg.meta}</div>}
+                    <div style={{ fontSize: cfg.name.length > 10 ? 10 : cfg.name.length > 7 ? 12 : 14, fontWeight: 800, color: '#1e293b' }}>{cfg.name}</div>
+                    {selectedStockId !== '000000' && <div style={{ fontSize: 10, color: '#64748b' }}>{selectedStockId} · {cfg.meta}</div>}
                   </div>
                   {favDetailLoading ? (
                     <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
@@ -1498,7 +1535,7 @@ export default function DashboardPage() {
                 })()}
 
                 {/* PER 업종 평균 비교 (주식) / KOSPI 평균 PER 비교 (지수) */}
-                {cfg?.sector ? (s?.per != null && (() => {
+                {cfg?.sector ? (() => {
                   const SECTOR_PER = {
                     '반도체': 23,
                     '자동차': 7,
@@ -1508,8 +1545,9 @@ export default function DashboardPage() {
                   };
                   const avg = SECTOR_PER[cfg.sector];
                   if (!avg) return null;
-                  const diff = s.per - avg;
-                  const isAbove = diff > 0;
+                  const isDeficit = s?.per == null;
+                  const diff = isDeficit ? null : s.per - avg;
+                  const isAbove = diff != null && diff > 0;
                   const diffColor = isAbove ? '#dc2626' : '#2563eb';
                   return (
                     <div style={{ marginTop: 8, padding: '7px 10px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
@@ -1520,7 +1558,9 @@ export default function DashboardPage() {
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <div style={{ flex: 1, textAlign: 'center' }}>
                           <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b', marginBottom: 2 }}>PER</div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: diffColor, lineHeight: 1 }}>{s.per.toFixed(1)}</div>
+                          {isDeficit
+                            ? <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8', lineHeight: 1 }}>적자</div>
+                            : <div style={{ fontSize: 15, fontWeight: 800, color: diffColor, lineHeight: 1 }}>{s.per.toFixed(1)}</div>}
                         </div>
                         <div style={{ width: 1, height: 28, background: '#e2e8f0', flexShrink: 0 }} />
                         <div style={{ flex: 1, textAlign: 'center' }}>
@@ -1529,12 +1569,16 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: diffColor }}>{isAbove ? '▲' : '▼'} {isAbove ? '+' : ''}{diff.toFixed(1)}</span>
-                        <span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>업종 평균 대비 {isAbove ? '높음' : '낮음'}</span>
+                        {isDeficit
+                          ? <><span style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>▼ 적자</span><span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>업종 평균 대비 낮음</span></>
+                          : <>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: diffColor }}>{isAbove ? '▲' : '▼'} {isAbove ? '+' : ''}{diff.toFixed(1)}</span>
+                              <span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>업종 평균 대비 {isAbove ? '높음' : '낮음'}</span>
+                            </>}
                       </div>
                     </div>
                   );
-                })()) : null}
+                })() : null}
               </>
             )}
             </>
@@ -1669,7 +1713,7 @@ export default function DashboardPage() {
                         onClick={showFull ? undefined : () => setExpandedPairKey(isExpanded ? null : pairKey)}
                         style={{ cursor: showFull ? 'default' : 'pointer' }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: showFull ? 4 : 3 }}>
-                          <span style={{ fontSize: showFull ? 12 : 11, color: '#312e81', fontWeight: 800, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortLabel(a)} · {shortLabel(b)}</span>
+                          <span style={{ fontSize: showFull ? 12 : 11, color: '#312e81', fontWeight: 800, flex: 1, minWidth: 0 }}>{shortLabel(a)} · {shortLabel(b)}</span>
                           <span style={{ fontSize: showFull ? 12 : 11, fontWeight: 800, color: textCol, flexShrink: 0 }}>{isPos ? '▲' : '▼'} {v.toFixed(2)}</span>
                         </div>
                         <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: showFull ? 4 : 3 }}>
