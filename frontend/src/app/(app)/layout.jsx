@@ -37,18 +37,26 @@ export default function AppLayout({ children }) {
 
   useEffect(() => {
     if (!checked) return;
-    async function loadDate() {
+    async function loadDataFreshness() {
       try {
-        const res = await fetchWithAuth('/api/v1/prices/latest');
+        const res = await fetchWithAuth('/api/v1/prices/data-freshness');
         if (!res.ok) return;
         const data = await res.json();
-        if (!data.length) return;
-        const now = new Date();
-        const hhmm = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
-        setUpdateTime(`마지막 업데이트: ${hhmm} KST`);
+        const formatDate = value => {
+          if (!value) return '—';
+          const [year, month, day] = value.slice(0, 10).split('-');
+          return year && month && day ? `${Number(month)}/${Number(day)}` : '—';
+        };
+        const dates = [data.price, data.news, data.fundamental].map(formatDate);
+        const allSame = dates.every(d => d === dates[0]);
+        setUpdateTime(
+          allSame
+            ? `최신 데이터 기준: ${dates[0]}`
+            : `최신 데이터 기준 · 주가 ${dates[0]} · 뉴스 ${dates[1]} · 펀더멘털 ${dates[2]}`
+        );
       } catch { /* silent */ }
     }
-    loadDate();
+    loadDataFreshness();
   }, [checked]);
 
   if (!checked) return null;

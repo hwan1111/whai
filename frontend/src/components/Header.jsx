@@ -241,7 +241,7 @@ export default function Header({ updateTime }) {
           </Link>
         </div>
         <div className="header-right">
-          {updateTime && <span style={{ fontSize: 11, color: '#94a3b8' }}>{updateTime}</span>}
+          {updateTime && <span style={{ fontSize: 11, color: '#64748b' }}>{updateTime}</span>}
           {pathname?.startsWith('/my-report') ? (
             <Link href="/dashboard" className="header-report-btn">
               🏠 대시보드
