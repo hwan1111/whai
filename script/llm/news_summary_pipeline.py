@@ -175,7 +175,7 @@ class NewsSummaryPipeline:
         title: str,
         fulltext: str,
         endpoint: str = "mid_performance_llm"
-    ) -> str:
+    ) -> tuple[str, int, int]:
         """LLM으로 뉴스 요약"""
         try:
             article_content = f"제목: {title}\n\n내용: {fulltext}"
@@ -200,18 +200,25 @@ class NewsSummaryPipeline:
                     "prompt_length": len(prompt),
                 })
 
-                logger.info(f"📤 LLM 프롬프트 전송: {len(prompt)}자 (uri={prompt_uri})")
+                logger.info(f"📤 LLM 프롬프트 전송: {len(prompt)}자")
 
                 gateway_client = GatewayClient(endpoint=endpoint, validate_connection=False)
-                summary = gateway_client.call(
+                summary, input_token, output_token = gateway_client.call_with_usage(
                     text=prompt,
                     max_tokens=self.max_tokens,
                 )
 
-                span.set_outputs({"summary": summary.strip()})
+                span.set_outputs({
+                    "summary": summary.strip(),
+                    "input_token": input_token,
+                    "output_token": output_token,
+                })
 
-                logger.info(f"📥 LLM 응답 수신: {len(summary)}자")
-                return summary.strip()
+                logger.info(
+                    f"📥 LLM 응답 수신: {len(summary)}자 "
+                    f"(input_token={input_token}, output_token={output_token})"
+                )
+                return summary.strip(), input_token, output_token
         except Exception as e:
             logger.error(f"❌ 요약 생성 실패: {str(e)}", exc_info=True)
             raise
@@ -254,8 +261,12 @@ class NewsSummaryPipeline:
                                 continue
 
                             # LLM으로 요약
-                            summary = self.summarize_news(title, fulltext, endpoint=endpoint)
-                            date_summaries[news_id] = summary
+                            summary, input_token, output_token = self.summarize_news(title, fulltext, endpoint=endpoint)
+                            date_summaries[news_id] = {
+                                "summary": summary,
+                                "input_token": input_token,
+                                "output_token": output_token,
+                            }
 
                             processed_count += 1
 
@@ -392,11 +403,18 @@ class NewsSummaryPipeline:
                                     article = news.get("fulltext", "")
                                     break
 
+                            mid_summary = mid_date_summaries[news_id]
+                            low_summary = low_date_summaries[news_id]
+
+                            # summary 필드 추출 (dict 또는 str)
+                            ref_text = mid_summary["summary"] if isinstance(mid_summary, dict) else mid_summary
+                            gen_text = low_summary["summary"] if isinstance(low_summary, dict) else low_summary
+
                             eval_summaries.append({
                                 "id": f"{ticker}_{date_str}_{news_id}",
                                 "article": article,
-                                "reference_summary": mid_date_summaries[news_id],
-                                "generated_summary": low_date_summaries[news_id],
+                                "reference_summary": ref_text,
+                                "generated_summary": gen_text,
                             })
 
                     # 5. 평가 실행
