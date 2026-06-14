@@ -176,21 +176,30 @@ jobs:
             docker pull $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:latest
           fi
 
+      # 변경된 컴포넌트만 해당 디렉토리에서 개별 기동 (루트 통합 compose 미사용)
+      # 각 컴포넌트 compose 는 env_file: ../.env 로 /opt/project/whai/.env 를 참조한다.
       - name: Deploy with docker-compose
         env:
           BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:latest
           FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
           AIRFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AIRFLOW }}:latest
         run: |
-          docker compose down
-          docker compose up -d
+          if [ "${{ needs.detect-changes.outputs.backend }}" = "true" ]; then
+            cd /opt/project/whai/backend && docker compose up -d
+          fi
+          if [ "${{ needs.detect-changes.outputs.frontend }}" = "true" ]; then
+            cd /opt/project/whai/frontend && docker compose up -d
+          fi
+          if [ "${{ needs.detect-changes.outputs.airflow }}" = "true" ]; then
+            cd /opt/project/whai/airflow && docker compose up -d
+          fi
 
       - name: Verify deployment
         run: |
           sleep 5
-          docker compose ps
+          docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
           curl -f http://localhost:8000/health || true
-          curl -f http://localhost:3000 || true
+          curl -f http://localhost:80 || true
 
       - name: Send Slack notification
         if: always()
