@@ -10,6 +10,17 @@ on:
       - 'src/**'
       - 'config/**'
       - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      components:
+        description: '수동 배포 대상 컴포넌트'
+        type: choice
+        default: all
+        options:
+          - all
+          - backend
+          - frontend
+          - airflow
 
 env:
   AWS_REGION: ap-northeast-2
@@ -22,16 +33,18 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.changes.outputs.backend }}
-      frontend: ${{ steps.changes.outputs.frontend }}
-      airflow: ${{ steps.changes.outputs.airflow }}
+      backend: ${{ steps.final.outputs.backend }}
+      frontend: ${{ steps.final.outputs.frontend }}
+      airflow: ${{ steps.final.outputs.airflow }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # push 이벤트에서만 변경 경로 감지 (수동 dispatch는 입력값으로 강제)
       - name: Detect changed paths
         id: changes
+        if: github.event_name == 'push'
         uses: dorny/paths-filter@v2
         with:
           filters: |
@@ -47,6 +60,28 @@ jobs:
               - 'airflow/**'
               - 'src/**'
               - 'config/**'
+
+      # 최종 빌드 대상 결정: push면 감지 결과, workflow_dispatch면 입력값(components)
+      - name: Compute effective targets
+        id: final
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            be=false; fe=false; af=false
+            case "${{ inputs.components }}" in
+              all)      be=true; fe=true; af=true ;;
+              backend)  be=true ;;
+              frontend) fe=true ;;
+              airflow)  af=true ;;
+            esac
+          else
+            be="${{ steps.changes.outputs.backend }}"
+            fe="${{ steps.changes.outputs.frontend }}"
+            af="${{ steps.changes.outputs.airflow }}"
+          fi
+          echo "backend=$be" >> "$GITHUB_OUTPUT"
+          echo "frontend=$fe" >> "$GITHUB_OUTPUT"
+          echo "airflow=$af" >> "$GITHUB_OUTPUT"
+          echo "대상 → backend=$be frontend=$fe airflow=$af"
 
   build-and-push:
     needs: detect-changes
