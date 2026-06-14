@@ -299,6 +299,38 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:16px;color:#334155">${l}</p>`).join('');
 }
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// LLM이 생성한 구조화 분석(ai_analysis)을 HTML로 렌더링.
+// 필드가 없으면(레거시 스냅샷/실패) 호출 측에서 buildAiHtml() fallback 사용.
+function buildAiHtmlFromAnalysis(analysis) {
+  const sections = [
+    { key: 'overall_summary',   label: '🧭 종합 요약' },
+    { key: 'concentration',     label: '⚖️ 집중도' },
+    { key: 'sector_allocation', label: '📂 섹터 구성' },
+    { key: 'performance',       label: '📈 성과' },
+    { key: 'news_highlights',   label: '📰 뉴스 하이라이트' },
+    { key: 'risk_alignment',    label: '🎯 투자성향 적합도' },
+    { key: 'suggestions',       label: '💡 제안' },
+  ];
+  const lines = sections
+    .filter(({ key }) => analysis[key])
+    .map(({ key, label }) =>
+      `<p style="margin:0 0 12px;line-height:1.8;font-size:16px;color:#334155"><strong>${label}</strong>: ${escapeHtml(analysis[key])}</p>`
+    );
+
+  if (typeof analysis.confidence === 'number') {
+    const pct = Math.round(analysis.confidence * 100);
+    lines.push(`<p style="margin:0;font-size:12px;color:#94a3b8">분석 신뢰도 ${pct}%</p>`);
+  }
+  return lines.join('');
+}
+
 function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) {
   const [tooltip, setTooltip] = useState(null);
   const [sortMode, setSortMode] = useState('value');
@@ -527,7 +559,10 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
   const pnlColor = totalPnl >= 0 ? '#dc2626' : '#2563eb';
-  const aiHtml = buildAiHtml(sorted, totalVal, totalCost);
+  // LLM 분석(ai_analysis)이 있으면 우선 사용, 없으면(레거시/실패) rule-based fallback
+  const aiHtml = snap.ai_analysis
+    ? buildAiHtmlFromAnalysis(snap.ai_analysis)
+    : buildAiHtml(sorted, totalVal, totalCost);
 
   return (
     <>
