@@ -182,11 +182,13 @@ jobs:
           FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
           AIRFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AIRFLOW }}:latest
         run: |
+          cd /opt/project/whai
           docker compose down
           docker compose up -d
 
       - name: Verify deployment
         run: |
+          cd /opt/project/whai
           sleep 5
           docker compose ps
           curl -f http://localhost:8000/health || true
