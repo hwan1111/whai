@@ -24,13 +24,9 @@ logger = logging.getLogger(__name__)
 #   }
 MLFLOW_PROMPTS_CONFIG = {
     "news_summarization": {
-        "name": "news_summary_prompt",
+        "name": "regime_news_summarys",
         "version": "2",  # 구체적인 버전 번호 사용
-    },
-    "news_summarization_detailed": {
-        "name": "news_summary_detailed_prompt",
-        "version": "latest",
-    },
+    }
 }
 
 
