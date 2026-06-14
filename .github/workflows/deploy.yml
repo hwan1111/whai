@@ -15,9 +15,10 @@ on:
       components:
         description: '수동 배포 대상 컴포넌트'
         type: choice
-        default: all
+        default: app
         options:
-          - all
+          - app        # backend + frontend (airflow 제외 — 일반 앱 배포)
+          - all        # backend + frontend + airflow
           - backend
           - frontend
           - airflow
@@ -58,8 +59,6 @@ jobs:
               - 'config/**'
             airflow:
               - 'airflow/**'
-              - 'src/**'
-              - 'config/**'
 
       # 최종 빌드 대상 결정: push면 감지 결과, workflow_dispatch면 입력값(components)
       - name: Compute effective targets
@@ -68,6 +67,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             be=false; fe=false; af=false
             case "${{ inputs.components }}" in
+              app)      be=true; fe=true ;;
               all)      be=true; fe=true; af=true ;;
               backend)  be=true ;;
               frontend) fe=true ;;
