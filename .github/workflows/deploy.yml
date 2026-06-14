@@ -176,23 +176,37 @@ jobs:
             docker pull $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:latest
           fi
 
+      # 변경된 컴포넌트만 해당 디렉토리에서 개별 기동 (루트 통합 compose 미사용).
+      # 각 compose 는 env_file: ../.env, image: ${X_IMAGE} 를 참조한다.
+      # container_name 이 고정이라, 다른 compose 프로젝트로 만들어진 동일 이름
+      # 컨테이너가 남아 있으면 충돌하므로 기동 전에 강제 제거한다.
       - name: Deploy with docker-compose
         env:
           BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:latest
           FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
           AIRFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AIRFLOW }}:latest
         run: |
-          cd /opt/project/whai
-          docker compose down
-          docker compose up -d
+          if [ "${{ needs.detect-changes.outputs.backend }}" = "true" ]; then
+            cd /opt/project/whai/backend
+            docker rm -f whai_backend 2>/dev/null || true
+            docker compose up -d
+          fi
+          if [ "${{ needs.detect-changes.outputs.frontend }}" = "true" ]; then
+            cd /opt/project/whai/frontend
+            docker rm -f whai_frontend 2>/dev/null || true
+            docker compose up -d
+          fi
+          if [ "${{ needs.detect-changes.outputs.airflow }}" = "true" ]; then
+            cd /opt/project/whai/airflow
+            docker compose up -d
+          fi
 
       - name: Verify deployment
         run: |
-          cd /opt/project/whai
           sleep 5
-          docker compose ps
+          docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
           curl -f http://localhost:8000/health || true
-          curl -f http://localhost:3000 || true
+          curl -f http://localhost:80 || true
 
       - name: Send Slack notification
         if: always()
