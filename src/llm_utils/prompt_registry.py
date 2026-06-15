@@ -32,7 +32,7 @@ MLFLOW_PROMPTS_CONFIG = {
     #   등록된 프롬프트 URI: prompts:/portfolio_analysis/1
     "portfolio_analysis": {
         "name": "portfolio_analysis",
-        "version": "1",
+        "version": "3",
     },
 }
 
