@@ -31,6 +31,7 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/../src:/opt/src
     - ${AIRFLOW_PROJ_DIR:-.}/../data:/opt/data
     - ${AIRFLOW_PROJ_DIR:-.}/../config/certs:/opt/certs
+    - ${AIRFLOW_PROJ_DIR:-.}/../.env:/opt/.env
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
     - whai-network
