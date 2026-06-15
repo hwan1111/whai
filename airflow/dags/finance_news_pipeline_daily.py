@@ -269,40 +269,25 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
 
 
 def _load_db_task(ticker_code: str, **context) -> None:
-    """regime JSON → MySQL 업로드 (마지막 국면 재삽입)."""
+    """regime JSON → MySQL 업로드 (신규 국면만 append)."""
     sys.path.insert(0, str(ROOT))
-    from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env", override=True)
 
-    import pymysql
+    # DB ticker(000000, USD)와 파일 ticker(KOSPI200, USD_KRW) 매핑
+    _FILE_TICKER = {"000000": "KOSPI200", "USD": "USD_KRW"}
+    _DB_TICKER   = {"KOSPI200": "000000", "USD_KRW": "USD"}
 
-    ca_path = str(ROOT / "config" / "certs" / "ca.pem")
-    conn = pymysql.connect(
-        host="mysql-12676458-whai.b.aivencloud.com", port=16935,
-        db="whai_service",
-        user=os.environ["BACKEND_DB_USER"], password=os.environ["BACKEND_DB_PASSWORD"],
-        charset="utf8mb4", ssl={"ca": ca_path},
-        cursorclass=pymysql.cursors.DictCursor,
-    )
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT start_date FROM regime WHERE ticker = %s ORDER BY end_date DESC LIMIT 1",
-                (ticker_code,),
-            )
-            row = cur.fetchone()
-    finally:
-        conn.close()
+    file_ticker = _FILE_TICKER.get(ticker_code, ticker_code)
+    db_ticker   = _DB_TICKER.get(file_ticker, file_ticker)
 
     cmd = [
         str(ROOT / ".venv" / "bin" / "python"),
         str(ROOT / "script" / "others" / "upload_regime_to_db.py"),
-        "--ticker", ticker_code,
+        "--ticker", file_ticker,
+        "--mode",   "append",
     ]
-    if row:
-        cmd += ["--since", row["start_date"].isoformat()]
-    else:
-        cmd += ["--auto-since"]
+    if db_ticker != file_ticker:
+        cmd += ["--db-ticker", db_ticker]
+
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
     print(result.stdout)
     if result.returncode != 0:
