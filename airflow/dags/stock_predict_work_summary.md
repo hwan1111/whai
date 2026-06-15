@@ -492,7 +492,7 @@ def update_model_config(ticker: str, eval_result: dict):
 |------|------|------|
 | SU CI 계산 방식 | rolling 변동성 기반으로 구현되어 있음. SU가 "모델 신뢰도 기반"이라고 했다면 수정 필요 | SU 확인 |
 | 신한지주 055550 pkl | SU pkl 존재 확인됨 (`saved_models/055550.pkl`) — 정상 | 완료 |
-| S3 버킷명 | `S3_BUCKET` 환경변수 설정 필요 (`AWS_BUCKET_NAME` or `.env.local`) | 인프라 |
+| S3 버킷명 | `S3_BUCKET` 환경변수 설정 필요 (`AWS_BUCKET_NAME` or `.env`) | 인프라 |
 | EC2 배포 | Airflow worker에 torch, prophet, lightgbm, pykrx, FinanceDataReader 설치 확인 필요 | 인프라 |
 | SU 재학습 트레이닝셋 | sklearn refit 시 어느 기간 데이터를 쓸지 확정 필요 (원래 노트북 기준 참조) | SU 확인 |
 | PatchTST 재학습 배포 절차 | 재학습 완료 후 S3 업로드 → model_config 초기화 절차 SU 팀원에게 공유 필요 | Choi → SU |

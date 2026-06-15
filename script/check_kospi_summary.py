@@ -1,7 +1,7 @@
 import os, sys, pymysql
 sys.stdout.reconfigure(encoding="utf-8")
 from dotenv import load_dotenv
-load_dotenv(".env.local", override=True)
+load_dotenv(".env", override=True)
 
 conn = pymysql.connect(
     host="mysql-12676458-whai.b.aivencloud.com", port=16935, db="whai_service",

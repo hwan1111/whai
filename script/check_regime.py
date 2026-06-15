@@ -7,7 +7,7 @@ import argparse, os, pymysql
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env.local", override=True)
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--ticker", required=True)

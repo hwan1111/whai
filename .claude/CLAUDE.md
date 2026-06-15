@@ -40,7 +40,7 @@ This is a greenfield ML/data engineering project with a monorepo layout. The dir
 
 Copy `.env` and fill in required values before running anything:
 ```
-cp .env .env.local
+cp .env .env
 ```
 
 ## Commands
