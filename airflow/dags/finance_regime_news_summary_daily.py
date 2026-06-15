@@ -54,7 +54,7 @@ dag = DAG(
     "finance_regime_news_summary_daily",
     default_args=default_args,
     description="국면별 뉴스 LLM 요약 생성 (일별)",
-    schedule="0 21 * * 1-5",  # 21:00 UTC = 06:00 KST 평일 (regime_update 완료 후)
+    schedule="30 16 * * 1-5",  # 16:30 UTC = 01:30 KST 평일 (regime_update 완료 후)
     catchup=False,
     tags=["finance", "news", "llm", "regime", "summary"],
 )
