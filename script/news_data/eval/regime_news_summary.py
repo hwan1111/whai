@@ -387,27 +387,62 @@ def run(ticker_code: str,
     regimes         = _merge_noise(raw_regimes, returns)
     log.info(f"국면: {len(raw_regimes)}개 → 병합 후 {len(regimes)}개")
 
-    # ── 기존 결과 로드 ────────────────────────────────────────────────
+    # ── 기존 결과 로드 (로컬 → S3 통합본 → S3 국면별, regime_key로 중복 제거) ──
+    # 이미 요약된 국면을 재요약(LLM 재호출)하지 않도록 모든 소스에서 기존 결과를 모은다.
     results: list[dict] = []
+    seen: set[str] = set()
+
+    def _merge(items: list[dict], src: str) -> None:
+        added = 0
+        for it in items:
+            rk = it.get("regime_key")
+            if rk and rk not in seen:
+                results.append(it)
+                seen.add(rk)
+                added += 1
+        if added:
+            log.info(f"기존 결과 {added}건 로드 ({src})")
+
+    # 1) 로컬 통합본
     if output_path.exists():
         try:
-            results = json.loads(output_path.read_text(encoding="utf-8"))
-            log.info(f"기존 결과 {len(results)}건 로드")
+            _merge(json.loads(output_path.read_text(encoding="utf-8")), "로컬")
         except Exception:
             pass
-    else:
-        # 로컬 파일 없으면 S3 백업에서 복구 (upload 후 삭제된 경우)
-        try:
-            s3_key = f"processed/{ticker_code}/regime_news_summary_{ticker_code}.json"
-            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
-            results = json.loads(obj["Body"].read().decode("utf-8"))
-            log.info(f"S3 백업에서 기존 결과 {len(results)}건 복구: {s3_key}")
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(
-                json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-        except ClientError:
-            pass
+
+    # 2) S3 통합본 백업 (cleanup 시 업로드된 파일)
+    try:
+        agg_key = f"processed/{ticker_code}/regime_news_summary_{ticker_code}.json"
+        body = s3_client.get_object(Bucket=S3_BUCKET, Key=agg_key)["Body"].read()
+        _merge(json.loads(body.decode("utf-8")), f"S3 {agg_key}")
+    except ClientError:
+        pass
+
+    # 3) S3 국면별 요약 (regime_news_summary/{ticker}/{year}/{start}_{end}.json — 정본)
+    try:
+        prefix = f"regime_news_summary/{ticker_code}/"
+        per_regime: list[dict] = []
+        for page in s3_client.get_paginator("list_objects_v2").paginate(
+            Bucket=S3_BUCKET, Prefix=prefix
+        ):
+            for meta in page.get("Contents", []):
+                if not meta["Key"].endswith(".json"):
+                    continue
+                try:
+                    body = s3_client.get_object(Bucket=S3_BUCKET, Key=meta["Key"])["Body"].read()
+                    per_regime.append(json.loads(body.decode("utf-8")))
+                except Exception:
+                    continue
+        _merge(per_regime, f"S3 {prefix}")
+    except ClientError:
+        pass
+
+    # 모은 결과를 로컬 통합본으로 저장 (downstream upload가 읽음)
+    if results:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     REQUIRED_KEYS = {"cause", "evidence", "vol_insight", "confidence", "reasoning"}
 
