@@ -6,7 +6,23 @@ import re
 _RESERVED_IDS = {"demo", "id123", "admin", "root", "system"}
 
 
-_INVEST_TYPES = {"SAFE", "STAB", "NEUT", "GROW", "AGGR"}
+_INVEST_TYPE_MAP = {
+    "SAFE": "안정형",
+    "STAB": "안정추구형",
+    "NEUT": "위험중립형",
+    "GROW": "적극투자형",
+    "AGGR": "공격투자형",
+}
+_INVEST_TYPES = set(_INVEST_TYPE_MAP.values())
+
+
+def normalize_invest_type(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = _INVEST_TYPE_MAP.get(value, value)
+    if normalized not in _INVEST_TYPES:
+        raise ValueError("올바르지 않은 투자성향입니다.")
+    return normalized
 
 
 class RegisterRequest(BaseModel):
@@ -20,9 +36,7 @@ class RegisterRequest(BaseModel):
     @field_validator("invest_type")
     @classmethod
     def validate_invest_type(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in _INVEST_TYPES:
-            raise ValueError("invest_type은 SAFE, STAB, NEUT, GROW, AGGR 중 하나여야 합니다.")
-        return v
+        return normalize_invest_type(v)
 
     @field_validator("user_id")
     @classmethod
@@ -92,10 +106,7 @@ class UpdateProfileRequest(BaseModel):
     @field_validator("invest_type")
     @classmethod
     def validate_invest_type(cls, v: Optional[str]) -> Optional[str]:
-        _INVEST_TYPES = {"SAFE", "STAB", "NEUT", "GROW", "AGGR"}
-        if v is not None and v not in _INVEST_TYPES:
-            raise ValueError("올바르지 않은 투자성향입니다.")
-        return v
+        return normalize_invest_type(v)
 
 
 class DeleteAccountRequest(BaseModel):

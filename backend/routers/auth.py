@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.db import get_db
 from backend.models.user import User
-from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UpdateProfileRequest
+from backend.schemas.auth import ChangePasswordRequest, DeleteAccountRequest, LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UpdateProfileRequest, normalize_invest_type
 
 _S3_PROFILE_BUCKET = os.getenv("AWS_S3_PROFILE_BUCKET", "whai-profile-images")
 _S3_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
@@ -121,12 +121,16 @@ def me(user_id: str = Depends(_get_user_id), db: Session = Depends(get_db)) -> d
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    invest_type = normalize_invest_type(user.invest_type)
+    if invest_type != user.invest_type:
+        user.invest_type = invest_type
+        db.commit()
     return {
         "user_id": user.user_id,
         "name": user.name,
         "birth_year": user.birth_year,
         "gender": user.gender.value if user.gender else None,
-        "invest_type": user.invest_type,
+        "invest_type": invest_type,
         "created_at": user.created_at.strftime("%Y-%m-%d") if user.created_at else None,
         "profile_image_url": _presigned_profile_url(user.profile_image_url),
     }

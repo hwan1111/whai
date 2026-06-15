@@ -3,7 +3,7 @@ import logging
 import re
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -211,6 +211,45 @@ def get_correlation_insights(
         raise HTTPException(status_code=502, detail="LLM 호출 실패")
 
     return {"descriptions": {p.key: descs[i] for i, p in enumerate(body.pairs) if i < len(descs)}}
+
+
+_VALID_PERIODS = {"1W", "1M", "3M", "6M", "1Y", "3Y", "ALL"}
+
+
+@router.get("/correlation")
+def get_stored_correlations(
+    period: str = Query(default="1M"),
+    user_id: str = Depends(_get_user_id),
+    db: Session = Depends(get_db),
+) -> dict:
+    if period not in _VALID_PERIODS:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 period: {period}")
+
+    latest_date = db.execute(
+        text("SELECT MAX(computed_date) FROM correlation WHERE period = :p"),
+        {"p": period},
+    ).scalar()
+    if not latest_date:
+        raise HTTPException(status_code=404, detail="해당 기간의 상관계수 데이터가 없습니다.")
+
+    rows = db.execute(
+        text("""
+            SELECT ticker_a, ticker_b, correlation_coeff
+            FROM correlation
+            WHERE period = :p AND computed_date = :d
+            ORDER BY ABS(correlation_coeff) DESC
+        """),
+        {"p": period, "d": latest_date},
+    ).fetchall()
+
+    return {
+        "period": period,
+        "computed_date": str(latest_date),
+        "pairs": [
+            {"a": r.ticker_a, "b": r.ticker_b, "v": r.correlation_coeff}
+            for r in rows
+        ],
+    }
 
 
 @router.delete("/snapshots/{snap_id}")

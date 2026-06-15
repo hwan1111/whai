@@ -29,7 +29,7 @@ default_args = {
 dag = DAG(
     "finance_market_data_daily",
     default_args=default_args,
-    description="KOSPI, 주식 10종, USD/KRW 환율(price ticker=USD), 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
+    description="KOSPI, 주식 10종, 환율 6쌍, 펀더멘털(PER·PBR·시가총액) 일일 증분 적재",
     schedule="0 15 * * *",  # 00:00 KST 매일 (Airflow/컨테이너는 UTC)
     catchup=True,
     max_active_runs=1,
@@ -72,6 +72,12 @@ def task_load_fundamentals(**_):
     load_fundamentals(engine)
 
 
+def task_compute_correlations(**_):
+    engine = _setup()
+    from script.others.compute_correlations import compute_correlations
+    compute_correlations(engine)
+
+
 t_kospi = PythonOperator(
     task_id="load_kospi",
     python_callable=task_load_kospi,
@@ -92,6 +98,11 @@ t_fundamentals = PythonOperator(
     python_callable=task_load_fundamentals,
     dag=dag,
 )
+t_correlations = PythonOperator(
+    task_id="compute_correlations",
+    python_callable=task_compute_correlations,
+    dag=dag,
+)
 
-# 4개 task 병렬 실행 (서로 독립적)
-[t_kospi, t_stocks, t_rates, t_fundamentals]
+# 가격·환율 적재 완료 후 상관계수 계산; 펀더멘털은 독립 병렬 실행
+[t_kospi, t_stocks, t_rates] >> t_correlations

@@ -41,30 +41,31 @@ export default function AppLayout({ children }) {
     if (!checked) return;
     async function loadDataFreshness() {
       try {
-        const res = await fetchWithAuth('/api/v1/prices/data-freshness');
+        const res = await fetchWithAuth('/api/v1/prices/data-freshness', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         const formatDate = value => {
           if (!value) return '—';
           const [year, month, day] = value.slice(0, 10).split('-');
-          return year && month && day ? `${Number(month)}/${Number(day)}` : '—';
+          return year && month && day ? `${year}/${Number(month)}/${Number(day)} 00:00 (KST)` : '—';
         };
         const sources = [
-          { label: '주가·KOSPI·환율', value: data.price },
+          { label: '주가', value: data.price },
+          { label: '뉴스', value: data.news },
           { label: '펀더멘털', value: data.fundamental },
-          { label: '뉴스 분석', value: data.news },
-        ];
-        const grouped = sources.reduce((acc, source) => {
-          const date = source.value?.slice(0, 10);
-          if (!date) return acc;
-          const existing = acc.find(group => group.date === date);
-          if (existing) existing.labels.push(source.label);
-          else acc.push({ date, labels: [source.label] });
-          return acc;
+        ].filter(source => source.value);
+        const grouped = sources.reduce((groups, source) => {
+          const date = source.value.slice(0, 10);
+          const group = groups.find(item => item.date === date);
+          if (group) group.labels.push(source.label);
+          else groups.push({ date, labels: [source.label] });
+          return groups;
         }, []);
-        const freshnessText = grouped
-          .map(group => `${group.labels.join('·')} ${formatDate(group.date)}`)
-          .join(' | ');
+        const freshnessText = grouped.length === 1 && sources.length > 1
+          ? formatDate(grouped[0].date)
+          : grouped
+              .map(group => `${group.labels.join('·')} ${formatDate(group.date)}`)
+              .join(' · ');
         setUpdateTime(freshnessText ? `최신 데이터 기준: ${freshnessText}` : '');
       } catch { /* silent */ }
     }
