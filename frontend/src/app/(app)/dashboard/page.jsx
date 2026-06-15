@@ -226,9 +226,21 @@ function CombinedPredictionChart({ pd, activeAssets, prediction, ticker }) {
     if (segment.length > 1) segments.push(segment);
     return segments;
   };
+
   const forecast = prediction?.forecast?.filter(item => Number.isFinite(Number(item.price))) ?? [];
-  const historyLength = pd.labels.length;
-  const labels = [...pd.labels, ...forecast.map(item => item.date.slice(5).replace('-', '/'))];
+  
+  // 예측이 있을 때 최근 6개월(약 180일) 데이터만 표시하여 예측 구간을 충분히 보여줌
+  const MAX_HISTORY_DAYS = 180;
+  const shouldLimitHistory = forecast.length > 0;
+  let filteredLabels = pd.labels;
+  let labelStartIndex = 0;
+  if (shouldLimitHistory) {
+    labelStartIndex = Math.max(0, pd.labels.length - MAX_HISTORY_DAYS);
+    filteredLabels = pd.labels.slice(labelStartIndex);
+  }
+  
+  const historyLength = filteredLabels.length;
+  const labels = [...filteredLabels, ...forecast.map(item => item.date.slice(5).replace('-', '/'))];
   const width = 1180;
   const height = 430;
   const pad = { left: 66, right: 28, top: 28, bottom: 48 };
@@ -241,9 +253,13 @@ function CombinedPredictionChart({ pd, activeAssets, prediction, ticker }) {
   const forecastValues = forecast.map(item => toReturn(item.price));
   const upperValues = forecast.map(item => toReturn(item.ci_upper));
   const lowerValues = forecast.map(item => toReturn(item.ci_lower));
-  const historyValues = activeAssets.flatMap(id => (
-    pd.d?.[id]?.map(toFiniteNumber).filter(value => value != null) ?? []
-  ));
+  
+  // 필터링된 인덱스 범위의 데이터만 사용
+  const historyValues = activeAssets.flatMap(id => {
+    const allValues = pd.d?.[id] ?? [];
+    const filtered = allValues.slice(labelStartIndex).map(toFiniteNumber).filter(value => value != null);
+    return filtered;
+  });
   const allValues = [...historyValues, ...forecastValues, ...upperValues, ...lowerValues].filter(Number.isFinite);
   const min = Math.min(0, ...allValues);
   const max = Math.max(0, ...allValues);
@@ -253,10 +269,12 @@ function CombinedPredictionChart({ pd, activeAssets, prediction, ticker }) {
   const y = value => pad.top + (maxY - value) / (maxY - minY) * (height - pad.top - pad.bottom);
   const ticks = Array.from({ length: 6 }, (_, index) => minY + (maxY - minY) * index / 5);
   const xLabelIndices = [...new Set([0, Math.floor((historyLength - 1) / 3), Math.floor((historyLength - 1) * 2 / 3), historyLength - 1, labels.length - 1])];
+  
   const selectedHistory = pd.d?.[ticker] ?? [];
-  let lastHistoryIndex = selectedHistory.length - 1;
-  while (lastHistoryIndex >= 0 && toFiniteNumber(selectedHistory[lastHistoryIndex]) == null) lastHistoryIndex--;
-  const lastHistoryValue = lastHistoryIndex >= 0 ? toFiniteNumber(selectedHistory[lastHistoryIndex]) : null;
+  const selectedHistoryFiltered = selectedHistory.slice(labelStartIndex);
+  let lastHistoryIndex = selectedHistoryFiltered.length - 1;
+  while (lastHistoryIndex >= 0 && toFiniteNumber(selectedHistoryFiltered[lastHistoryIndex]) == null) lastHistoryIndex--;
+  const lastHistoryValue = lastHistoryIndex >= 0 ? toFiniteNumber(selectedHistoryFiltered[lastHistoryIndex]) : null;
   const predictionPoints = lastHistoryValue == null ? [] : [
     `${x(lastHistoryIndex)},${y(lastHistoryValue)}`,
     ...forecastValues.map((value, index) => value == null ? null : `${x(historyLength + index)},${y(value)}`).filter(Boolean),
@@ -292,8 +310,9 @@ function CombinedPredictionChart({ pd, activeAssets, prediction, ticker }) {
       )}
       {band && <polygon points={band} fill="rgba(124,58,237,0.12)" />}
       {activeAssets.map(id => {
-        const values = pd.d?.[id];
-        if (!values) return null;
+        const allValues = pd.d?.[id];
+        if (!allValues) return null;
+        const values = allValues.slice(labelStartIndex);
         const segments = buildSegments(values);
         return (
           <g key={id} opacity={id === ticker ? 1 : 0.72}>
@@ -312,11 +331,11 @@ function CombinedPredictionChart({ pd, activeAssets, prediction, ticker }) {
         );
       })}
       {predictionPoints.length > 1 && (
-        <polyline points={predictionPoints.join(' ')} fill="none" stroke="#7c3aed" strokeWidth="3.5" strokeDasharray="8 6" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={predictionPoints.join(' ')} fill="none" stroke="#7c3aed" strokeWidth="4" strokeDasharray="8 6" strokeLinejoin="round" strokeLinecap="round" />
       )}
       {predictionPoints.slice(1).map((point, index) => {
         const [cx, cy] = point.split(',');
-        return <circle key={forecast[index]?.date} cx={cx} cy={cy} r="4" fill="#7c3aed" stroke="white" strokeWidth="2" />;
+        return <circle key={forecast[index]?.date} cx={cx} cy={cy} r="5" fill="#7c3aed" stroke="white" strokeWidth="2.5" />;
       })}
       {xLabelIndices.map(index => (
         <text key={index} x={x(index)} y={height - 16} textAnchor={index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'} fontSize="13" fill="#64748b">
@@ -395,71 +414,77 @@ function PredictionAnalysisModal({ open, onClose, ticker, activeAssets, pd, lege
                 <span>실선은 실제 흐름, 보라색 점선과 음영은 선택 자산의 D+1~D+5 예측 구간입니다.</span>
               </div>
             </div>
-            <div className="prediction-history-chart">
-              <CombinedPredictionChart
-                pd={pd}
-                activeAssets={activeAssets}
-                prediction={prediction}
-                ticker={ticker}
-              />
-              {loading && (
-                <div className="prediction-chart-state">
-                  <LoadingSpinner label="최신 예측을 불러오는 중..." size={34} />
+            <div className="prediction-history-layout">
+              <div className="prediction-history-main">
+                <div className="prediction-history-chart">
+                  <CombinedPredictionChart
+                    pd={pd}
+                    activeAssets={activeAssets}
+                    prediction={prediction}
+                    ticker={ticker}
+                  />
+                  {loading && (
+                    <div className="prediction-chart-state">
+                      <LoadingSpinner label="최신 예측을 불러오는 중..." size={34} />
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="prediction-history-legend">
-              {legend.map(item => (
-                <span key={item.id}>
-                  <i style={{ background: ASSETS[item.id]?.color }} />
-                  {ASSETS[item.id]?.label}
-                </span>
-              ))}
-              {prediction && <span className="prediction-legend-forecast"><i />{ASSETS[ticker]?.label || ticker} 예측</span>}
-            </div>
-            {error ? (
-              <div className="prediction-data-notice">
-                <strong>{ASSETS[ticker]?.label || ticker} 예측을 표시할 수 없습니다.</strong>
-                <span>
-                  {ticker === '000000' || ticker === 'USD'
-                    ? '새 예측 DAG가 성공적으로 실행된 뒤 데이터가 표시됩니다.'
-                    : error}
-                </span>
+                <div className="prediction-history-legend">
+                  {legend.map(item => (
+                    <span key={item.id}>
+                      <i style={{ background: ASSETS[item.id]?.color }} />
+                      {ASSETS[item.id]?.label}
+                    </span>
+                  ))}
+                  {prediction && <span className="prediction-legend-forecast"><i />{ASSETS[ticker]?.label || ticker} 예측</span>}
+                </div>
               </div>
-            ) : prediction ? (
-              <div className="prediction-details">
-                <div className="prediction-summary">
-                  <div>
-                    <span>D+5 예상가</span>
-                    <strong style={{ color: predictedColor }}>
-                      {formatPredictionValue(prediction.pred_price_d5)}{predictionUnit}
-                    </strong>
-                    <em style={{ color: predictedColor }}>
-                      {predictedChange >= 0 ? '▲' : '▼'} {Math.abs(predictedChange).toFixed(2)}%
-                    </em>
-                  </div>
-                  <div className="prediction-target-date">
-                    기준 {prediction.date}<br />목표 {prediction.target_date}
-                  </div>
+              {error ? (
+                <div className="prediction-data-notice prediction-summary-panel">
+                  <strong>{ASSETS[ticker]?.label || ticker} 예측을 표시할 수 없습니다.</strong>
+                  <span>
+                    {ticker === '000000' || ticker === 'USD'
+                      ? '새 예측 DAG가 성공적으로 실행된 뒤 데이터가 표시됩니다.'
+                      : error}
+                  </span>
                 </div>
-                <div className="prediction-metrics">
-                  <div><span>기준 종가</span><strong>{formatPredictionValue(prediction.base_price)}{predictionUnit}</strong></div>
-                  <div><span>{Math.round(prediction.ci_pct * 100)}% 신뢰구간</span><strong>{formatPredictionValue(prediction.ci_lower_d5)} ~ {formatPredictionValue(prediction.ci_upper_d5)}{predictionUnit}</strong></div>
-                  <div><span>사용 모델</span><strong>{prediction.model_name}</strong></div>
-                  <div><span>모델 출처</span><strong>{prediction.model_source} · {prediction.model_used === 'priority_1' ? '1순위' : '2순위'}</strong></div>
-                  <div><span>최근 MAPE</span><strong>{prediction.rolling_mape == null ? '산출 전' : `${prediction.rolling_mape.toFixed(2)}%`}</strong></div>
-                  <div>
-                    <span>모델 상태</span>
-                    <strong className={prediction.drift_detected ? 'prediction-status-warning' : prediction.threshold === 0 ? '' : 'prediction-status-ok'}>
-                      {prediction.drift_detected ? '드리프트 감지' : prediction.threshold === 0 ? '기준 수집 중' : '정상'}
-                    </strong>
+              ) : prediction ? (
+                <aside className="prediction-summary-panel">
+                  <div className="prediction-details">
+                    <div className="prediction-summary">
+                      <div>
+                        <span>D+5 예상가</span>
+                        <strong style={{ color: predictedColor }}>
+                          {formatPredictionValue(prediction.pred_price_d5)}{predictionUnit}
+                        </strong>
+                        <em style={{ color: predictedColor }}>
+                          {predictedChange >= 0 ? '▲' : '▼'} {Math.abs(predictedChange).toFixed(2)}%
+                        </em>
+                      </div>
+                      <div className="prediction-target-date">
+                        기준 {prediction.date}<br />목표 {prediction.target_date}
+                      </div>
+                    </div>
+                    <div className="prediction-metrics">
+                      <div><span>기준 종가</span><strong>{formatPredictionValue(prediction.base_price)}{predictionUnit}</strong></div>
+                      <div><span>{Math.round(prediction.ci_pct * 100)}% 신뢰구간</span><strong>{formatPredictionValue(prediction.ci_lower_d5)} ~ {formatPredictionValue(prediction.ci_upper_d5)}{predictionUnit}</strong></div>
+                      <div><span>사용 모델</span><strong>{prediction.model_name}</strong></div>
+                      <div><span>모델 출처</span><strong>{prediction.model_source} · {prediction.model_used === 'priority_1' ? '1순위' : '2순위'}</strong></div>
+                      <div><span>최근 MAPE</span><strong>{prediction.rolling_mape == null ? '산출 전' : `${prediction.rolling_mape.toFixed(2)}%`}</strong></div>
+                      <div>
+                        <span>모델 상태</span>
+                        <strong className={prediction.drift_detected ? 'prediction-status-warning' : prediction.threshold === 0 ? '' : 'prediction-status-ok'}>
+                          {prediction.drift_detected ? '드리프트 감지' : prediction.threshold === 0 ? '기준 수집 중' : '정상'}
+                        </strong>
+                      </div>
+                    </div>
+                    <p className="prediction-disclaimer">
+                      예측값은 통계·머신러닝 모델의 추정치이며 투자 수익을 보장하지 않습니다.
+                    </p>
                   </div>
-                </div>
-                <p className="prediction-disclaimer">
-                  예측값은 통계·머신러닝 모델의 추정치이며 투자 수익을 보장하지 않습니다.
-                </p>
-              </div>
-            ) : null}
+                </aside>
+              ) : null}
+            </div>
           </section>
         </div>
       </div>

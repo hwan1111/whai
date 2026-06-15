@@ -279,6 +279,8 @@ html, body { height: 100%; overflow: hidden; }
 .prediction-panel-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .prediction-panel-heading strong { display: block; color: #1e293b; font-size: 17px; }
 .prediction-panel-heading span { display: block; margin-top: 3px; color: #64748b; font-size: 12px; }
+.prediction-history-layout { display: grid; grid-template-columns: 7fr 3fr; gap: 18px; min-height: 0; align-items: start; }
+.prediction-history-main { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .prediction-history-chart { position: relative; flex: 1 0 430px; min-height: 360px; }
 .prediction-combined-chart { width: 100%; height: 100%; display: block; }
 .prediction-chart-state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.76); border-radius: 10px; }
@@ -286,8 +288,9 @@ html, body { height: 100%; overflow: hidden; }
 .prediction-history-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .prediction-history-legend i { width: 8px; height: 8px; border-radius: 50%; }
 .prediction-legend-forecast i { width: 18px; height: 0; border-top: 3px dashed #7c3aed; border-radius: 0; background: transparent !important; }
-.prediction-details { display: grid; grid-template-columns: minmax(220px, 0.65fr) minmax(520px, 1.35fr); gap: 14px; align-items: center; margin-top: 12px; padding: 12px 14px; background: #f8fafc; border-radius: 11px; }
-.prediction-data-notice { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 14px; border: 1px solid #ddd6fe; border-radius: 10px; background: #f5f3ff; }
+.prediction-summary-panel { display: flex; flex-direction: column; gap: 14px; padding: 16px; background: #f8fafc; border-radius: 16px; min-height: min(430px, max-content); }
+.prediction-details { display: grid; gap: 14px; margin: 0; padding: 0; background: transparent; border-radius: 0; }
+.prediction-data-notice { display: flex; flex-direction: column; justify-content: center; gap: 10px; margin: 0; padding: 20px; border: 1px solid #ddd6fe; border-radius: 14px; background: #f5f3ff; }
 .prediction-data-notice strong { color: #5b21b6; font-size: 14px; }
 .prediction-data-notice span { color: #64748b; font-size: 12px; }
 .prediction-result-panel { display: flex; flex-direction: column; overflow-y: auto; padding: 18px; }
@@ -307,6 +310,10 @@ html, body { height: 100%; overflow: hidden; }
 .prediction-disclaimer { grid-column: 1 / -1; margin: 0; color: #94a3b8; font-size: 11px; line-height: 1.55; }
 .prediction-empty { display: flex; align-items: center; justify-content: center; min-height: 160px; color: #64748b; font-size: 14px; text-align: center; }
 
+@media (max-width: 1200px) {
+  .prediction-history-layout { grid-template-columns: 1fr; }
+  .prediction-summary-panel { min-height: auto; }
+}
 @media (max-width: 1050px) {
   .prediction-details { grid-template-columns: 1fr; }
   .prediction-metrics { grid-template-columns: 1fr 1fr; }
