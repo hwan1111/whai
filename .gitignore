@@ -198,3 +198,11 @@ coverage/
 
 # 마운트 테스트용 로컬 파일
 .sshfs-test/
+
+# 임시 모델 작업 노트북
+*.ipynb
+.ipynb_checkpoints/
+
+# 임시 모델 작업 스크립트
+model/_*.py
+model/llm/prompts/dart_summarization.yaml

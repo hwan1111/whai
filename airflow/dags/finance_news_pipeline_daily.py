@@ -79,7 +79,7 @@ dag = DAG(
     "finance_news_pipeline_daily",
     default_args=default_args,
     description="뉴스 수집 → S3 전처리 → LLM 국면 분석 → DB 업로드 (일별)",
-    schedule="0 15 * * *",  # 15:00 UTC = 00:00 KST 매일
+    schedule="0 15 * * 1-5",  # 15:00 UTC = 00:00 KST 평일
     catchup=False,
     tags=["finance", "news", "llm", "pipeline"],
 )
@@ -92,7 +92,7 @@ dag.doc_md = __doc__
 wait_for_market_data = ExternalTaskSensor(
     task_id="wait_for_market_data",
     external_dag_id="finance_market_data_daily",
-    external_task_id="sync_market_data",
+    external_task_id=None,  # DAG 전체 완료 대기
     allowed_states=["success"],
     failed_states=["failed", "skipped"],
     mode="reschedule",
@@ -196,7 +196,7 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
     """마지막 국면 시작일부터 최신 전처리 날짜까지 재분석한다."""
     sys.path.insert(0, str(ROOT))
     from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env.local", override=True)
+    load_dotenv(ROOT / ".env", override=True)
 
     import pymysql
 
@@ -269,7 +269,7 @@ def _load_db_task(ticker_code: str, **context) -> None:
     """regime JSON → MySQL 업로드 (마지막 국면 재삽입)."""
     sys.path.insert(0, str(ROOT))
     from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env.local", override=True)
+    load_dotenv(ROOT / ".env", override=True)
 
     import pymysql
 
@@ -293,7 +293,7 @@ def _load_db_task(ticker_code: str, **context) -> None:
 
     cmd = [
         str(ROOT / ".venv" / "bin" / "python"),
-        str(ROOT / "script" / "load_regime_to_db.py"),
+        str(ROOT / "script" / "others" / "upload_regime_to_db.py"),
         "--ticker", ticker_code,
     ]
     if row:

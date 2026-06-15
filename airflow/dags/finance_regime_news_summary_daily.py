@@ -54,7 +54,7 @@ dag = DAG(
     "finance_regime_news_summary_daily",
     default_args=default_args,
     description="국면별 뉴스 LLM 요약 생성 (일별)",
-    schedule="0 3 * * *",  # 03:00 UTC = 12:00 KST 매일
+    schedule="0 21 * * 1-5",  # 21:00 UTC = 06:00 KST 평일 (regime_update 완료 후)
     catchup=False,
     tags=["finance", "news", "llm", "regime", "summary"],
 )
@@ -68,12 +68,12 @@ logger = logging.getLogger(__name__)
 wait_for_regime_update = ExternalTaskSensor(
     task_id="wait_for_regime_update",
     external_dag_id="finance_regime_update_daily",
-    external_task_id="update_regimes",
+    external_task_id=None,  # DAG 전체 완료 대기
     allowed_states=["success"],
     failed_states=["failed", "skipped"],
     mode="reschedule",
     poke_interval=60,
-    timeout=60 * 60 * 2,
+    timeout=60 * 60 * 6,  # 최대 6시간 (15:30 UTC 시작 기준 여유)
     dag=dag,
 )
 

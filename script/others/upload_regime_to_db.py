@@ -28,7 +28,7 @@ import pymysql
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-load_dotenv(ROOT / ".env.local", override=True)
+load_dotenv(ROOT / ".env", override=True)
 
 _CA_CANDIDATES = [
     Path("/opt/certs/ca.pem"),              # Airflow container
