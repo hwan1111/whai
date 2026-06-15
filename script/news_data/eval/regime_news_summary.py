@@ -18,7 +18,7 @@ import json
 import logging
 import os
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import boto3
@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 
 START_DATE = "2020-01-01"
-END_DATE   = "2026-05-28"
+END_DATE   = date.today().isoformat()
 
 TICKER_MAP: dict[str, tuple[str, str]] = {
     "005930":   ("삼성전자",                  "반도체"),
@@ -60,7 +60,7 @@ FDR_CODE_MAP: dict[str, str] = {
 }
 
 S3_BUCKET = "fisa-news-archive"
-S3_PREFIX = "raw"
+S3_PREFIX = "preprocessed_final"
 
 MAX_NEWS_CHARS  = 1_300
 MAX_NEWS_COUNT  = 20   # 장기 구간 토큰 폭증 방지: 구간 내 최대 기사 수
@@ -407,7 +407,7 @@ def run(ticker_code: str,
 
     REQUIRED_KEYS = {"cause", "evidence", "vol_insight", "confidence", "reasoning"}
 
-    valid_done: set[str] = set()
+    valid_done: list[tuple] = []  # (start, end) 범위 목록
     for r in results:
         key = r.get("regime_key", "")
         if not key:
@@ -416,13 +416,19 @@ def run(ticker_code: str,
         analysis = r.get("llm_analysis", {})
         is_valid = REQUIRED_KEYS.issubset(analysis.keys())
         if is_valid and rid not in rerun_ids:
-            valid_done.add(key)
+            valid_done.append((r["start"], r["end"]))
         else:
             reason = "강제 재처리" if rid in rerun_ids else "필수 키 누락"
             log.info(f"  → [{rid}] {reason}, 재처리 대상으로 분류")
             results = [x for x in results if x.get("regime_key") != key]
 
-    done_keys: set[str] = valid_done
+    def _is_covered(start_str: str, end_str: str) -> bool:
+        """기존 결과와 날짜가 겹치면 완료로 판단 (경계 이동으로 인한 중복 방지)."""
+        for s, e in valid_done:
+            if s <= start_str <= e or s <= end_str <= e:
+                return True
+        return False
+
     total_in = total_out = 0
 
     # ── 국면 순회 ─────────────────────────────────────────────────────
@@ -446,8 +452,8 @@ def run(ticker_code: str,
         if dry_run:
             continue
 
-        if regime_key in done_keys:
-            log.info(f"  → 이미 완료, 스킵")
+        if _is_covered(start_str, end_str):
+            log.info(f"  → 이미 완료(날짜 겹침), 스킵")
             continue
 
         news_context = _build_news_context(news_articles)
@@ -499,7 +505,7 @@ def run(ticker_code: str,
             "tokens_out":   tok_out,
             "llm_analysis": answer,
         })
-        done_keys.add(regime_key)
+        valid_done.append((start_str, end_str))
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
