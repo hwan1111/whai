@@ -24,12 +24,15 @@ logger = logging.getLogger(__name__)
 #   }
 MLFLOW_PROMPTS_CONFIG = {
     "news_summarization": {
-        "name": "news_summary_prompt",
+        "name": "regime_news_summarys",
         "version": "2",  # 구체적인 버전 번호 사용
     },
-    "news_summarization_detailed": {
-        "name": "news_summary_detailed_prompt",
-        "version": "latest",
+    # TODO(owner): MLflow UI에서 portfolio_analysis 프롬프트를 등록한 뒤
+    #   아래 name/version 을 실제 등록값으로 확정할 것 (현재는 placeholder).
+    #   등록된 프롬프트 URI: prompts:/portfolio_analysis/1
+    "portfolio_analysis": {
+        "name": "portfolio_analysis",
+        "version": "1",
     },
 }
 

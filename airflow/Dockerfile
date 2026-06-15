@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir \
     boto3 \
     beautifulsoup4 \
     pymysql \
-    FinanceDataReader \
+    finance-datareader \
     && playwright install chromium
 
 # 주가 예측/재학습 DAG 의존성

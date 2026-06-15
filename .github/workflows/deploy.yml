@@ -10,24 +10,18 @@ on:
       - 'src/**'
       - 'config/**'
       - '.github/workflows/deploy.yml'
-
   workflow_dispatch:
     inputs:
-      backend:
-        description: 'Build and deploy backend'
-        required: true
-        type: boolean
-        default: true
-      frontend:
-        description: 'Build and deploy frontend'
-        required: true
-        type: boolean
-        default: true
-      airflow:
-        description: 'Build and deploy airflow'
-        required: true
-        type: boolean
-        default: false
+      components:
+        description: '수동 배포 대상 컴포넌트'
+        type: choice
+        default: app
+        options:
+          - app        # backend + frontend (airflow 제외 — 일반 앱 배포)
+          - all        # backend + frontend + airflow
+          - backend
+          - frontend
+          - airflow
 
 permissions:
   id-token: write
@@ -44,17 +38,19 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.changes.outputs.backend == 'true' || (github.event_name == 'workflow_dispatch' && inputs.backend) }}
-      frontend: ${{ steps.changes.outputs.frontend == 'true' || (github.event_name == 'workflow_dispatch' && inputs.frontend) }}
-      airflow: ${{ steps.changes.outputs.airflow == 'true' || (github.event_name == 'workflow_dispatch' && inputs.airflow) }}
+      backend: ${{ steps.final.outputs.backend }}
+      frontend: ${{ steps.final.outputs.frontend }}
+      airflow: ${{ steps.final.outputs.airflow }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # push 이벤트에서만 변경 경로 감지 (수동 dispatch는 입력값으로 강제)
       - name: Detect changed paths
         id: changes
+        if: github.event_name == 'push'
         uses: dorny/paths-filter@v2
         with:
           filters: |
@@ -68,8 +64,29 @@ jobs:
               - 'config/**'
             airflow:
               - 'airflow/**'
-              - 'src/**'
-              - 'config/**'
+
+      # 최종 빌드 대상 결정: push면 감지 결과, workflow_dispatch면 입력값(components)
+      - name: Compute effective targets
+        id: final
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            be=false; fe=false; af=false
+            case "${{ inputs.components }}" in
+              app)      be=true; fe=true ;;
+              all)      be=true; fe=true; af=true ;;
+              backend)  be=true ;;
+              frontend) fe=true ;;
+              airflow)  af=true ;;
+            esac
+          else
+            be="${{ steps.changes.outputs.backend }}"
+            fe="${{ steps.changes.outputs.frontend }}"
+            af="${{ steps.changes.outputs.airflow }}"
+          fi
+          echo "backend=$be" >> "$GITHUB_OUTPUT"
+          echo "frontend=$fe" >> "$GITHUB_OUTPUT"
+          echo "airflow=$af" >> "$GITHUB_OUTPUT"
+          echo "대상 → backend=$be frontend=$fe airflow=$af"
 
   build-and-push:
     needs: detect-changes
@@ -124,6 +141,9 @@ jobs:
   deploy-to-ec2:
     needs: [build-and-push, detect-changes]
     runs-on: [self-hosted, ec2]
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -161,15 +181,30 @@ jobs:
             docker pull $ECR_REGISTRY/$IMAGE_NAME_AIRFLOW:latest
           fi
 
+      # 변경된 컴포넌트만 해당 디렉토리에서 개별 기동 (루트 통합 compose 미사용).
+      # 각 compose 는 env_file: ../.env, image: ${X_IMAGE} 를 참조한다.
+      # container_name 이 고정이라, 다른 compose 프로젝트로 만들어진 동일 이름
+      # 컨테이너가 남아 있으면 충돌하므로 기동 전에 강제 제거한다.
       - name: Deploy with docker-compose
         env:
           BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:latest
           FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
           AIRFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AIRFLOW }}:latest
         run: |
-          cd /opt/project/whai
-          docker compose down
-          docker compose up -d
+          if [ "${{ needs.detect-changes.outputs.backend }}" = "true" ]; then
+            cd /opt/project/whai/backend
+            docker rm -f whai_backend 2>/dev/null || true
+            docker compose up -d
+          fi
+          if [ "${{ needs.detect-changes.outputs.frontend }}" = "true" ]; then
+            cd /opt/project/whai/frontend
+            docker rm -f whai_frontend 2>/dev/null || true
+            docker compose up -d
+          fi
+          if [ "${{ needs.detect-changes.outputs.airflow }}" = "true" ]; then
+            cd /opt/project/whai/airflow
+            docker compose up -d
+          fi
 
       - name: Verify deployment
         env:
@@ -179,9 +214,9 @@ jobs:
         run: |
           cd /opt/project/whai
           sleep 5
-          docker compose ps
+          docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
           curl -f http://localhost:8000/health || true
-          curl -f http://localhost:3000 || true
+          curl -f http://localhost:80 || true
 
       - name: Send Slack notification
         if: always()
