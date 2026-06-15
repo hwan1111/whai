@@ -242,6 +242,8 @@ def _patch_pipeline(monkeypatch, gateway_return):
     mock_gateway = MagicMock()
     mock_gateway.call_with_usage.return_value = gateway_return
     monkeypatch.setattr(pa, "GatewayClient", MagicMock(return_value=mock_gateway))
+    # 근거 뉴스 검색은 OpenRouter 직접 호출 → 단위 테스트에선 mock (네트워크 차단)
+    monkeypatch.setattr(pa, "find_news_evidence", MagicMock(return_value=[]))
     return mock_gateway
 
 
@@ -291,10 +293,39 @@ def test_analyze_portfolio_sets_mlflow_standard_token_usage_and_cost(monkeypatch
     assert attrs["mlflow.llm.cost"]["input_cost"] == pytest.approx(100 / 1_000_000 * 0.003)
     assert attrs["mlflow.llm.cost"]["output_cost"] == pytest.approx(50 / 1_000_000 * 0.009)
     assert attrs["endpoint"] == "mid_performance_llm"
-    # 보안: span 입력에 원본 PII 대신 종목 수/뉴스 수/투자 성향만 기록
-    inputs = mock_span.set_inputs.call_args[0][0]
+    # 보안: span 입력에 원본 PII 대신 종목 수/뉴스 수/투자 성향만 기록.
+    # (news_evidence_search span 도 같은 mock span 에 set_inputs 하므로 게이트웨이
+    #  span 입력을 call_args_list 에서 골라낸다)
+    inputs = next(
+        c[0][0] for c in mock_span.set_inputs.call_args_list if "endpoint" in c[0][0]
+    )
     assert inputs["endpoint"] == "mid_performance_llm"
     assert inputs["invest_type"] == "미상"  # db user=None → 미상
+
+
+def test_analyze_portfolio_attaches_news_sources(monkeypatch):
+    """근거 뉴스 검색 결과가 있으면 분석 결과에 sources(선택 키)로 첨부된다."""
+    _patch_pipeline(monkeypatch, (json.dumps(_full_analysis()), 100, 50))
+    sources = [{"ticker": "005930", "title": "삼성전자 실적 호조", "url": "https://news.example.com/a"}]
+    monkeypatch.setattr(pa, "find_news_evidence", MagicMock(return_value=sources))
+    db = _fake_db(None)
+
+    result = analyze_portfolio("user1", [{"id": "005930", "qty": 1, "avgPrice": 100}], db)
+
+    assert result["sources"] == sources
+    # sources 는 선택 키이므로 필수 키 계약에는 영향을 주지 않는다
+    assert REQUIRED_KEYS <= result.keys()
+
+
+def test_analyze_portfolio_omits_sources_when_evidence_empty(monkeypatch):
+    """근거 뉴스 검색이 빈 결과(키 미설정/실패)면 sources 키를 넣지 않는다."""
+    _patch_pipeline(monkeypatch, (json.dumps(_full_analysis()), 100, 50))
+    monkeypatch.setattr(pa, "find_news_evidence", MagicMock(return_value=[]))
+    db = _fake_db(None)
+
+    result = analyze_portfolio("user1", [{"id": "005930", "qty": 1, "avgPrice": 100}], db)
+
+    assert "sources" not in result
 
 
 def test_analyze_portfolio_returns_none_on_empty_holdings():
