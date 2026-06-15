@@ -102,6 +102,9 @@ wait_for_market_data = ExternalTaskSensor(
 )
 
 
+# 월요일은 주말(토·일) 뉴스까지 소급 수집: ds - 2일(토요일)부터 시작
+_since = "{{ macros.ds_add(ds, -2) if dag_run.logical_date.weekday() == 0 else ds }}"
+
 # ──────────────────────────────────────────────
 # Stage 1: 전일 뉴스 수집
 # ──────────────────────────────────────────────
@@ -111,7 +114,7 @@ task_collect_all = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         ".venv/bin/python script/news_data/collect_all_news.py "
-        "--start {{ ds }} --end {{ ds }}"
+        f"--start {_since} --end {{{{ ds }}}}"
     ),
     dag=dag,
 )
@@ -125,7 +128,7 @@ task_upload_raw = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         ".venv/bin/python script/news_data/upload_raw_to_s3.py "
-        "--since {{ ds }}"
+        f"--since {_since}"
     ),
     dag=dag,
 )
@@ -139,8 +142,8 @@ task_preprocess = BashOperator(
     task_id="preprocess_upload",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/preprocess_and_upload.py "
-        "--since {{ ds }}"
+        ".venv/bin/python script/news_data/preprocess/preprocess_and_upload.py "
+        f"--since {_since}"
     ),
     dag=dag,
 )
@@ -149,8 +152,8 @@ task_preprocess_kospi200 = BashOperator(
     task_id="preprocess_upload_kospi200",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/preprocess_and_upload_kospi200.py "
-        "--since {{ ds }}"
+        ".venv/bin/python script/news_data/preprocess/preprocess_and_upload_kospi200.py "
+        f"--since {_since}"
     ),
     dag=dag,
 )
@@ -246,7 +249,7 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
 
     cmd = [
         str(ROOT / ".venv" / "bin" / "python"),
-        str(ROOT / "script" / "news_data" / "regime_news_summary.py"),
+        str(ROOT / "script" / "news_data" / "eval" / "regime_news_summary.py"),
         "--provider",    LLM_PROVIDER,
         "--ticker-code", ticker_code,
         "--ticker-name", ticker_name,
@@ -266,40 +269,25 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
 
 
 def _load_db_task(ticker_code: str, **context) -> None:
-    """regime JSON → MySQL 업로드 (마지막 국면 재삽입)."""
+    """regime JSON → MySQL 업로드 (신규 국면만 append)."""
     sys.path.insert(0, str(ROOT))
-    from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env", override=True)
 
-    import pymysql
+    # DB ticker(000000, USD)와 파일 ticker(KOSPI200, USD_KRW) 매핑
+    _FILE_TICKER = {"000000": "KOSPI200", "USD": "USD_KRW"}
+    _DB_TICKER   = {"KOSPI200": "000000", "USD_KRW": "USD"}
 
-    ca_path = str(ROOT / "config" / "certs" / "ca.pem")
-    conn = pymysql.connect(
-        host="mysql-12676458-whai.b.aivencloud.com", port=16935,
-        db="whai_service",
-        user=os.environ["BACKEND_DB_USER"], password=os.environ["BACKEND_DB_PASSWORD"],
-        charset="utf8mb4", ssl={"ca": ca_path},
-        cursorclass=pymysql.cursors.DictCursor,
-    )
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT start_date FROM regime WHERE ticker = %s ORDER BY end_date DESC LIMIT 1",
-                (ticker_code,),
-            )
-            row = cur.fetchone()
-    finally:
-        conn.close()
+    file_ticker = _FILE_TICKER.get(ticker_code, ticker_code)
+    db_ticker   = _DB_TICKER.get(file_ticker, file_ticker)
 
     cmd = [
         str(ROOT / ".venv" / "bin" / "python"),
         str(ROOT / "script" / "others" / "upload_regime_to_db.py"),
-        "--ticker", ticker_code,
+        "--ticker", file_ticker,
+        "--mode",   "append",
     ]
-    if row:
-        cmd += ["--since", row["start_date"].isoformat()]
-    else:
-        cmd += ["--auto-since"]
+    if db_ticker != file_ticker:
+        cmd += ["--db-ticker", db_ticker]
+
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
     print(result.stdout)
     if result.returncode != 0:
