@@ -4,11 +4,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { login, getUser, setProfileImage } from '@/lib/auth';
 
 const INVEST_OPTS = [
-  { val: 'SAFE', label: '안정형' },
-  { val: 'STAB', label: '안정추구형' },
-  { val: 'NEUT', label: '위험중립형' },
-  { val: 'GROW', label: '적극투자형' },
-  { val: 'AGGR', label: '공격투자형' },
+  { val: '안정형', label: '안정형' },
+  { val: '안정추구형', label: '안정추구형' },
+  { val: '위험중립형', label: '위험중립형' },
+  { val: '적극투자형', label: '적극투자형' },
+  { val: '공격투자형', label: '공격투자형' },
 ];
 
 function AuthPageContent() {

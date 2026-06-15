@@ -32,7 +32,9 @@
       "Bash(curl -s -X POST http://localhost:8000/api/v1/report/correlation-insight -H 'Content-Type: application/json' -d '{\"asset_a\":\"005930\",\"asset_b\":\"000000\",\"asset_a_name\":\"삼성전자\",\"asset_b_name\":\"KOSPI\",\"correlation\":0.93}' -w '\\\\nHTTP_STATUS:%{http_code}')",
       "Bash(curl -s -X POST http://localhost:8000/api/v1/report/correlation-insight -H 'Content-Type: application/json' -H 'Authorization: Bearer dummy' -d '{\"asset_a\":\"005930\",\"asset_b\":\"000000\",\"asset_a_name\":\"samsung\",\"asset_b_name\":\"KOSPI\",\"correlation\":0.93}' -w '\\\\nHTTP:%{http_code}')",
       "PowerShell(Get-NetTCPConnection -State Listen | Where-Object {$_.LocalPort -in 8000,8001,8080} | Select-Object LocalAddress, LocalPort, OwningProcess | ForEach-Object { $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; [PSCustomObject]@{Port=$_.LocalPort; PID=$_.OwningProcess; Process=$proc.Name} })",
-      "PowerShell(Get-NetTCPConnection -State Listen | Where-Object {$_.LocalPort -ge 3000 -and $_.LocalPort -le 9000} | Select-Object LocalPort, OwningProcess | ForEach-Object { $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; \"$\\($_.LocalPort\\) - $\\($proc.Name\\)\" })"
+      "PowerShell(Get-NetTCPConnection -State Listen | Where-Object {$_.LocalPort -ge 3000 -and $_.LocalPort -le 9000} | Select-Object LocalPort, OwningProcess | ForEach-Object { $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; \"$\\($_.LocalPort\\) - $\\($proc.Name\\)\" })",
+      "Bash(python3 -c ' *)",
+      "Bash(python)"
     ]
   }
 }

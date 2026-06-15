@@ -22,10 +22,10 @@ async function getCroppedBlob(imageSrc, pixelCrop) {
   return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
 }
 
-const INVEST_MAP = {
+const LEGACY_INVEST_MAP = {
   SAFE: '안정형', STAB: '안정추구형', NEUT: '위험중립형', GROW: '적극투자형', AGGR: '공격투자형',
 };
-const INVEST_VALS = ['SAFE', 'STAB', 'NEUT', 'GROW', 'AGGR'];
+const INVEST_VALS = ['안정형', '안정추구형', '위험중립형', '적극투자형', '공격투자형'];
 
 export default function Header({ updateTime }) {
   const router = useRouter();
@@ -114,7 +114,7 @@ export default function Header({ updateTime }) {
       const d = await res.json();
       setProfileData(d);
       setProfileName(d.name || '');
-      setProfileInvest(d.invest_type || '');
+      setProfileInvest(LEGACY_INVEST_MAP[d.invest_type] || d.invest_type || '');
     } catch {
       setProfileData(null);
     }
@@ -329,7 +329,7 @@ export default function Header({ updateTime }) {
           </Link>
         </div>
         <div className="header-right">
-          {updateTime && <span style={{ fontSize: 12, color: '#64748b' }}>{updateTime}</span>}
+          {updateTime && <span className="header-update-time">{updateTime}</span>}
           {pathname?.startsWith('/my-report') ? (
             <Link href="/dashboard" className="header-report-btn">
               🏠 대시보드
@@ -414,7 +414,7 @@ export default function Header({ updateTime }) {
                         className={`invest-opt${profileInvest === v ? ' selected' : ''}`}
                         onClick={() => setProfileInvest(v)}
                       >
-                        {INVEST_MAP[v]}
+                        {v}
                       </button>
                     ))}
                   </div>
