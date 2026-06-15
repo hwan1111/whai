@@ -212,6 +212,88 @@ class GatewayClient:
             logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
+    def call_with_usage(
+        self,
+        text: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        endpoint: Optional[str] = None,
+    ) -> tuple[str, int, int]:
+        """
+        MLflow Gateway를 통해 LLM 호출 (토큰 정보 포함)
+
+        Args:
+            text: 입력 텍스트
+            temperature: 샘플링 온도
+            max_tokens: 최대 토큰 수
+            endpoint: 사용할 route 이름
+
+        Returns:
+            (응답 텍스트, 입력 토큰 수, 출력 토큰 수) 튜플
+        """
+        temperature = temperature or self.DEFAULT_TEMPERATURE
+        max_tokens = max_tokens or self.DEFAULT_MAX_TOKENS
+        endpoint = endpoint or self.endpoint
+
+        try:
+            logger.debug(f"MLflow Gateway 호출: {len(text)}자 텍스트 전송 (Route: {endpoint})")
+
+            with httpx.Client(timeout=60.0, auth=(self.username, self.password)) as client:
+                response = client.post(
+                    self.request_url,
+                    json={
+                        "model": endpoint,
+                        "messages": [{"role": "user", "content": text}],
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                    }
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+
+                    # 응답 형식 파싱
+                    if isinstance(result, dict):
+                        # OpenAI 형식 응답
+                        if "choices" in result and len(result["choices"]) > 0:
+                            message = result["choices"][0].get("message", {})
+                            content = message.get("content", "")
+                        # 직접 응답
+                        elif "content" in result:
+                            content = result["content"]
+                        # 기타 형식
+                        else:
+                            content = str(result)
+                    else:
+                        content = str(result)
+
+                    # 토큰 정보 추출
+                    input_tokens = 0
+                    output_tokens = 0
+                    if isinstance(result, dict) and "usage" in result:
+                        usage = result["usage"]
+                        input_tokens = usage.get("prompt_tokens", 0)
+                        output_tokens = usage.get("completion_tokens", 0)
+
+                    logger.debug(
+                        f"✓ MLflow Gateway 응답 수신 (크기: {len(content)}자, "
+                        f"input_tokens: {input_tokens}, output_tokens: {output_tokens})"
+                    )
+                    return content, input_tokens, output_tokens
+                else:
+                    error_msg = (
+                        f"❌ MLflow Gateway 응답 오류\n"
+                        f"   Status Code: {response.status_code}\n"
+                        f"   Response: {response.text}"
+                    )
+                    logger.error(error_msg)
+                    raise RuntimeError(error_msg)
+
+        except Exception as e:
+            error_msg = f"❌ MLflow Gateway 호출 실패: {str(e)}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
+
     def summarize(
         self,
         text: str,

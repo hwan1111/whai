@@ -1,18 +1,18 @@
 import { getToken } from './auth';
 
 export const ASSETS = {
-  '000000':  { label: 'KOSPI 지수', color: '#94A3B8' },
+  '000000':  { label: 'KOSPI', color: '#94A3B8' },
   '005930':  { label: '삼성전자',   color: '#034EA2' },
   '000660':  { label: 'SK하이닉스', color: '#E8400A' },
   '005380':  { label: '현대차',     color: '#002C5F' },
   '000270':  { label: '기아',       color: '#C8102E' },
-  '079550':  { label: 'LIG디펜스',  color: '#0077C8' },
-  '012450':  { label: '한화에어로', color: '#FF9200' },
-  '105560':  { label: 'KB금융',     color: '#FFB500' },
-  '055550':  { label: '신한지주',   color: '#5BADD1' },
-  '051910':  { label: 'LG화학',     color: '#A50034' },
-  '096770':  { label: 'SK이노베',   color: '#E86500' },
-  'USD': { label: 'USD',   color: '#3C3B6E' },
+  '079550':  { label: 'LIG디펜스앤에어로스페이스', color: '#0077C8' },
+  '012450':  { label: '한화에어로스페이스',        color: '#FF9200' },
+  '105560':  { label: 'KB금융',                    color: '#FFB500' },
+  '055550':  { label: '신한지주',                  color: '#5BADD1' },
+  '051910':  { label: 'LG화학',                    color: '#A50034' },
+  '096770':  { label: 'SK이노베이션',              color: '#E86500' },
+  'USD': { label: 'USD/KRW', color: '#3C3B6E' },
 };
 
 const _cache = {};
@@ -73,5 +73,5 @@ export function buildPeriodData(period, ids) {
     });
   }
 
-  return { labels, d, closes };
+  return { labels, d, closes, isoLabels: sortedDates };
 }

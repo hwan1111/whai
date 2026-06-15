@@ -25,21 +25,23 @@ system: |
   반드시 JSON 형식으로만 응답하세요. 설명 텍스트는 포함하지 마세요.
 
 # ── 유저 프롬프트 템플릿 ────────────────────────────────────────────
-# 변수: {start} {end} {days} {name} {code} {dir_str} {cum_ret}
-#       {direction} {vol_trend} {sector}
-#       {news_pre} {news_post} {max_news_count} {news_context}
-# 치환 방식: str.replace("{var}", value) — .format() 사용 금지
+# 변수: {{ start }} {{ end }} {{ days }} {{ name }} {{ code }} {{ dir_str }} {{ cum_ret }}
+#       {{ direction }} {{ vol_trend }} {{ sector }}
+#       {{ news_pre }} {{ news_post }} {{ max_news_count }} {{ news_context }}
+# 치환 방식: 정규식 기반 render() — .format() 사용 금지
 #            (JSON 스키마 예시의 { } 와 충돌 방지)
+#            "{var}", "{{var}}", "{{ var }}" 형식 모두 지원 (MLflow Prompt
+#            Registry의 "{{ var }}" 형식과 호환).
 template: |
-  {start} ~ {end} ({days}일간) {name}({code})의 주가가 {dir_str} {cum_ret} 이동했습니다.
+  {{ start }} ~ {{ end }} ({{ days }}일간) {{ name }}({{ code }})의 주가가 {{ dir_str }} {{ cum_ret }} 이동했습니다.
 
   ■ 구간 요약
-    · 방향: {direction}  누적 수익률: {cum_ret}
-    · 거래량 추세: {vol_trend}  (구간 {days}일)
-    · 섹터: {sector}
+    · 방향: {{ direction }}  누적 수익률: {{ cum_ret }}
+    · 거래량 추세: {{ vol_trend }}  (구간 {{ days }}일)
+    · 섹터: {{ sector }}
 
-  ■ 뉴스 (구간 시작 {news_pre}일 전 ~ 종료 {news_post}일 후, 최대 {max_news_count}건)
-  {news_context}
+  ■ 뉴스 (구간 시작 {{ news_pre }}일 전 ~ 종료 {{ news_post }}일 후, 최대 {{ max_news_count }}건)
+  {{ news_context }}
 
   ■ 작성 규칙
     · evidence 의 quote 는 위 뉴스 원문에서 근거가 되는 핵심 구절만 직접 인용하세요 (전후 맥락 포함 최대 80자).

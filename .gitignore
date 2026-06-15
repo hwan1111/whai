@@ -198,5 +198,3 @@ coverage/
 
 # 마운트 테스트용 로컬 파일
 .sshfs-test/
-
-model/

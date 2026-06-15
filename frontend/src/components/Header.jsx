@@ -1,8 +1,25 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { getUser, getProfileImage, setProfileImage, logout, updateUserName, fetchWithAuth } from '@/lib/auth';
+import Cropper from 'react-easy-crop';
+import { getUser, setProfileImage, logout, updateUserName, fetchWithAuth } from '@/lib/auth';
+
+async function getCroppedBlob(imageSrc, pixelCrop) {
+  const image = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = imageSrc;
+  });
+  const size = Math.min(pixelCrop.width, pixelCrop.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, size, size);
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+}
 
 const INVEST_MAP = {
   SAFE: '안정형', STAB: '안정추구형', NEUT: '위험중립형', GROW: '적극투자형', AGGR: '공격투자형',
@@ -26,6 +43,12 @@ export default function Header({ updateTime }) {
   const [imgMsg, setImgMsg] = useState({ text: '', type: '' });
   const [imgFile, setImgFile] = useState(null);
   const [imgPreview, setImgPreview] = useState(null);
+  const [cropSrc, setCropSrc] = useState(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [cropSize, setCropSize] = useState(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [showCrop, setShowCrop] = useState(false);
   const [withdrawPw, setWithdrawPw] = useState('');
   const [withdrawMsg, setWithdrawMsg] = useState({ text: '', type: '' });
   const [saving, setSaving] = useState(false);
@@ -34,13 +57,34 @@ export default function Header({ updateTime }) {
   const [profileImg, setProfileImg] = useState(null);
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
+  const profileBlobUrlRef = useRef(null);
 
   const user = getUser();
   const initial = user?.name?.charAt(0) || '?';
 
-  useEffect(() => {
-    setProfileImg(getProfileImage());
+  const loadProfileImage = useCallback(async (clearWhenMissing = true) => {
+    const res = await fetchWithAuth('/api/v1/auth/me/profile-image', { cache: 'no-store' });
+    if (!res.ok) {
+      if (clearWhenMissing) setProfileImg(null);
+      return false;
+    }
+
+    const blobUrl = URL.createObjectURL(await res.blob());
+    if (profileBlobUrlRef.current) URL.revokeObjectURL(profileBlobUrlRef.current);
+    profileBlobUrlRef.current = blobUrl;
+    setProfileImg(blobUrl);
+    return true;
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadProfileImage().catch(() => setProfileImg(null));
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      if (profileBlobUrlRef.current) URL.revokeObjectURL(profileBlobUrlRef.current);
+    };
+  }, [loadProfileImage]);
 
   useEffect(() => {
     function handleClick(e) {
@@ -131,17 +175,44 @@ export default function Header({ updateTime }) {
     setModal('profileImg');
     setImgFile(null);
     setImgPreview(null);
+    setCropSrc(null);
+    setCropSize(null);
+    setShowCrop(false);
     setImgMsg({ text: '', type: '' });
   }
 
   function onFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
-    setImgFile(file);
+    e.target.value = '';
     setImgMsg({ text: '', type: '' });
     const reader = new FileReader();
-    reader.onload = ev => setImgPreview(ev.target.result);
+    reader.onload = ev => {
+      setCropSrc(ev.target.result);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCropSize(null);
+      setShowCrop(true);
+    };
     reader.readAsDataURL(file);
+  }
+
+  const onCropComplete = useCallback((_, pixels) => setCroppedAreaPixels(pixels), []);
+  const onCropMediaLoaded = useCallback(({ width, height }) => {
+    const diameter = Math.min(width, height);
+    setCropSize({ width: diameter, height: diameter });
+  }, []);
+
+  async function confirmCrop() {
+    if (!croppedAreaPixels) return;
+    const blob = await getCroppedBlob(cropSrc, croppedAreaPixels);
+    const file = new File([blob], 'profile.jpg', { type: 'image/jpeg' });
+    setImgFile(file);
+    setImgPreview(current => {
+      if (current?.startsWith('blob:')) URL.revokeObjectURL(current);
+      return URL.createObjectURL(blob);
+    });
+    setShowCrop(false);
   }
 
   async function uploadProfileImage() {
@@ -160,7 +231,12 @@ export default function Header({ updateTime }) {
         setImgMsg({ text: data.detail || '업로드에 실패했습니다.', type: 'err' });
       } else {
         setProfileImage(data.profile_image_url);
-        setProfileImg(data.profile_image_url);
+        setProfileImg(imgPreview);
+        const loaded = await loadProfileImage(false);
+        if (loaded) {
+          if (imgPreview?.startsWith('blob:')) URL.revokeObjectURL(imgPreview);
+          setImgPreview(null);
+        }
         setImgFile(null);
         setImgMsg({ text: '프로필 사진이 업데이트되었습니다.', type: 'ok' });
       }
@@ -179,6 +255,10 @@ export default function Header({ updateTime }) {
         setImgMsg({ text: '삭제에 실패했습니다.', type: 'err' });
       } else {
         setProfileImage(null);
+        if (profileBlobUrlRef.current) {
+          URL.revokeObjectURL(profileBlobUrlRef.current);
+          profileBlobUrlRef.current = null;
+        }
         setProfileImg(null);
         setImgPreview(null);
         setImgFile(null);
@@ -226,7 +306,14 @@ export default function Header({ updateTime }) {
   }
 
   const avatarContent = profileImg
-    ? <img src={profileImg} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => { setProfileImage(null); setProfileImg(null); }} alt="" />
+    ? (
+      <img
+        src={profileImg}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        onError={() => setProfileImg(current => current === profileImg ? null : current)}
+        alt=""
+      />
+    )
     : initial;
 
   const genderMap = { M: '남성', F: '여성', OTHER: '기타' };
@@ -241,7 +328,7 @@ export default function Header({ updateTime }) {
           </Link>
         </div>
         <div className="header-right">
-          {updateTime && <span style={{ fontSize: 11, color: '#94a3b8' }}>{updateTime}</span>}
+          {updateTime && <span style={{ fontSize: 11, color: '#64748b' }}>{updateTime}</span>}
           {pathname?.startsWith('/my-report') ? (
             <Link href="/dashboard" className="header-report-btn">
               🏠 대시보드
@@ -383,47 +470,85 @@ export default function Header({ updateTime }) {
 
       {/* 프로필 사진 모달 */}
       {modal === 'profileImg' && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null); }}>
-          <div className="modal-box" style={{ width: 340 }}>
+        <div className="modal-overlay" onClick={e => { if (!showCrop && e.target === e.currentTarget) setModal(null); }}>
+          <div className="modal-box" style={{ width: showCrop ? 400 : 340 }}>
             <div className="modal-title">📷 프로필 사진</div>
-            <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
-                {(imgPreview || profileImg) ? (
-                  <img
-                    src={imgPreview || profileImg}
-                    style={{ width: 90, height: 90, borderRadius: '50%', objectFit: 'cover', border: imgPreview ? '3px solid #2563eb' : '3px solid #e2e8f0' }}
-                    alt=""
+
+            {showCrop ? (
+              <>
+                <div style={{ position: 'relative', width: '100%', height: 280, borderRadius: 10, overflow: 'hidden', background: '#0f172a' }}>
+                  <Cropper
+                    image={cropSrc}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1}
+                    cropSize={cropSize || undefined}
+                    cropShape="round"
+                    objectFit="contain"
+                    restrictPosition
+                    zoomSpeed={0.2}
+                    showGrid={false}
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={onCropComplete}
+                    onMediaLoaded={onCropMediaLoaded}
                   />
-                ) : (
-                  <div style={{ width: 90, height: 90, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 32, fontWeight: 700 }}>
-                    {initial}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+                  <span style={{ fontSize: 11, color: '#64748b', flexShrink: 0 }}>확대</span>
+                  <input
+                    type="range" min={1} max={3} step={0.02} value={zoom}
+                    onChange={e => setZoom(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                </div>
+                <div className="modal-actions" style={{ marginTop: 14 }}>
+                  <button className="btn btn-ghost" onClick={() => setShowCrop(false)}>취소</button>
+                  <button className="btn btn-primary" onClick={confirmCrop}>자르기</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                  <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
+                    {(imgPreview || profileImg) ? (
+                      <img
+                        src={imgPreview || profileImg}
+                        style={{ width: 90, height: 90, borderRadius: '50%', objectFit: 'cover', border: imgPreview ? '3px solid #2563eb' : '3px solid #e2e8f0' }}
+                        alt=""
+                      />
+                    ) : (
+                      <div style={{ width: 90, height: 90, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 32, fontWeight: 700 }}>
+                        {initial}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
-                <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()}>📁 사진 선택</button>
-                {profileImg && !imgPreview && (
-                  <button className="btn btn-danger" onClick={deleteProfileImage} disabled={saving}>삭제</button>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                style={{ display: 'none' }}
-                onChange={onFileSelect}
-              />
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>JPG · PNG · WEBP · GIF &nbsp;·&nbsp; 최대 5MB</div>
-            </div>
-            {imgMsg.text && <div className={`modal-msg ${imgMsg.type}`}>{imgMsg.text}</div>}
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setModal(null)}>닫기</button>
-              {imgFile && (
-                <button className="btn btn-primary" onClick={uploadProfileImage} disabled={saving}>
-                  {saving ? '업로드 중...' : '업로드'}
-                </button>
-              )}
-            </div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                    <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()}>📁 사진 선택</button>
+                    {profileImg && !imgPreview && (
+                      <button className="btn btn-danger" onClick={deleteProfileImage} disabled={saving}>삭제</button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    style={{ display: 'none' }}
+                    onChange={onFileSelect}
+                  />
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>JPG · PNG · WEBP · GIF &nbsp;·&nbsp; 최대 5MB</div>
+                </div>
+                {imgMsg.text && <div className={`modal-msg ${imgMsg.type}`}>{imgMsg.text}</div>}
+                <div className="modal-actions">
+                  <button className="btn btn-ghost" onClick={() => setModal(null)}>닫기</button>
+                  {imgFile && (
+                    <button className="btn btn-primary" onClick={uploadProfileImage} disabled={saving}>
+                      {saving ? '업로드 중...' : '업로드'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

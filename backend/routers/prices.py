@@ -21,6 +21,22 @@ PERIOD_DAYS = {
 }
 
 
+@router.get("/data-freshness")
+def get_data_freshness(db: Session = Depends(get_db)) -> dict:
+    row = db.execute(text("""
+        SELECT
+            (SELECT MAX(date) FROM price) AS price_date,
+            (SELECT MAX(end_date) FROM regime) AS news_date,
+            (SELECT MAX(date) FROM fundamental) AS fundamental_date
+    """)).fetchone()
+
+    return {
+        "price": str(row.price_date) if row and row.price_date else None,
+        "news": str(row.news_date) if row and row.news_date else None,
+        "fundamental": str(row.fundamental_date) if row and row.fundamental_date else None,
+    }
+
+
 @router.get("/latest")
 def get_latest_prices(db: Session = Depends(get_db)) -> list[dict]:
     rows = db.execute(text("""
@@ -114,6 +130,17 @@ def get_price_stats(
     change = round(close - prev, 2) if close and prev else None
     change_pct = round((close - prev) / prev * 100, 2) if close and prev else None
 
+    def _period_change_pct(days: int) -> float | None:
+        cutoff = date.today() - timedelta(days=days)
+        old = db.execute(text("""
+            SELECT close FROM price
+            WHERE ticker = :ticker AND date >= :cutoff
+            ORDER BY date ASC LIMIT 1
+        """), {"ticker": ticker, "cutoff": str(cutoff)}).fetchone()
+        if old and old.close and close:
+            return float(round((close - float(old.close)) / float(old.close) * 100, 2))
+        return None
+
     return {
         "high52": int(row.high52) if row and row.high52 else None,
         "low52": int(row.low52) if row and row.low52 else None,
@@ -123,4 +150,6 @@ def get_price_stats(
         "market_cap": int(fund.market_cap) if fund and fund.market_cap else None,
         "change": change,
         "change_pct": change_pct,
+        "change_30d": _period_change_pct(30),
+        "change_1y": _period_change_pct(365),
     }

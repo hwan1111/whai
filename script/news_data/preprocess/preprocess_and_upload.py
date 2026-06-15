@@ -25,43 +25,43 @@ TARGET_FOLDERS = [
     "LG화학_051910",
     "LIG디펜스앤에어로스페이스_079550",
     "SK이노베이션_096770",
-    "SK하이닉스_000660"
+    "SK하이닉스_000660",
+    "원달러환율_USD_KRW",
 ]
 
-# 4. Option B 전처리 함수 정의
-def preprocess_option_b(text):
+S3_TICKERS = [
+    "000270", "005930", "055550", "012450", "005380",
+    "105560", "051910", "079550", "096770", "000660",
+    "USD_KRW",
+]
+
+# 4. 전처리 함수 (금융 도메인용 — 마침표/쉼표/%/+/- 등 금융 기호 보존)
+#    이전 Option B는 모든 특수기호를 제거해 "3.7%", "8,500억원", "+2.3%" 같은
+#    금융 수치가 뭉개졌다. 본 함수는 금융 기호를 살리고 노이즈만 정제한다.
+def clean_financial_news(text: str) -> str:
     if not text:
         return ""
-    
-    # R1: 줄바꿈 기호를 공백으로 대체
-    temp_text = text.replace('\n', ' ').replace('\r', ' ')
-    
-    # 문장 분할 (마침표로 분할)
-    sentences = [s.strip() for s in temp_text.split('.') if s.strip()]
-    
-    processed_sentences = []
-    for sentence in sentences:
-        # R3: 저작권/저작권자 포함 문장 제외
-        if "저작권" in sentence or "저작권자" in sentence:
-            continue
-            
-        # R5: 기사/기자 포함 문장 제외
-        if "기사" in sentence or "기자" in sentence:
-            continue
-            
-        # R6: 이메일 제거
-        sentence = re.sub(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', '', sentence)
-        
-        # R2: 특수기호 날리기 (한글, 영문, 숫자, 공백 제외 제거)
-        sentence = re.sub(r'[^가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9\s]', '', sentence)
-        
-        # 연속된 공백 정리
-        sentence = re.sub(r'\s+', ' ', sentence).strip()
-        if sentence:
-            processed_sentences.append(sentence)
-            
-    # 마침표가 사라졌으므로 문장들을 다시 띄어쓰기로 결합
-    return " ".join(processed_sentences)
+
+    # 1. 기사 하단 저작권 및 배너 문구 제거 (가장 먼저 잘라내기)
+    text = re.sub(r"(<저작권자|▶|ⓒ).*$", "", text, flags=re.MULTILINE | re.DOTALL)
+    # 이메일 제거
+    text = re.sub(r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)", "", text)
+
+    # 2. 언론사별 상단 메타데이터 및 말머리 제거
+    text = re.sub(r"\[머니투데이.*?\]", "", text)      # 머니투데이 대괄호 마크
+    text = re.sub(r"\(.*?\=연합뉴스\)", "", text)       # (서울=연합뉴스) 형태
+    text = re.sub(r"사진\s*=\s*\S+", "", text)          # 사진=머니S 등 제거
+    text = re.sub(r"사진제공\s*=\s*\S+", "", text)
+
+    # 3. 불필요한 특수문자 제거 (★ 마침표, 쉼표, %, +, - 기호는 반드시 보존)
+    #    금융 수치에 쓰이는 기호와 문장 마침표를 제외한 나머지 특수문자만 청소
+    text = re.sub(r"[^\w\s.,%+\-가-힣]", " ", text)
+
+    # 4. 줄바꿈(\n, \r) 제거 → 공백으로 대체 후 연속 공백 압축 (토큰 절감 핵심)
+    text = text.replace("\n", " ").replace("\r", " ")   # 줄바꿈 기호 제거
+    text = re.sub(r" +", " ", text)                     # 연속된 띄어쓰기 → 단일 공백
+
+    return text.strip()
 
 # 5. 개별 파일 전처리 및 S3 업로드 함수
 def preprocess_and_upload_file(filepath):
@@ -72,7 +72,7 @@ def preprocess_and_upload_file(filepath):
     folder_name = os.path.basename(os.path.dirname(filepath))
     
     # 티커 추출 (예: 005930)
-    ticker = folder_name.split('_')[-1]
+    ticker = "USD_KRW" if folder_name.endswith("_USD_KRW") else folder_name.rsplit("_", 1)[-1]
     
     # 연도와 월 추출
     year = filename[:4]
@@ -86,9 +86,9 @@ def preprocess_and_upload_file(filepath):
         data = json.load(f)
         
     fulltext = data.get('fulltext', '')
-    
-    # Option B 전처리 적용
-    preprocessed_text = preprocess_option_b(fulltext)
+
+    # 금융 도메인 전처리 적용 (금융 기호 보존)
+    preprocessed_text = clean_financial_news(fulltext)
     
     # JSON 내용 업데이트
     data['fulltext'] = preprocessed_text
@@ -106,22 +106,72 @@ def preprocess_and_upload_file(filepath):
     )
     return True
 
-def main():
+
+def preprocess_and_upload_s3_key(raw_key):
+    """로컬 파일이 없어도 S3 raw를 기준으로 전처리 누락분을 복구한다."""
+    response = s3.get_object(Bucket=BUCKET_NAME, Key=raw_key)
+    data = json.loads(response["Body"].read().decode("utf-8"))
+    data["fulltext"] = clean_financial_news(data.get("fulltext", ""))
+    data["fulltext_length"] = len(data["fulltext"])
+    data.pop("source", None)
+
+    preprocessed_key = raw_key.replace("raw/", "preprocessed/", 1)
+    body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=preprocessed_key,
+        Body=body,
+        ContentType="application/json; charset=utf-8",
+    )
+    return preprocessed_key
+
+
+def backfill_s3_raw(since: str | None = None) -> int:
+    raw_keys = []
+    paginator = s3.get_paginator("list_objects_v2")
+    for ticker in S3_TICKERS:
+        prefix = f"raw/{ticker}/"
+        for page in paginator.paginate(Bucket=BUCKET_NAME, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                filename = key.rsplit("/", 1)[-1]
+                if not filename.endswith(".json"):
+                    continue
+                if since and filename[:10] < since:
+                    continue
+                raw_keys.append(key)
+
+    if not raw_keys:
+        return 0
+
+    success_count = 0
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(preprocess_and_upload_s3_key, key) for key in raw_keys]
+        for future in as_completed(futures):
+            future.result()
+            success_count += 1
+    return success_count
+
+
+def main(since: str | None = None) -> None:
     json_files = []
     for folder in TARGET_FOLDERS:
         folder_path = os.path.join(DATA_DIR, folder)
         if os.path.exists(folder_path):
-            json_files.extend(glob.glob(f"{folder_path}/**/*.json", recursive=True))
-            
+            files = glob.glob(f"{folder_path}/**/*.json", recursive=True)
+            if since:
+                files = [f for f in files if os.path.basename(f)[:10] >= since]
+            json_files.extend(files)
+
     total_files = len(json_files)
-    print(f"[시작] 총 {total_files}개의 뉴스 파일을 찾았습니다.")
+    since_msg = f" (since {since})" if since else ""
+    print(f"[시작] 총 {total_files}개의 뉴스 파일을 찾았습니다{since_msg}.")
     print(f"[{BUCKET_NAME}] 버킷의 preprocessed 경로로 병렬 업로드를 시작합니다...\n")
-    
+
     success_count = 0
-    # 병렬 처리 (10개 스레드)
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(preprocess_and_upload_file, fp) for fp in json_files]
-        
+
         for idx, future in enumerate(as_completed(futures), 1):
             try:
                 future.result()
@@ -130,8 +180,14 @@ def main():
                     print(f"진행 상황: {idx} / {total_files} 완료...")
             except Exception as e:
                 print(f"오류 발생: {e}")
-                
+
     print(f"\n[완료] S3 전처리 업로드 완료! (성공: {success_count}/{total_files}개)")
+    s3_count = backfill_s3_raw(since)
+    print(f"[완료] S3 raw 기반 전처리 복구: {s3_count}개")
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="뉴스 전처리 및 S3 업로드")
+    parser.add_argument("--since", default=None, help="이 날짜 이후 파일만 처리 YYYY-MM-DD")
+    args = parser.parse_args()
+    main(since=args.since)

@@ -25,11 +25,14 @@ import boto3
 import FinanceDataReader as fdr
 import numpy as np
 import pandas as pd
+import pymysql
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from scipy import stats
 
 load_dotenv(".env")
+load_dotenv(".env.local", override=True)
+ROOT = Path(__file__).resolve().parents[2]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -52,7 +55,7 @@ TICKER_MAP: dict[str, tuple[str, str]] = {
 }
 
 S3_BUCKET = "fisa-news-archive"
-S3_PREFIX = "raw"
+S3_PREFIX = "preprocessed"
 
 MAX_NEWS_CHARS  = 1_300
 MAX_NEWS_COUNT  = 20   # 장기 구간 토큰 폭증 방지: 구간 내 최대 기사 수
@@ -110,12 +113,54 @@ _USER_TMPL = """\
 # ── 국면 탐지 (test3.py 핵심 로직 인라인) ────────────────────────────
 
 def _fetch_price_volume(code: str, start: str, end: str) -> tuple[pd.Series, pd.Series]:
-    df = fdr.DataReader(code, start, end)
-    return df["Close"].pct_change().dropna(), df["Volume"]
+    # pct_change 계산에 이전 종가가 필요하므로 14일 앞에서부터 로드
+    start_adj = (pd.Timestamp(start) - pd.Timedelta(days=14)).strftime("%Y-%m-%d")
+    if code == "USD/KRW":
+        # Yahoo 기반 USD/KRW는 날짜와 값이 서비스의 BOK 환율과 달라 DB 기준으로 맞춘다.
+        conn = pymysql.connect(
+            host="mysql-12676458-whai.b.aivencloud.com",
+            port=16935,
+            db="whai_service",
+            user=os.environ["BACKEND_DB_USER"],
+            password=os.environ["BACKEND_DB_PASSWORD"],
+            charset="utf8mb4",
+            ssl={"ca": str(ROOT / "config" / "certs" / "ca.pem")},
+            cursorclass=pymysql.cursors.DictCursor,
+        )
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT date, close, volume
+                    FROM price
+                    WHERE ticker = 'USD' AND date BETWEEN %s AND %s
+                    ORDER BY date
+                    """,
+                    (start_adj, end),
+                )
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+
+        index = pd.to_datetime([row["date"] for row in rows])
+        close = pd.Series([float(row["close"]) for row in rows], index=index)
+        volume = pd.Series([float(row["volume"] or 0) for row in rows], index=index)
+        returns = close.pct_change().dropna()
+        returns = returns[returns.index >= pd.Timestamp(start)]
+        volume = volume[volume.index >= pd.Timestamp(start)]
+        return returns, volume
+
+    df = fdr.DataReader(code, start_adj, end)
+    returns = df["Close"].pct_change().dropna()
+    returns = returns[returns.index >= pd.Timestamp(start)]
+    volume  = df["Volume"][df.index >= pd.Timestamp(start)]
+    return returns, volume
 
 
 def _detect_price_regimes(returns: pd.Series) -> list[dict]:
     s = returns.dropna()
+    if s.empty:
+        return []
     dirs = s.map(lambda x: "상승" if x > 0 else "하락")
     regimes, cur_dir, cur_start, cur_dates = [], dirs.iloc[0], dirs.index[0], [dirs.index[0]]
     for date, d in dirs.iloc[1:].items():
@@ -354,9 +399,9 @@ def run(ticker_code: str,
             llm_client = groq_lib.Groq(api_key=api_key)
         elif provider == "openrouter":
             from openai import OpenAI
-            api_key = os.getenv("GPT_API_KEY", "")
+            api_key = os.getenv("OPENROUTER_API_KEY", "")
             if not api_key:
-                raise EnvironmentError(".env에 GPT_API_KEY 없음")
+                raise EnvironmentError(".env에 OPENROUTER_API_KEY 없음")
             llm_client = OpenAI(api_key=api_key, base_url=OPENROUTER_BASE_URL)
         else:
             from google import genai
@@ -374,12 +419,13 @@ def run(ticker_code: str,
     regimes         = _merge_noise(raw_regimes, returns)
     log.info(f"국면: {len(raw_regimes)}개 → 병합 후 {len(regimes)}개")
 
-    # ── 기존 결과 로드 ────────────────────────────────────────────────
+    # ── 기존 결과 로드 (분석 시작일 이전 데이터만 유지) ──────────────
     results: list[dict] = []
     if output_path.exists():
         try:
-            results = json.loads(output_path.read_text(encoding="utf-8"))
-            log.info(f"기존 결과 {len(results)}건 로드")
+            all_prev = json.loads(output_path.read_text(encoding="utf-8"))
+            results = [r for r in all_prev if r.get("end", "") < start]
+            log.info(f"기존 결과 {len(all_prev)}건 중 {len(results)}건 유지 ({start} 이전)")
         except Exception:
             pass
 
@@ -405,15 +451,19 @@ def run(ticker_code: str,
 
     # ── 국면 순회 ─────────────────────────────────────────────────────
     for i, reg in enumerate(regimes, 1):
-        regime_key = f"{reg['start'].strftime('%Y-%m-%d')}_{reg['end'].strftime('%Y-%m-%d')}"
+        effective_end = reg["end"]
+        if i == len(regimes):
+            effective_end = max(effective_end, pd.Timestamp(end))
+
+        regime_key = f"{reg['start'].strftime('%Y-%m-%d')}_{effective_end.strftime('%Y-%m-%d')}"
         start_str  = reg["start"].strftime("%Y-%m-%d")
-        end_str    = reg["end"].strftime("%Y-%m-%d")
+        end_str    = effective_end.strftime("%Y-%m-%d")
         cum_ret    = _cum_return(returns, reg["dates"])
         vol_trend  = _vol_trend(volume, reg["dates"])
         dir_str    = DIR_STR.get(reg["direction"], reg["direction"])
 
         news_articles = _fetch_regime_news(s3_client, ticker_code,
-                                           reg["start"], reg["end"],
+                                           reg["start"], effective_end,
                                            NEWS_PRE, NEWS_POST)
 
         log.info(
