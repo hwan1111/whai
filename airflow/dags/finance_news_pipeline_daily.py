@@ -12,6 +12,7 @@ News collection starts immediately, while regime analysis waits for market data.
 """
 
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timedelta, date
@@ -71,16 +72,19 @@ default_args = {
     "start_date":       datetime(2026, 6, 10),
     "email_on_failure": True,
     "email_on_retry":   False,
-    "retries":          1,
+    "retries":          3,
     "retry_delay":      timedelta(minutes=10),
+    "retry_exponential_backoff": True,
+    "max_retry_delay":  timedelta(hours=1),
 }
 
 dag = DAG(
     "finance_news_pipeline_daily",
     default_args=default_args,
     description="뉴스 수집 → S3 전처리 → LLM 국면 분석 → DB 업로드 (일별)",
-    schedule="0 15 * * 1-5",  # 15:00 UTC = 00:00 KST 평일
+    schedule="0 15 * * *",  # 15:00 UTC = 00:00 KST 매일
     catchup=False,
+    max_active_runs=1,
     tags=["finance", "news", "llm", "pipeline"],
 )
 
@@ -102,9 +106,6 @@ wait_for_market_data = ExternalTaskSensor(
 )
 
 
-# 월요일은 주말(토·일) 뉴스까지 소급 수집: ds - 2일(토요일)부터 시작
-_since = "{{ macros.ds_add(ds, -2) if dag_run.logical_date.weekday() == 0 else ds }}"
-
 # ──────────────────────────────────────────────
 # Stage 1: 전일 뉴스 수집
 # ──────────────────────────────────────────────
@@ -114,7 +115,7 @@ task_collect_all = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         "python script/news_data/collect_all_news.py "
-        f"--start {_since} --end {{{{ ds }}}}"
+        "--start {{ ds }} --end {{ ds }}"
     ),
     dag=dag,
 )
@@ -128,7 +129,7 @@ task_upload_raw = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         "python script/news_data/upload_raw_to_s3.py "
-        f"--since {_since}"
+        "--since {{ ds }}"
     ),
     dag=dag,
 )
@@ -143,7 +144,7 @@ task_preprocess = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         "python script/news_data/preprocess/preprocess_and_upload.py "
-        f"--since {_since}"
+        "--since {{ ds }}"
     ),
     dag=dag,
 )
@@ -153,7 +154,7 @@ task_preprocess_kospi200 = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         "python script/news_data/preprocess/preprocess_and_upload_kospi200.py "
-        f"--since {_since}"
+        "--since {{ ds }}"
     ),
     dag=dag,
 )
@@ -247,30 +248,33 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
 
     print(f"[{ticker_code}] LLM 분석: {start_str} ~ {end_str}")
 
+    analysis_ticker = s3_ticker or ticker_code
     cmd = [
         sys.executable,
         str(ROOT / "script" / "news_data" / "eval" / "regime_news_summary.py"),
-        "--provider",    LLM_PROVIDER,
-        "--ticker-code", ticker_code,
-        "--ticker-name", ticker_name,
-        "--sector",      sector,
-        "--start",       start_str,
-        "--end",         end_str,
+        "--provider", LLM_PROVIDER,
+        "--ticker",   analysis_ticker,
+        "--start",    start_str,
+        "--end",      end_str,
     ]
-    if s3_ticker:
-        cmd += ["--s3-ticker", s3_ticker]
-    if fdr_ticker:
-        cmd += ["--fdr-ticker", fdr_ticker]
 
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
     print(result.stdout)
     if result.returncode != 0:
         raise RuntimeError(f"regime_news_summary 실패 [{ticker_code}]:\n{result.stderr}")
 
+    if analysis_ticker != ticker_code:
+        source = ROOT / "data" / analysis_ticker / f"regime_news_summary_{analysis_ticker}.json"
+        target = ROOT / "data" / ticker_code / f"regime_news_summary_{ticker_code}.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+
 
 def _load_db_task(ticker_code: str, **context) -> None:
     """regime JSON → MySQL 업로드 (신규 국면만 append)."""
     sys.path.insert(0, str(ROOT))
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env", override=True)
 
     # DB ticker(000000, USD)와 파일 ticker(KOSPI200, USD_KRW) 매핑
     _FILE_TICKER = {"000000": "KOSPI200", "USD": "USD_KRW"}

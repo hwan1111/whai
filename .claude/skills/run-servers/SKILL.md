@@ -15,12 +15,12 @@ description: Launch backend (Uvicorn) and frontend (Next.js) dev servers for thi
 Working directory: repo root (`c:/Users/minha/whai`)
 
 ```bash
-cd "c:/Users/minha/whai" && source .venv/Scripts/activate && uvicorn backend.main:app --port 8000 --reload
+cd "c:/Users/minha/whai" && source .venv/Scripts/activate && PYTHONUTF8=1 uvicorn backend.main:app --port 8000 --reload
 ```
 
 Run in background. Healthy when output contains:
 ```
-INFO:     Uvicorn running on http://127.0.0.1:8000
+INFO:     Application startup complete.
 ```
 
 Smoke test:
@@ -50,3 +50,4 @@ Run in background. Healthy when output contains:
 - Start backend first, then frontend
 - Bash tool path issue: use forward slashes (`/`), not backslashes (`\`)
 - `.venv\Scripts\activate` (PowerShell) → `.venv/Scripts/activate` (bash)
+- `PYTHONUTF8=1` 필수 — `.env`에 한글 주석이 있어서 Windows 기본 인코딩(cp949)으로 읽으면 `slowapi`/Starlette에서 UnicodeDecodeError 발생

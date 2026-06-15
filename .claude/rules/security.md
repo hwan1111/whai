@@ -2,7 +2,7 @@
 
 ## Secrets & Credentials
 
-- All secrets (API keys, DB passwords, broker tokens) go in `.env.local` — never hardcoded, never committed.
+- All secrets (API keys, DB passwords, broker tokens) go in `.env` — never hardcoded, never committed.
 - `.env` in the repo is the template with empty values only.
 - Use `python-dotenv` or the framework's env loader; do not `os.environ` raw strings in application logic.
 - Rotate any secret that appears in a commit immediately.

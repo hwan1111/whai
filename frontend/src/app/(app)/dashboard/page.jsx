@@ -5,6 +5,7 @@ import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, fetchAssetData, buildPeriodData } from '@/lib/data';
 import { STOCK_CONFIG } from '@/components/StockDetailModal';
 import LineChart, { anomalyColor, computeAnomalies, findNewsForDate } from '@/components/LineChart';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 const STOCK_SECTORS = [
   { label: '반도체', ids: ['005930', '000660'] },
@@ -24,9 +25,7 @@ const STOCK_NAMES = {
 
 const FX_INFO = {
   'USD': { flag: '/assets/flags/us.png', label: 'USD/KRW', desc: '미국 환율',
-    factors: [{ label: '미 연준 통화정책', pct: 55, color: '#2563eb', val: '+55%', desc: '연준 금리 결정이 달러 강세·약세 방향을 결정' },
-              { label: '한미 금리차', pct: 25, color: '#7c3aed', val: '+25%', desc: '양국 금리 격차 확대로 달러 강세 지속' },
-              { label: '무역수지', pct: 10, color: '#dc2626', val: '-10%', desc: '한국 무역수지 흑자가 원화 강세 요인으로 작용' }] },
+    factors: [{ label: '미 연준 통화정책' }, { label: '한미 금리차' }, { label: '무역수지' }] },
 };
 
 const LOGO = id => `/assets/logos/${({
@@ -116,11 +115,11 @@ function NewsDrawer({ open, onClose, defaultTicker, width }) {
           </select>
           <button className="btn btn-primary" onClick={() => fetchNews()}>검색</button>
         </div>
-        <div className="news-drawer-body">
+        <div className={`news-drawer-body${loading ? ' is-loading' : ''}`}>
           {loading ? (
-            <div style={{ color: '#94a3b8', fontSize: 12, padding: '24px 0', textAlign: 'center' }}>불러오는 중...</div>
+            <LoadingSpinner label="뉴스를 불러오는 중..." />
           ) : news.length === 0 ? (
-            <div style={{ color: '#94a3b8', fontSize: 12, padding: '24px 0', textAlign: 'center' }}>데이터가 없습니다.</div>
+            <div style={{ color: '#94a3b8', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>데이터가 없습니다.</div>
           ) : news.map((n, i) => {
             const isUp = n.direction === '상승';
             const isDown = n.direction === '하락';
@@ -145,11 +144,11 @@ function NewsDrawer({ open, onClose, defaultTicker, width }) {
                 onClick={() => { if (!n.vol_insight) return; setExpandedSet(prev => { const next = new Set(prev); next.has(i) ? next.delete(i) : next.add(i); return next; }); }}
               >
                 {n.cause && (
-                  <div style={{ fontSize: 13, fontWeight: 700, color: textColor, lineHeight: 1.5 }}>{n.cause}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: textColor, lineHeight: 1.5 }}>{n.cause}</div>
                 )}
                 {n.vol_insight && expandedSet.has(i) && (
                   <div style={{ marginTop: 8, padding: '10px 12px', background: 'white', borderRadius: 7, border: '1px solid rgba(0,0,0,0.07)' }}>
-                    <div style={{ fontSize: 13, color: textColor, lineHeight: 1.6 }}>{n.vol_insight}</div>
+                    <div style={{ fontSize: 14, color: textColor, lineHeight: 1.6 }}>{n.vol_insight}</div>
                   </div>
                 )}
               </div>
@@ -183,121 +182,6 @@ async function pushFavs(s, onFail) {
   } catch { onFail?.(); }
 }
 
-const CORR_PAIR_DESCRIPTIONS = {
-  'semiconductor:semiconductor': {
-    pos: 'AI 서버·HBM 수요 급증으로 동일한 반도체 업황 사이클에 노출되어 동반 등락',
-    neg: '메모리 시장 점유율 경쟁 심화로 이익률 방향이 엇갈려 역행',
-  },
-  'auto:auto': {
-    pos: '현대차그룹 완성차 계열사로 북미 수출 호조와 USD/KRW 환율 영향을 함께 반영',
-    neg: '차종 구성 및 생산 일정 차이로 분기 실적이 엇갈리는 구간 발생',
-  },
-  'defense:defense': {
-    pos: 'K-방산 수출 수주 모멘텀과 국방예산 증액 기대를 동일하게 공유하며 동반 상승',
-    neg: '수주 경쟁 및 사업 부문 구성 차이로 수익성 방향이 다르게 나타남',
-  },
-  'finance:finance': {
-    pos: '기준금리 변화와 NIM 방향성에 국내 대형 시중은행이 동시에 반응',
-    neg: '대출 포트폴리오·충당금 적립 차이로 실적 방향이 상이하게 나타남',
-  },
-  'chemical:chemical': {
-    pos: '국제 납사 가격과 배터리 소재 수요 변화가 동시에 영향을 미쳐 함께 움직임',
-    neg: '석유화학 vs 배터리 소재 사업 비중 차이로 유가 수혜 방향이 엇갈림',
-  },
-  'auto:semiconductor': {
-    pos: '글로벌 경기 회복 기대에 국내 수출 대형주가 함께 강세를 보임',
-    neg: '전기차 가속 시 반도체 수혜 증가, 완성차 전환 비용 증가로 방향이 엇갈림',
-  },
-  'defense:semiconductor': {
-    pos: '지정학 리스크 고조·기술 안보 투자 확대에 반도체·방산 동반 매수세 유입',
-    neg: '방산 예산 확대가 IT 민수 설비 투자 위축을 동반하는 국면에서 역행',
-  },
-  'finance:semiconductor': {
-    pos: 'KOSPI 대형주 동반 강세 장세에서 반도체·금융주가 함께 상승',
-    neg: '금리 인상 구간에서 반도체(성장주) 하락, 은행은 NIM 확대로 강세 역행',
-  },
-  'chemical:semiconductor': {
-    pos: '글로벌 제조업 PMI 개선 기대에 소재·IT 대형주 동반 매수세 유입',
-    neg: '에너지 비용 상승이 화학 마진을 압박하는 반면 반도체는 수요 호조로 상반',
-  },
-  'auto:defense': {
-    pos: '경기 회복·정부 지출 확대 기대에 수출·방산 종목이 동반 상승',
-    neg: '원자재 비용 변동 방향이 달라 수익성 기대치가 다르게 나타남',
-  },
-  'auto:finance': {
-    pos: '국내 경기 회복 기대에 소비·금융 관련 대형주가 동반 강세를 보임',
-    neg: '금리 인상이 자동차 할부 수요를 억제하는 반면 은행은 NIM 개선으로 역행',
-  },
-  'auto:chemical': {
-    pos: '전기차 전환 가속으로 배터리 화학과 완성차가 동반 수혜를 기대',
-    neg: '유가 상승 시 화학 원재료 부담 증가 vs 완성차 연비 수요로 방향이 상충',
-  },
-  'defense:finance': {
-    pos: '지정학 리스크 대응 수요·안정 배당 기대에 방산·금융주 동반 매수',
-    neg: '금리 급등기에 방산 성장주 밸류에이션 하락 vs 은행 NIM 개선이 상충',
-  },
-  'chemical:defense': {
-    pos: '글로벌 공급망 재편 수혜 기대로 방산·소재 종목이 동반 모멘텀을 받음',
-    neg: '유가 급등이 화학 마진을 압박하는 반면 방산 수주는 무관하여 역행',
-  },
-  'chemical:finance': {
-    pos: '경기 민감 업종 동반 강세 장세에서 화학·금융주가 함께 상승',
-    neg: '유가 상승 시 화학 원가 압박 우려 vs 은행 NIM 개선 기대로 방향이 엇갈림',
-  },
-  'semiconductor:usd': {
-    pos: '달러 강세로 반도체 수출 원화 환산 실적이 개선되며 동반 상승',
-    neg: '달러 약세(글로벌 위험선호)와 반도체 수요 기대가 상충하는 구간',
-  },
-  'auto:usd': {
-    pos: '달러 강세가 미국 수출 차량의 원화 환산 이익을 높여 동반 상승',
-    neg: '달러 약세 시 수출 자동차 마진 압박과 원화 강세가 동반',
-  },
-  'finance:usd': {
-    pos: '달러 강세 구간에서 외화 자산 평가이익이 금융사 실적에 우호적으로 반영',
-    neg: '달러 약세(글로벌 위험선호)와 금융주 강세가 방향 상충',
-  },
-  'defense:usd': {
-    pos: '달러 강세 구간에서 방산 수출 계약의 원화 환산 이익 증가',
-    neg: '달러 약세(지정학 긴장 완화)와 방산 수요 기대 약화가 동반',
-  },
-  'chemical:usd': {
-    pos: '달러 강세 시 수출 화학 제품의 원화 환산 수익이 개선되어 동반',
-    neg: '달러 강세로 납사·원자재 달러 비용이 늘어나 화학 마진 압박',
-  },
-  'index:semiconductor': {
-    pos: 'KOSPI 시총 1·2위 반도체 대형주가 지수 방향을 주도하며 함께 상승',
-    neg: '반도체 업황 부진이 KOSPI 하락을 견인하는 국면',
-  },
-  'auto:index': {
-    pos: '완성차 수출 호조가 KOSPI 방향과 동반 상승',
-    neg: '자동차 섹터 부진이 KOSPI와 역행하는 국면',
-  },
-  'finance:index': {
-    pos: '시중은행 대형주의 NIM 수혜가 KOSPI와 동반 상승',
-    neg: '금융 섹터 부진이 KOSPI와 역행하는 국면',
-  },
-};
-
-function getPairDesc(idA, idB, isPos, absR) {
-  const SECTOR = {
-    '005930': 'semiconductor', '000660': 'semiconductor',
-    '005380': 'auto',          '000270': 'auto',
-    '079550': 'defense',       '012450': 'defense',
-    '105560': 'finance',       '055550': 'finance',
-    '051910': 'chemical',      '096770': 'chemical',
-    '000000': 'index',
-    'USD': 'usd',
-  };
-  const typeA = SECTOR[idA] ?? 'other';
-  const typeB = SECTOR[idB] ?? 'other';
-  const key = [typeA, typeB].sort().join(':');
-  const entry = CORR_PAIR_DESCRIPTIONS[key];
-  if (!entry) {
-    const intensity = absR >= 0.7 ? '강하게' : absR >= 0.3 ? '중간 정도로' : '약하게';
-    return isPos ? `${intensity} 같은 방향으로 움직이는 경향` : `${intensity} 반대 방향으로 움직이는 경향`;
-  }
-  return isPos ? entry.pos : entry.neg;
-}
 
 function fmtNewsDate(d) {
   if (!d) return '';
@@ -318,61 +202,114 @@ function fmtChg(pct) {
 }
 
 
-function FactorDonut({ factors, title }) {
-  if (!factors?.length) return null;
-
-  const R = 28, SW = 10, CX = 36, CY = 36;
-  const circumference = 2 * Math.PI * R;
+function FactorInsightPanel({ rawFactors, cachedData, title, marketChangePct }) {
+  const isLoading = cachedData === undefined;
+  const marketDirection = marketChangePct > 0 ? '상승' : marketChangePct < 0 ? '하락' : '중립';
+  const directionOrder = marketDirection === '상승'
+    ? { 상승: 0, 하락: 1, 중립: 2 }
+    : marketDirection === '하락'
+      ? { 하락: 0, 상승: 1, 중립: 2 }
+      : { 상승: 0, 하락: 1, 중립: 2 };
+  const directionRank = direction => directionOrder[direction] ?? 3;
+  const strengthOrder = { 강함: 0, 보통: 1, 약함: 2 };
+  const strengthRank = strength => strengthOrder[strength] ?? 3;
+  const factors = !isLoading && rawFactors
+    ?.map((f, i) => ({
+      ...f,
+      label: cachedData.labels?.[i] || f.label,
+      desc: cachedData.descs?.[i],
+      direction: cachedData.directions?.[i] || '중립',
+      strength: cachedData.strengths?.[i] || '보통',
+      sourceIndex: i,
+    }))
+    .sort((a, b) => (
+      directionRank(a.direction) - directionRank(b.direction)
+      || strengthRank(a.strength) - strengthRank(b.strength)
+      || a.sourceIndex - b.sourceIndex
+    ));
+  const adviceItems = Array.isArray(cachedData?.advice)
+    ? cachedData.advice
+    : cachedData?.advice
+      ? [cachedData.advice]
+      : [];
+  const llmSpinner = (size = 14) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ animation: 'loading-blink 1.2s ease-in-out infinite', display: 'inline-block' }}>🤖</span>
+      <span className="loading-dots" style={{ color: '#7c3aed', fontSize: size }}>분석 중</span>
+    </span>
+  );
 
   return (
-    <div className="ai-main-card" style={{ flex: '2 1 0', minHeight: 0, overflowY: 'auto' }}>
-      <div className="ai-main-title" style={{ marginBottom: 14 }}>{title}</div>
-      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-        {factors.map((factor, i) => {
-          const pct = Math.abs(factor.pct);
-          const arcLen = circumference * pct / 100;
-          const isNeg = factor.val.startsWith('-');
-          return (
-            <div key={i} style={{ display: 'contents' }}>
-              {i > 0 && (
-                <div style={{ width: 1, background: '#e2e8f0', alignSelf: 'stretch', flexShrink: 0, margin: '0 10px' }} />
-              )}
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '0 4px' }}>
-                {/* 도넛 SVG */}
-                <div style={{ position: 'relative', width: CX * 2, height: CY * 2 }}>
-                  <svg width={CX * 2} height={CY * 2} style={{ transform: 'rotate(-90deg)' }}>
-                    <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e2e8f0" strokeWidth={SW} />
-                    <circle
-                      cx={CX} cy={CY} r={R}
-                      fill="none"
-                      stroke={factor.color}
-                      strokeWidth={SW}
-                      strokeDasharray={`${arcLen} ${circumference - arcLen}`}
-                      strokeDashoffset={0}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: isNeg ? '#1d4ed8' : '#b91c1c', lineHeight: 1 }}>{factor.val}</span>
+    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, flex: '2 1 0', minHeight: 0 }}>
+      {/* ── 요인 분석 카드 (chart-panel과 동일 flex: 2) ── */}
+      <div className="ai-main-card" style={{ flex: '2 1 0', minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
+        <div className="factor-insight-header">
+          <div className="ai-main-title dashboard-section-title">{title}</div>
+        </div>
+        {isLoading ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 100 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ animation: 'loading-blink 1.2s ease-in-out infinite', display: 'inline-block', fontSize: 23 }}>🤖</span>
+              <span className="loading-dots" style={{ color: '#7c3aed', fontSize: 14, fontWeight: 600 }}>분석 중</span>
+            </span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+            {factors?.map((factor, i) => {
+              const isNeg = factor.direction === '하락';
+              const isNeutral = factor.direction === '중립';
+              const strengthTone = factor.strength === '강함' ? 'strong' : factor.strength === '약함' ? 'weak' : 'medium';
+              const directionText = `${factor.direction} · ${factor.strength}`;
+              return (
+                <div key={i} style={{ display: 'contents' }}>
+                  {i > 0 && <div style={{ width: 1, background: '#e2e8f0', alignSelf: 'stretch', flexShrink: 0, margin: '0 10px' }} />}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, padding: '0 4px', minHeight: 0 }}>
+                    <span
+                      className={`factor-direction-badge ${isNeutral ? 'neutral' : isNeg ? 'down' : 'up'} ${strengthTone}`}
+                      title={`${factor.direction} 영향 · ${factor.strength}`}
+                    >
+                      {directionText}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', textAlign: 'center', lineHeight: 1.3 }}>{factor.label}</span>
+                    </div>
+                    <div
+                      className="factor-insight-box"
+                    >
+                      {factor.desc}
+                    </div>
                   </div>
                 </div>
-                {/* 제목 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: factor.color, flexShrink: 0, display: 'inline-block' }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textAlign: 'center', lineHeight: 1.3 }}>{factor.label}</span>
-                </div>
-                {/* 설명 */}
-                <div style={{ fontSize: 10, color: '#4c1d95', lineHeight: 1.55, textAlign: 'left', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '6px 8px', width: '100%', boxSizing: 'border-box' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
-                    <span className="ai-badge" style={{ fontSize: 9, flexShrink: 0 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#3b0764' }}>영향 포착</span>
-                  </div>
-                  {factor.desc}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── 현 시장 투자 유의사항 카드 (ai-main-panel과 동일 flex: 1) ── */}
+      <div
+        className="ai-main-card"
+        style={{
+          flex: '1 1 0',
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%)',
+          borderColor: '#c4b5fd',
+        }}
+      >
+        <div className="ai-main-title dashboard-section-title dashboard-section-title--purple" style={{ marginBottom: 14 }}>
+          <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+          <span>현 시장 투자 유의사항</span>
+        </div>
+        <div className="market-caution-body">
+          {isLoading ? llmSpinner() : (
+            <ul className="market-caution-list">
+              {adviceItems.map((advice, index) => <li key={`${advice}-${index}`}>{advice}</li>)}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -394,6 +331,7 @@ export default function DashboardPage() {
   const [selectedFxId, setSelectedFxId] = useState(null);
   const [fxStats, setFxStats] = useState(null);
   const [fxStatsLoading, setFxStatsLoading] = useState(false);
+  const [chartLoading, setChartLoading] = useState(false);
   const [fxNews, setFxNews] = useState([]);
   const [favDetail, setFavDetail] = useState(null);
   const [favDetailLoading, setFavDetailLoading] = useState(false);
@@ -403,6 +341,10 @@ export default function DashboardPage() {
   const [anomalyClick, setAnomalyClick] = useState(null);
   const [showMatrix, setShowMatrix] = useState(false);
   const [expandedPairKey, setExpandedPairKey] = useState(null);
+  const [corrDescCache, setCorrDescCache] = useState({});
+  const corrFetchingRef = useRef(new Set());
+  const [factorDescCache, setFactorDescCache] = useState({});
+  const factorFetchingRef = useRef(new Set());
   const matrixColRef = useRef(null);
   const [panelWidth, setPanelWidth] = useState(400);
   const [matrixColWidth, setMatrixColWidth] = useState(250);
@@ -421,7 +363,7 @@ export default function DashboardPage() {
     if (matrixColRef.current) ro.observe(matrixColRef.current);
     window.addEventListener('resize', update);
     return () => { ro.disconnect(); window.removeEventListener('resize', update); };
-  }, []);
+  }, [complexData]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem('whai_prefetch');
@@ -611,6 +553,7 @@ export default function DashboardPage() {
 
   async function renderChart() {
     if (activeAssets.length === 0) { setChartPd(null); setLegend([]); setComplexData({}); return; }
+    setChartLoading(true);
     await Promise.all(activeAssets.map(id => fetchAssetData(id, period)));
     const pd = buildPeriodData(period, activeAssets);
     setChartPd(pd);
@@ -619,7 +562,8 @@ export default function DashboardPage() {
       const last = vals ? (vals.filter(v => v !== null).pop() ?? 0) : 0;
       return { id: a, last };
     }));
-    computeComplex(activeAssets, period);
+    await computeComplex(activeAssets, period);
+    setChartLoading(false);
   }
 
   function selectStock(id) {
@@ -763,7 +707,71 @@ export default function DashboardPage() {
   const complexIds = activeAssets.filter(id => complexData[id]);
   const showComplex = complexIds.length >= 2;
 
+  useEffect(() => {
+    if (complexIds.length < 2) return;
+    const newPairs = [];
+    for (let i = 0; i < complexIds.length; i++) {
+      for (let j = i + 1; j < complexIds.length; j++) {
+        const a = complexIds[i], b = complexIds[j];
+        const key = `${a}|${b}`;
+        if (corrDescCache[key] !== undefined || corrFetchingRef.current.has(key)) continue;
+        const v = calcPearson(complexData[a], complexData[b]);
+        if (Math.abs(v) < 0.3) continue;
+        newPairs.push({ key, asset_a_name: shortLabel(a), asset_b_name: shortLabel(b), correlation: v });
+        corrFetchingRef.current.add(key);
+      }
+    }
+    if (!newPairs.length) return;
+    fetchWithAuth('/api/v1/report/correlation-insights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pairs: newPairs }),
+    }).then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.descriptions) {
+          setCorrDescCache(prev => ({ ...prev, ...data.descriptions }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => newPairs.forEach(p => corrFetchingRef.current.delete(p.key)));
+  }, [complexIds.join(','), Object.keys(complexData).sort().join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const cfg = selectedStockId ? STOCK_CONFIG[selectedStockId] : null;
+
+  useEffect(() => {
+    const ticker = selectedFxId || selectedStockId;
+    if (!ticker) return;
+    if (factorDescCache[ticker] !== undefined || factorFetchingRef.current.has(ticker)) return;
+    const config = selectedFxId ? FX_INFO[selectedFxId] : cfg;
+    if (!config?.factors?.length) return;
+    const tickerName = selectedFxId ? (FX_INFO[selectedFxId]?.label || selectedFxId) : (cfg?.name || selectedStockId);
+    factorFetchingRef.current.add(ticker);
+    fetchWithAuth('/api/v1/report/factor-insights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticker,
+        ticker_name: tickerName,
+        factors: config.factors.map(f => ({ label: f.label })),
+      }),
+    }).then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.descs?.length) {
+          setFactorDescCache(prev => ({
+            ...prev,
+            [ticker]: {
+              labels: data.labels || [],
+              descs: data.descs,
+              directions: data.directions || [],
+              strengths: data.strengths || [],
+              advice: data.advice || '',
+            },
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => factorFetchingRef.current.delete(ticker));
+  }, [selectedStockId, selectedFxId]); // eslint-disable-line react-hooks/exhaustive-deps
   const s = favDetail?.stats;
   const chgPct = favDetail?.changePct;
   const chgAmt = favDetail?.change;
@@ -802,15 +810,15 @@ export default function DashboardPage() {
             minWidth: 180,
             pointerEvents: 'none',
           }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: popText, marginBottom: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ background: popBg, border: `1px solid ${popColor}`, borderRadius: 4, padding: '1px 5px', fontSize: 9, color: popBadge }}>!</span>
+            <div style={{ fontSize: 11, fontWeight: 700, color: popText, marginBottom: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ background: popBg, border: `1px solid ${popColor}`, borderRadius: 4, padding: '1px 5px', fontSize: 10, color: popBadge }}>!</span>
               {fmtNewsDate(anomaly.isoDate)} 급변 포착
             </div>
             {anomaly.movers.map(m => (
               <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: ASSETS[m.id]?.color ?? '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
                   {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
                 </span>
               </div>
@@ -834,10 +842,10 @@ export default function DashboardPage() {
                 style={{ width: cnt >= 9 ? 'min(1500px, 97vw)' : cnt >= 4 ? 'min(1200px, 95vw)' : 'min(500px, 92vw)', maxHeight: '82vh', overflowY: 'auto', background: 'white', border: `1.5px solid ${clkColor}`, borderRadius: 14, padding: '16px 18px', boxShadow: '0 20px 60px rgba(15,23,42,0.28)' }}
                 onClick={e => e.stopPropagation()}
               >
-                <div style={{ fontSize: 13, fontWeight: 800, color: clkText, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <span style={{ background: clkBg, border: `1px solid ${clkColor}`, borderRadius: 5, padding: '1px 6px', fontSize: 10, color: clkBadge }}>!</span>
+                <div style={{ fontSize: 14, fontWeight: 800, color: clkText, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ background: clkBg, border: `1px solid ${clkColor}`, borderRadius: 5, padding: '1px 6px', fontSize: 11, color: clkBadge }}>!</span>
                   {fmtNewsDate(anomaly.isoDate)} 급변 포착
-                  <button onClick={() => setAnomalyClick(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 17, color: '#94a3b8', lineHeight: 1, padding: 2 }}>✕</button>
+                  <button onClick={() => setAnomalyClick(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8', lineHeight: 1, padding: 2 }}>✕</button>
                 </div>
                 <div style={isMultiCol ? { display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 } : {}}>
                   {anomaly.movers.map((m, idx) => {
@@ -856,24 +864,24 @@ export default function DashboardPage() {
                         : { padding: '10px 0', borderTop: idx > 0 ? '1px solid #f1f5f9' : 'none' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, flexWrap: 'wrap' }}>
                           <span style={{ width: 8, height: 8, borderRadius: '50%', background: ASSETS[m.id]?.color ?? '#94a3b8', flexShrink: 0, display: 'inline-block' }} />
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{ASSETS[m.id]?.label ?? m.id}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
                             {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
                           </span>
                         </div>
                         {newsList === null || newsList === undefined ? (
-                          <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>뉴스를 불러오는 중입니다.</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>뉴스를 불러오는 중입니다.</div>
                         ) : news ? (
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginBottom: 7 }}>
-                              <span className="ai-badge" style={{ fontSize: 10 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+                              <span className="ai-badge" style={{ fontSize: 11 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
                               {news.direction && (
                                 <span className={`regime-direction ${isUp ? 'up' : isDown ? 'down' : 'neutral'}`}>
                                   {isUp ? '▲ 상승' : isDown ? '▼ 하락' : news.direction}
                                 </span>
                               )}
                               {news.start_date && !isMultiCol && (
-                                <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
+                                <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>
                                   {fmtNewsPeriod(news.start_date, news.end_date)}
                                 </span>
                               )}
@@ -885,7 +893,7 @@ export default function DashboardPage() {
                             )}
                           </div>
                         ) : (
-                          <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>해당 날짜를 포함하는 국면 뉴스가 없습니다.</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>해당 날짜를 포함하는 국면 뉴스가 없습니다.</div>
                         )}
                       </div>
                     );
@@ -909,12 +917,12 @@ export default function DashboardPage() {
             {/* 헤더 */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexShrink: 0 }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>상관계수 히트맵</div>
-                <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginTop: 2 }}>Pearson · {complexIds.length}개 종목</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b' }}>상관계수 히트맵</div>
+                <div style={{ fontSize: 11, color: '#475569', fontWeight: 600, marginTop: 2 }}>Pearson · {complexIds.length}개 종목</div>
               </div>
               <button
                 onClick={() => setShowMatrix(false)}
-                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', fontSize: 13, color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', fontSize: 14, color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >✕</button>
             </div>
 
@@ -974,12 +982,12 @@ export default function DashboardPage() {
             </div>
             {/* 컬러 스케일 (고정) */}
             <div style={{ flexShrink: 0, marginTop: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#475569', fontWeight: 600 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#475569', fontWeight: 600 }}>
                 <span>-1</span>
                 <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'linear-gradient(to right,rgb(185,28,28),rgb(248,250,252),rgb(30,64,175))' }} />
                 <span>+1</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, fontSize: 9, color: '#64748b', fontWeight: 600 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, fontSize: 10, color: '#64748b', fontWeight: 600 }}>
                 <span>강한 음의 상관관계</span>
                 <span>강한 양의 상관관계</span>
               </div>
@@ -998,7 +1006,7 @@ export default function DashboardPage() {
         <div className="left-wrapper">
           <div className="chart-controls">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginRight: 4 }}>기간</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginRight: 4 }}>기간</div>
               <div className="period-sel">
                 {PERIODS.map(p => (
                   <button
@@ -1012,10 +1020,10 @@ export default function DashboardPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '2px 10px' }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 10 }}>(최대 3개)</span></span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 11 }}>(최대 3개)</span></span>
               <div className="active-chips" style={{ margin: 0, padding: 0 }}>
                 {[...favs].filter(id => ASSETS[id]).length === 0 && (
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>+ 종목을 추가해보세요</span>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>+ 종목을 추가해보세요</span>
                 )}
                 {[...favs].filter(id => ASSETS[id]).map(id => {
                   const isFx = !!FX_INFO[id];
@@ -1040,18 +1048,23 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', flex: '3 1 0', gap: 14, minHeight: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', flex: '3 1 0', gap: 14, minHeight: 0 }}>
         {/* LEFT: Chart */}
         <div className="chart-panel">
 
           <div className="chart-body">
             <div className="chart-main">
               <div className="chart-card">
+                {chartLoading && activeAssets.length > 0 && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'white', zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                    <div style={{ width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  </div>
+                )}
                 {activeAssets.length === 0 && (
                   <div className="chart-empty">
-                    <div style={{ fontSize: 48 }}>🖥️</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#334155' }}>종목을 선택해주세요</div>
-                    <div style={{ fontSize: 12, color: '#94a3b8' }}>오른쪽 목록에서 종목을 클릭하면 차트가 표시됩니다</div>
+                    <div style={{ fontSize: 49 }}>🖥️</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: '#334155' }}>종목을 선택해주세요</div>
+                    <div style={{ fontSize: 13, color: '#94a3b8' }}>오른쪽 목록에서 종목을 클릭하면 차트가 표시됩니다</div>
                   </div>
                 )}
                 <div className="chart-svg-wrap">
@@ -1088,7 +1101,7 @@ export default function DashboardPage() {
 
         {/* 종목/환율 상세 패널 */}
         <div className="ai-main-panel">
-          <div className="ai-main-card" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          <div className="ai-main-card" style={{ flex: 1, minHeight: 0 }}>
             {/* ── 환율 상세 ── */}
             {selectedFxId ? (() => {
               const fxInfo = FX_INFO[selectedFxId];
@@ -1103,19 +1116,19 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
                     <img src={fxInfo.flag} alt={currency} style={{ width: 32, height: 22, borderRadius: 4, objectFit: 'cover', border: '1px solid #e8ecf0', flexShrink: 0 }} />
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap' }}>{fxInfo.label}</div>
-                      <div style={{ marginTop: 1, fontSize: 10, color: '#64748b', fontWeight: 500 }}>{fxInfo.desc}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap' }}>{fxInfo.label}</div>
+                      <div style={{ marginTop: 1, fontSize: 11, color: '#64748b', fontWeight: 500 }}>{fxInfo.desc}</div>
                     </div>
                     {fxPrice ? (
                       <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>{Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}<span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>원</span></div>
+                        <div style={{ fontSize: 16, fontWeight: 800, whiteSpace: 'nowrap' }}>{Number(fxPrice.price).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}<span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>원</span></div>
                         {fxChgPct != null && (
-                          <div style={{ fontSize: 11, fontWeight: 600, color: fxChgColor, whiteSpace: 'nowrap' }}>{fxChgArrow} {fxChgAmt != null ? Math.abs(fxChgAmt).toFixed(2) : ''} ({Math.abs(fxChgPct).toFixed(2)}%)</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: fxChgColor, whiteSpace: 'nowrap' }}>{fxChgArrow} {fxChgAmt != null ? Math.abs(fxChgAmt).toFixed(2) : ''} ({Math.abs(fxChgPct).toFixed(2)}%)</div>
                         )}
                       </div>
                     ) : (
                       <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                        <span className="loading-dots" style={{ fontSize: 15, fontWeight: 800 }}>···</span>
+                        <span className="loading-dots" style={{ fontSize: 16, fontWeight: 800 }}>···</span>
                       </div>
                     )}
                   </div>
@@ -1128,7 +1141,7 @@ export default function DashboardPage() {
                     ].map(({ label, value, color }) => (
                       <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '6px 9px' }}>
                         <div className="metric-label">{label}</div>
-                        <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 12, marginTop: 2, ...(color ? { color } : {}) }}>
+                        <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 13, marginTop: 2, ...(color ? { color } : {}) }}>
                           {fxStatsLoading ? <span className="loading-dots">···</span> : value}
                         </div>
                       </div>
@@ -1145,7 +1158,7 @@ export default function DashboardPage() {
                         ].map(({ label, value }) => (
                           <div key={label} className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '6px 9px' }}>
                             <div className="metric-label">{label}</div>
-                            <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 12, marginTop: 2, color: value != null ? col(value) : undefined }}>{value != null ? fmt(value) : '—'}</div>
+                            <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 13, marginTop: 2, color: value != null ? col(value) : undefined }}>{value != null ? fmt(value) : '—'}</div>
                           </div>
                         ))}
                       </div>
@@ -1164,9 +1177,9 @@ export default function DashboardPage() {
                       <div style={{ marginTop: 14 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                           <span className="detail-section-title">52주 환율 위치</span>
-                          <span style={{ fontSize: 8, color: '#94a3b8' }}>BOK ECOS</span>
+                          <span style={{ fontSize: 9, color: '#94a3b8' }}>BOK ECOS</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#64748b', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', marginBottom: 6 }}>
                           <span>최저 {fmtFx(l)}원</span>
                           <span>최고 {fmtFx(h)}원</span>
                         </div>
@@ -1177,7 +1190,7 @@ export default function DashboardPage() {
                         </div>
                         {safePct != null && (
                           <div style={{ position: 'relative', marginTop: 6, height: 14 }}>
-                            <span style={{ position: 'absolute', left: `${Math.min(Math.max(safePct, 6), 94)}%`, transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: dotColor, whiteSpace: 'nowrap' }}>{safePct}%</span>
+                            <span style={{ position: 'absolute', left: `${Math.min(Math.max(safePct, 6), 94)}%`, transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700, color: dotColor, whiteSpace: 'nowrap' }}>{safePct}%</span>
                           </div>
                         )}
                       </div>
@@ -1200,7 +1213,7 @@ export default function DashboardPage() {
                       <div style={{ marginTop: 6 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                           <span className="detail-section-title">분석 종목 상관관계</span>
-                          <span style={{ fontSize: 8, color: '#94a3b8' }}>Pearson</span>
+                          <span style={{ fontSize: 9, color: '#94a3b8' }}>Pearson</span>
                         </div>
                         <div style={{ padding: '6px 9px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                         {items.map((item, idx) => {
@@ -1211,10 +1224,10 @@ export default function DashboardPage() {
                           return (
                             <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: idx > 0 ? 3 : 0 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
-                                <span style={{ fontSize: 8, color: labelColor, fontWeight: 700, background: `${labelColor}18`, borderRadius: 3, padding: '1px 4px' }}>{label}</span>
-                                <span style={{ fontSize: 10, lineHeight: 1.25, fontWeight: 700, color: '#334155' }}>{STOCK_NAMES[item.id] || item.id}</span>
+                                <span style={{ fontSize: 9, color: labelColor, fontWeight: 700, background: `${labelColor}18`, borderRadius: 3, padding: '1px 4px' }}>{label}</span>
+                                <span style={{ fontSize: 11, lineHeight: 1.25, fontWeight: 700, color: '#334155' }}>{STOCK_NAMES[item.id] || item.id}</span>
                               </div>
-                              <span style={{ fontSize: 12, fontWeight: 800, color: vColor, flexShrink: 0 }}>{isPos ? '+' : ''}{item.v.toFixed(2)}</span>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: vColor, flexShrink: 0 }}>{isPos ? '+' : ''}{item.v.toFixed(2)}</span>
                             </div>
                           );
                         })}
@@ -1235,17 +1248,17 @@ export default function DashboardPage() {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: cfg.name.length > 10 ? 11 : cfg.name.length > 7 ? 12.5 : 14, lineHeight: 1.2, fontWeight: 800, color: '#1e293b' }}>{cfg.name}</div>
-                    {selectedStockId !== '000000' && <div style={{ fontSize: 10, color: '#64748b' }}>{selectedStockId} · {cfg.meta}</div>}
+                    {selectedStockId !== '000000' && <div style={{ fontSize: 11, color: '#64748b' }}>{selectedStockId} · {cfg.meta}</div>}
                   </div>
                   {favDetailLoading ? (
                     <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                      <span className="loading-dots" style={{ fontSize: 15, fontWeight: 800 }}>···</span>
+                      <span className="loading-dots" style={{ fontSize: 16, fontWeight: 800 }}>···</span>
                     </div>
                   ) : favDetail?.price ? (
                     <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}{selectedStockId !== '000000' && <span style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>원</span>}</div>
+                      <div style={{ fontSize: 16, fontWeight: 800 }}>{Number(favDetail.price).toLocaleString('ko-KR')}{selectedStockId !== '000000' && <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>원</span>}</div>
                       {chgPct != null && (
-                        <div style={{ fontSize: 11, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}${selectedStockId !== '000000' ? '원' : ''}` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: chgColor }}>{chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}${selectedStockId !== '000000' ? '원' : ''}` : ''} ({Math.abs(chgPct).toFixed(2)}%)</div>
                       )}
                     </div>
                   ) : null}
@@ -1270,7 +1283,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : !cfg ? (
-              <div style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>관심종목을 선택해주세요</div>
+              <div style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>관심종목을 선택해주세요</div>
             ) : (
               <>
                 <div className="grid g11" style={{ gap: 5, flex: 1, alignContent: 'stretch' }}>
@@ -1282,7 +1295,7 @@ export default function DashboardPage() {
                     return (
                       <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <div className="metric-label">분석 종목</div>
-                        <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
+                        <div className="metric-value" style={{ whiteSpace: 'nowrap', fontSize: 14 }}>
                           <span style={{ color: '#dc2626' }}>{up}▲</span>
                           <span style={{ color: '#94a3b8', margin: '0 2px' }}> / </span>
                           <span style={{ color: '#2563eb' }}>{dn}▼</span>
@@ -1296,7 +1309,7 @@ export default function DashboardPage() {
                   <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">52주 최저</div><div className="metric-value" style={{ whiteSpace: 'nowrap', color: '#2563eb' }}>{s?.low52 ? `${fmt(s.low52)}${selectedStockId !== '000000' ? '원' : ''}` : '—'}</div></div>
                   {selectedStockId !== '000000' && (
                     <>
-                      <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#94a3b8' }}>적자</span>}</div></div>
+                      <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PER</div><div className="metric-value">{s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 13, color: '#94a3b8' }}>적자</span>}</div></div>
                       <div className="metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '—'}</div></div>
                     </>
                   )}
@@ -1311,7 +1324,7 @@ export default function DashboardPage() {
                   return (
                     <div style={{ marginTop: 8 }}>
                       <div className="detail-section-title" style={{ marginBottom: 3 }}>{selectedStockId === '000000' ? '52주 지수 위치' : '52주 가격 위치'}</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#64748b', marginBottom: 3 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', marginBottom: 3 }}>
                         <span>최저 {fmt(s.low52)}{selectedStockId !== '000000' ? '원' : ''}</span>
                         <span>최고 {fmt(s.high52)}{selectedStockId !== '000000' ? '원' : ''}</span>
                       </div>
@@ -1319,7 +1332,7 @@ export default function DashboardPage() {
                         <div style={{ position: 'absolute', top: '50%', left: `${safePct}%`, transform: 'translate(-50%, -50%)', width: 11, height: 11, borderRadius: '50%', background: safePct >= 50 ? '#dc2626' : '#2563eb', border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
                       </div>
                       <div style={{ position: 'relative', marginTop: 4, height: 13 }}>
-                        <span style={{ position: 'absolute', left: `${Math.min(Math.max(safePct, 6), 94)}%`, transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700, color: safePct >= 50 ? '#dc2626' : '#2563eb', whiteSpace: 'nowrap' }}>{safePct}%</span>
+                        <span style={{ position: 'absolute', left: `${Math.min(Math.max(safePct, 6), 94)}%`, transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700, color: safePct >= 50 ? '#dc2626' : '#2563eb', whiteSpace: 'nowrap' }}>{safePct}%</span>
                       </div>
                     </div>
                   );
@@ -1345,8 +1358,8 @@ export default function DashboardPage() {
                             const isLeft = idx % 2 === 0;
                             return (
                               <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px', borderRight: isLeft ? '1px solid #e2e8f0' : 'none' }}>
-                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{label}</span>
-                                <span style={{ fontSize: 10 }}>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{label}</span>
+                                <span style={{ fontSize: 11 }}>
                                   {allLoaded ? (
                                     <><span style={{ color: '#dc2626', fontWeight: 700 }}>{up}▲</span><span style={{ color: '#94a3b8', margin: '0 2px' }}> / </span><span style={{ color: '#2563eb', fontWeight: 700 }}>{dn}▼</span></>
                                   ) : '—'}
@@ -1367,14 +1380,25 @@ export default function DashboardPage() {
         </div>
           </div>
           {(cfg && !selectedFxId) || selectedFxId ? (() => {
-            const factors = selectedFxId ? FX_INFO[selectedFxId]?.factors : cfg?.factors;
+            const rawFactors = selectedFxId ? FX_INFO[selectedFxId]?.factors : cfg?.factors;
+            const ticker = selectedFxId || selectedStockId;
+            const cachedData = factorDescCache[ticker];
             const title = selectedFxId ? '환율 변동 원인 분석' : selectedStockId === '000000' ? '지수 변동 원인 분석' : '주가 변동 원인 분석';
-            return <FactorDonut key={title} factors={factors} title={title} />;
+            const marketChangePct = selectedFxId ? prices[selectedFxId]?.change_pct : favDetail?.changePct;
+            return (
+              <FactorInsightPanel
+                key={title}
+                rawFactors={rawFactors}
+                cachedData={cachedData}
+                title={title}
+                marketChangePct={marketChangePct}
+              />
+            );
           })() : null}
         </div>
 
-        <div className="matrix-col" ref={matrixColRef}>
-          {showComplex ? (() => {
+        {(showComplex || (chartLoading && activeAssets.length >= 2)) && <div className="matrix-col" ref={matrixColRef}>
+          {(() => {
             const allPairs = [];
             for (let i = 0; i < complexIds.length; i++)
               for (let j = i + 1; j < complexIds.length; j++) {
@@ -1436,7 +1460,7 @@ export default function DashboardPage() {
                     </table>
                   </div>
                   <div style={{ marginTop: isTiny ? 9 : 5 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: '#475569', fontWeight: 600 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#475569', fontWeight: 600 }}>
                       <span>-1</span>
                       <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'linear-gradient(to right,rgb(30,64,175),rgb(248,250,252),rgb(185,28,28))' }} />
                       <span>+1</span>
@@ -1461,10 +1485,9 @@ export default function DashboardPage() {
                     const textCol = corrColor(v);
                     const isPos = v > 0;
                     const abs = Math.abs(v);
-                    const desc = abs >= 0.3
-                      ? getPairDesc(a, b, isPos, abs)
-                      : `|r|가 0.3 미만 → 통계적으로 유의미한 상관관계 없음`;
                     const pairKey = `${a}|${b}`;
+                    const isLlmLoading = abs >= 0.3 && corrDescCache[pairKey] === undefined;
+                    const corrDescText = abs >= 0.3 ? corrDescCache[pairKey] : null;
                     const isExpanded = showFull || expandedPairKey === pairKey;
                     return (
                       <div key={idx}
@@ -1477,10 +1500,16 @@ export default function DashboardPage() {
                         <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', marginBottom: showFull ? 4 : 1 }}>
                           <div style={{ width: `${barW}%`, height: '100%', borderRadius: 3, background: barCol, transition: 'width 0.3s' }} />
                         </div>
-                        <div style={{
-                          fontSize: showFull ? 11 : 10, color: '#6d28d9', lineHeight: showFull ? 1.5 : 1.35, fontWeight: 500,
-                          ...(isExpanded ? {} : { overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }),
-                        }}>{desc}</div>
+                        {abs >= 0.3 && (
+                          <div style={{
+                            fontSize: showFull ? 11 : 10, color: '#6d28d9', lineHeight: showFull ? 1.5 : 1.35, fontWeight: 500,
+                            ...(isExpanded ? {} : { overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }),
+                          }}>
+                            {isLlmLoading
+                              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><span style={{ animation: 'loading-blink 1.2s ease-in-out infinite', display: 'inline-block' }}>🤖</span><span className="loading-dots" style={{ color: '#7c3aed' }}>분석 중</span></span>
+                              : corrDescText}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1490,8 +1519,13 @@ export default function DashboardPage() {
 
 
             return (
-              <div className="matrix-side">
-                <div className="matrix-side-title">
+              <div className="matrix-side" style={{ position: 'relative' }}>
+                {chartLoading && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.96)', zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                    <LoadingSpinner label="상관계수를 계산하는 중..." size={32} />
+                  </div>
+                )}
+                <div className="matrix-side-title dashboard-section-title">
                   상관계수 분석
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {/* 5개부터는 기본 카드가 조밀해져 확대 히트맵을 제공 */}
@@ -1499,7 +1533,7 @@ export default function DashboardPage() {
                       <button
                         onClick={() => setShowMatrix(true)}
                         title="전체 히트맵 팝업"
-                        style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 6px', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600 }}
+                        style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 6px', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600 }}
                       >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
@@ -1509,12 +1543,15 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </div>
+                <div className="corr-analysis-note">
+                  움직임의 관계가 비교적 뚜렷한 경우(|r| ≥ 0.3)에만 설명을 보여드려요.
+                </div>
 
                 {(() => {
                   const EmptySection = ({ isTop }) => (
                     <div style={{ flex: 1, minHeight: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f8fafc', borderRadius: 8, border: '1px dashed #e2e8f0', padding: '12px 16px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>해당 쌍 없음</div>
-                      <div style={{ fontSize: 10, color: '#cbd5e1', lineHeight: 1.7 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>해당 쌍 없음</div>
+                      <div style={{ fontSize: 11, color: '#cbd5e1', lineHeight: 1.7 }}>
                         {isTop
                           ? '모든 쌍이 하위 3개에 포함되어 있습니다.'
                           : '종목 수가 적어 상위 3쌍이 전부입니다.'}
@@ -1522,12 +1559,12 @@ export default function DashboardPage() {
                     </div>
                   );
                   const TopHeader = () => (
-                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 2, flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2, flexShrink: 0 }}>
                       <span style={{ color: '#2563eb' }}>▲ 높은 상관계수</span> TOP {pairCount}
                     </div>
                   );
                   const BottomHeader = () => (
-                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 2, flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2, flexShrink: 0 }}>
                       <span style={{ color: '#dc2626' }}>▼ 낮은 상관계수</span> TOP {pairCount}
                     </div>
                   );
@@ -1581,17 +1618,13 @@ export default function DashboardPage() {
 
               </div>
             );
-          })() : (
-            <div style={{ flex: 1, background: 'white', border: '1px solid var(--border)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 11, textAlign: 'center', padding: 20 }}>
-              종목 2개 이상<br/>선택 시 표시
-            </div>
-          )}
-        </div>
+          })()}
+        </div>}
 
         <div className="news-col">
           <div className="news-preview-card" style={{ flex: 1, overflow: 'hidden' }}>
             <div className="news-preview-header">
-              <div className="news-preview-title">
+              <div className="news-preview-title dashboard-section-title dashboard-section-title--purple">
                 <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
                 관련 뉴스
               </div>
@@ -1599,43 +1632,43 @@ export default function DashboardPage() {
             </div>
             <div className="news-preview-body">
               {(favDetailLoading || (selectedFxId && fxStatsLoading)) ? (
-                <div style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>
+                <div style={{ color: '#94a3b8', fontSize: 14, padding: '16px 0', textAlign: 'center' }}>
                   <span className="loading-dots">···</span>
                 </div>
               ) : (() => {
                 const newsList = selectedFxId ? fxNews : (favDetail?.news ?? []);
                 const isEmpty = newsList.length === 0;
                 if (isEmpty) return (
-                  <div style={{ color: '#94a3b8', fontSize: 12, padding: '12px 0', textAlign: 'center' }}>
+                  <div style={{ color: '#94a3b8', fontSize: 13, padding: '12px 0', textAlign: 'center' }}>
                     {selectedFxId || (selectedStockId && STOCK_CONFIG[selectedStockId]) ? '관련 뉴스가 없습니다.' : '관심종목을 선택해주세요'}
                   </div>
                 );
-                if (favNewsExpanded !== null && !selectedFxId) {
-                  const n = newsList[favNewsExpanded];
+                return newsList.map((n, i) => {
+                  const isExpanded = !selectedFxId && favNewsExpanded === i;
                   return (
-                    <div className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => setFavNewsExpanded(null)}>
-                      <div className="news-meta">
-                        <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
-                        <span className="news-date" style={{ marginLeft: 'auto' }}>{fmtNewsPeriod(n.start_date, n.end_date)}</span>
-                      </div>
-                      <div className="news-title" style={{ fontSize: 12, marginBottom: 8 }}>{n.cause}</div>
-                      {n.vol_insight && (
-                        <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
-                          <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.7 }}>{n.vol_insight}</div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-                return newsList.map((n, i) => (
-                  <div key={i} className="news-preview-item" style={{ cursor: 'pointer' }} onClick={() => !selectedFxId && setFavNewsExpanded(i)}>
+                  <div
+                    key={i}
+                    className="news-preview-item"
+                    style={{ cursor: !selectedFxId && n.vol_insight ? 'pointer' : 'default' }}
+                    onClick={() => {
+                      if (!selectedFxId && n.vol_insight) {
+                        setFavNewsExpanded(isExpanded ? null : i);
+                      }
+                    }}
+                  >
                     <div className="news-meta">
                       <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
                       <span className="news-date" style={{ marginLeft: 'auto' }}>{fmtNewsPeriod(n.start_date, n.end_date)}</span>
                     </div>
-                    <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
+                    <div className="news-title news-preview-item-title" style={{ marginBottom: isExpanded ? 8 : 0 }}>{n.cause}</div>
+                    {isExpanded && (
+                      <div style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px' }}>
+                        <div className="news-preview-insight">{n.vol_insight}</div>
+                      </div>
+                    )}
                   </div>
-                ));
+                  );
+                });
               })()}
             </div>
           </div>

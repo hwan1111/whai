@@ -1,8 +1,10 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { handleUnauthorized, fetchWithAuth } from '@/lib/auth';
 import { ASSETS } from '@/lib/data';
 import StockDetailModal from '@/components/StockDetailModal';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 const ASSET_INFO = {
   '005930': { name: '삼성전자',      color: ASSETS['005930'].color,  sector: '반도체', unit: '주' },
@@ -196,33 +198,36 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick, hoveredStock
             onMouseMove={e => {
               setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
             }}
-            onMouseLeave={() => { onHoverStock?.(null); }}
+            onMouseLeave={() => {
+              onHoverStock?.(null);
+              setTooltip(null);
+            }}
             onClick={() => { setTooltip(null); onSegmentClick && onSegmentClick(seg.h); }}
           />
         ))}
         <text x={cx} y={cy - size * 0.055} textAnchor="middle" fontSize={fs1} fontWeight="600" fill="#64748b" pointerEvents="none">총 평가액</text>
         <text x={cx} y={cy + size * 0.075} textAnchor="middle" fontSize={fs2} fontWeight="900" fill="#1e293b" pointerEvents="none">{fmtShort(totalVal)}</text>
       </svg>
-      {tooltip && (
+      {tooltip && typeof document !== 'undefined' && createPortal(
         <div style={{
           position: 'fixed',
-          left: Math.min(tooltip.x + 14, window.innerWidth - 210),
-          top: tooltip.y - 14,
+          left: tooltip.x > window.innerWidth - 240 ? tooltip.x - 218 : tooltip.x + 10,
+          top: Math.max(8, Math.min(tooltip.y + 10, window.innerHeight - 178)),
           background: 'white',
           border: '1px solid #e2e8f0',
           borderRadius: 8,
           padding: '7px 14px',
-          fontSize: 15,
+          fontSize: 16,
           fontWeight: 600,
           color: '#1e293b',
           boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
           pointerEvents: 'none',
           whiteSpace: 'nowrap',
-          zIndex: 10,
+          zIndex: 9999,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
             <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: tooltip.color, flexShrink: 0 }} />
-            <span style={{ fontWeight: 700, fontSize: 17 }}>{tooltip.name}</span>
+            <span style={{ fontWeight: 700, fontSize: 18 }}>{tooltip.name}</span>
           </div>
           {[
             { label: '비중',   val: `${tooltip.pct}%`,  color: '#1e293b' },
@@ -230,12 +235,13 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick, hoveredStock
             { label: '손익',   val: `${tooltip.pnl >= 0 ? '+' : '-'}${fmtCompact(Math.abs(tooltip.pnl))}`, color: parseFloat(tooltip.retPct) >= 0 ? '#dc2626' : '#2563eb' },
             { label: '수익률', val: `${parseFloat(tooltip.retPct) >= 0 ? '+' : ''}${tooltip.retPct}%`,     color: parseFloat(tooltip.retPct) >= 0 ? '#dc2626' : '#2563eb' },
           ].map(({ label, val, color }) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 15, marginBottom: 4 }}>
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 16, marginBottom: 4 }}>
               <span style={{ color: '#94a3b8', fontWeight: 500 }}>{label}</span>
               <span style={{ color, fontWeight: 600 }}>{val}</span>
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -296,7 +302,7 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   // 5. 메모
   lines.push(`<strong>📝 메모</strong>: 포트폴리오 AI는 대시보드 AI보다는 좀 더 포트폴리오 쪽에 치중하도록! 나이대, 성별, 투자성향은 여기에 반영하는게 맞을까?`);
 
-  return lines.map(l => `<p style="margin:0 0 12px;line-height:1.8;font-size:16px;color:#334155">${l}</p>`).join('');
+  return lines.map(l => `<p style="margin:0 0 8px;line-height:1.6;font-size:14px;color:#334155">${l}</p>`).join('');
 }
 
 function escapeHtml(str) {
@@ -321,12 +327,12 @@ function buildAiHtmlFromAnalysis(analysis) {
   const lines = sections
     .filter(({ key }) => analysis[key])
     .map(({ key, label }) =>
-      `<p style="margin:0 0 12px;line-height:1.8;font-size:16px;color:#334155"><strong>${label}</strong>: ${escapeHtml(analysis[key])}</p>`
+      `<p style="margin:0 0 8px;line-height:1.6;font-size:14px;color:#334155"><strong>${label}</strong>: ${escapeHtml(analysis[key])}</p>`
     );
 
   if (typeof analysis.confidence === 'number') {
     const pct = Math.round(analysis.confidence * 100);
-    lines.push(`<p style="margin:0;font-size:12px;color:#94a3b8">분석 신뢰도 ${pct}%</p>`);
+    lines.push(`<p style="margin:0;font-size: 13px;color:#94a3b8">분석 신뢰도 ${pct}%</p>`);
   }
   return lines.join('');
 }
@@ -338,7 +344,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
   const containerRef = useRef(null);
 
   if (snapshots.length === 0) return (
-    <div style={{ padding: '40px 16px', textAlign: 'center', color: '#cbd5e1', fontSize: 12 }}>
+    <div style={{ padding: '40px 16px', textAlign: 'center', color: '#cbd5e1', fontSize: 13 }}>
       스냅샷을 기록하면<br />비중 추이가 표시됩니다.
     </div>
   );
@@ -358,7 +364,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
       <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0 }}>
         {[{ key: 'value', label: '금액순' }, { key: 'name', label: '가나다순' }].map(({ key, label }) => (
           <button key={key} onClick={() => setSortMode(key)} style={{
-            padding: '3px 9px', fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+            padding: '3px 9px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
             background: sortMode === key ? '#2563eb' : '#f1f5f9',
             color: sortMode === key ? 'white' : '#64748b',
           }}>{label}</button>
@@ -376,8 +382,8 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
         return (
           <div key={snap.id} onClick={() => onSnapClick?.(snap.id)} style={{ cursor: 'pointer', borderRadius: 7, padding: '4px 6px', margin: '0 -6px', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: selectedSnapId === snap.id ? '#eff6ff' : 'transparent', outline: selectedSnapId === snap.id ? '1.5px solid #bfdbfe' : '1.5px solid transparent', transition: 'background 0.15s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{label}</span>
-              <span style={{ fontSize: 11, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
+              <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>{label}</span>
+              <span style={{ fontSize: 12, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
             </div>
             <div style={{ height: barHeight, overflow: 'hidden', position: 'relative', borderRadius: 3 }}>
               <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex', borderRadius: 3, overflow: 'hidden' }}>
@@ -398,7 +404,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
                       onMouseLeave={() => { setHoveredId(null); setTooltip(null); }}
                     >
                       {effectiveW >= 8 && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.9)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
                           {w.toFixed(0)}%
                         </span>
                       )}
@@ -426,8 +432,8 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
           boxShadow: '0 4px 14px rgba(0,0,0,0.13)',
           border: `1.5px solid ${tooltip.color}`,
         }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>{tooltip.name}</div>
-          <div style={{ fontSize: 11, color: '#64748b' }}>{tooltip.val} <span style={{ color: tooltip.color, fontWeight: 600 }}>({tooltip.pct}%)</span></div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>{tooltip.name}</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>{tooltip.val} <span style={{ color: tooltip.color, fontWeight: 600 }}>({tooltip.pct}%)</span></div>
         </div>
       )}
     </div>
@@ -472,26 +478,26 @@ function AssetDrawer({ holding, prices, onClose }) {
             {logo && <div style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e8ecf0', overflow: 'hidden', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><img src={logo} alt={info.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>}
             {flag && <img src={flag} alt={info.name} style={{ width: 34, height: 24, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />}
             <div>
-              <div style={{ fontWeight: 700, fontSize: 17, color: '#1e293b' }}>{info.name || id}</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{info.sector} · {id}</div>
+              <div style={{ fontWeight: 700, fontSize: 18, color: '#1e293b' }}>{info.name || id}</div>
+              <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>{info.sector} · {id}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#94a3b8', padding: '0 4px', lineHeight: 1, flexShrink: 0 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 23, color: '#94a3b8', padding: '0 4px', lineHeight: 1, flexShrink: 0 }}>×</button>
         </div>
 
         {/* 현재가 */}
         <div style={{ background: '#f8fafc', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>현재가</div>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 6 }}>현재가</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b' }}>{fmtCompact(cur)}</div>
+            <div style={{ fontSize: 23, fontWeight: 800, color: '#1e293b' }}>{fmtCompact(cur)}</div>
             {stats?.change != null && (() => {
               const up = stats.change >= 0;
               const color = up ? '#dc2626' : '#2563eb';
               const arrow = up ? '▲' : '▼';
               return (
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, fontSize: 13, fontWeight: 600, color }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, fontSize: 14, fontWeight: 600, color }}>
                   <span>{arrow} {fmtCompact(Math.abs(stats.change))}</span>
-                  <span style={{ fontSize: 12 }}>({up ? '+' : ''}{stats.change_pct}%)</span>
+                  <span style={{ fontSize: 13 }}>({up ? '+' : ''}{stats.change_pct}%)</span>
                 </div>
               );
             })()}
@@ -502,7 +508,7 @@ function AssetDrawer({ holding, prices, onClose }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 56px' }}>
           {/* 보유 정보 */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>보유 정보</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>보유 정보</div>
             {[
               { label: '수량',        val: `${fmt(holding.qty)}${info.unit || ''}` },
               { label: '평균 매입가', val: fmtCompact(holding.avgPrice) },
@@ -510,7 +516,7 @@ function AssetDrawer({ holding, prices, onClose }) {
               { label: '손익',        val: `${pnl >= 0 ? '+' : '-'}${fmtCompact(Math.abs(pnl))}`, color: pnlColor },
               { label: '수익률',      val: `${retPct >= 0 ? '+' : ''}${retPct.toFixed(2)}%`, color: pnlColor },
             ].map(({ label, val, color }) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 14 }}>
                 <span style={{ color: '#64748b' }}>{label}</span>
                 <span style={{ fontWeight: 600, color: color || '#1e293b' }}>{val}</span>
               </div>
@@ -520,10 +526,10 @@ function AssetDrawer({ holding, prices, onClose }) {
           {/* 종목 정보 (주식만) */}
           {isStock && (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>종목 정보</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>종목 정보</div>
               {statsLoading ? (
                 ['52주 최고', '52주 최저', 'PER', 'PBR', '시가총액', '거래량'].map(label => (
-                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 14 }}>
                     <span style={{ color: '#64748b' }}>{label}</span>
                     <span className="loading-dots">···</span>
                   </div>
@@ -537,7 +543,7 @@ function AssetDrawer({ holding, prices, onClose }) {
                   { label: '시가총액',  val: stats.market_cap ? fmtShort(stats.market_cap) : '-' },
                   { label: '거래량',    val: stats.volume  ? `${fmt(stats.volume)}주`  : '-' },
                 ].map(({ label, val }) => (
-                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid #f1f5f9', fontSize: 14 }}>
                     <span style={{ color: '#64748b' }}>{label}</span>
                     <span style={{ fontWeight: 600, color: '#1e293b' }}>{val}</span>
                   </div>
@@ -576,7 +582,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
         <span className="snapshot-datetime">{fmtDatetime(snap.datetime)}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
-            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 10px', fontSize: 11, color: '#64748b', cursor: 'pointer' }}
+            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 10px', fontSize: 12, color: '#64748b', cursor: 'pointer' }}
             onClick={() => setDetailOpen(true)}
           >
             자세히 보기
@@ -589,14 +595,14 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
         <div className="modal-overlay" onClick={() => setDetailOpen(false)}>
           <div className="modal-box" style={{ width: 780, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div className="modal-title" style={{ fontSize: 14, marginBottom: 0 }}>📋 {fmtDatetime(snap.datetime)} 종목 상세</div>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>현재가·평가액·손익은 스냅샷 저장 시점의 시장 가격을 기준으로 산출됩니다.</div>
+              <div className="modal-title" style={{ fontSize: 15, marginBottom: 0 }}>📋 {fmtDatetime(snap.datetime)} 종목 상세</div>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>현재가·평가액·손익은 스냅샷 저장 시점의 시장 가격을 기준으로 산출됩니다.</div>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 4 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 4 }}>
               <thead>
                 <tr>
                   {['종목', '수량', '평균 매입가', '현재가', '매입 원가', '평가액', '손익', '수익률'].map((label, i) => (
-                    <th key={label} style={{ padding: '5px 7px', fontSize: 10, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', textAlign: i === 0 ? 'left' : 'right', whiteSpace: 'nowrap' }}>{label}</th>
+                    <th key={label} style={{ padding: '5px 7px', fontSize: 11, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', textAlign: i === 0 ? 'left' : 'right', whiteSpace: 'nowrap' }}>{label}</th>
                   ))}
                 </tr>
               </thead>
@@ -611,7 +617,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
                       <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'left', whiteSpace: 'nowrap' }}>
                         <span style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 5, background: h.info.color || '#94a3b8', flexShrink: 0 }} />
                         <span style={{ fontWeight: 600, color: '#1e293b' }}>{h.info.name || h.id}</span>
-                        <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 5 }}>{w.toFixed(1)}%</span>
+                        <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 5 }}>{w.toFixed(1)}%</span>
                       </td>
                       <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmt(h.qty)}{h.info.unit || ''}</td>
                       <td style={{ padding: '8px 7px', borderBottom: '1px solid #f8fafc', textAlign: 'right', color: '#475569' }}>{fmt(h.avgPrice)}원</td>
@@ -634,7 +640,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
               ].map(({ label, val, color }) => (
                 <div key={label} className="snapshot-summary-item">
                   <div className="snapshot-summary-label">{label}</div>
-                  <div className="snapshot-summary-val" style={{ color: color || 'inherit', fontSize: 16 }}>{val}</div>
+                  <div className="snapshot-summary-val" style={{ color: color || 'inherit', fontSize: 17 }}>{val}</div>
                 </div>
               ))}
             </div>
@@ -649,8 +655,8 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
         {/* 1열: AI 분석 */}
         <div className="snapshot-ai">
           <div className="snapshot-ai-header">
-            <span className="ai-badge" style={{ fontSize: 11 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-            <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>포트폴리오 분석</span>
+            <span className="ai-badge" style={{ fontSize: 12 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+            <span style={{ fontSize: 14, color: '#475569', fontWeight: 600 }}>포트폴리오 분석</span>
           </div>
           <div dangerouslySetInnerHTML={{ __html: aiHtml }} />
         </div>
@@ -658,7 +664,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
         {/* 2열: 도넛 차트 (상단) + 1행 4열 요약 (하단) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', alignItems: 'center' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
-            <DonutChart sorted={sorted} totalVal={totalVal} size={220} onSegmentClick={setDrawerHolding} hoveredStockId={hoveredStockId} onHoverStock={onHoverStock} />
+            <DonutChart sorted={sorted} totalVal={totalVal} size={180} onSegmentClick={setDrawerHolding} hoveredStockId={hoveredStockId} onHoverStock={onHoverStock} />
           </div>
           <div className="snapshot-summary">
             {[
@@ -741,27 +747,25 @@ export default function MyReportPage() {
 
   function removeHolding(id) { setHoldings(holdings.filter(h => h.id !== id)); }
 
-  function saveSnapshot() {
+  async function saveSnapshot() {
     if (holdings.length === 0) { alert('자산을 1개 이상 추가해주세요.'); return; }
     setGenerating(true);
-    setTimeout(async () => {
-      const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h, snapshotPrice: getPrice(h.id) })) };
-      try {
-        await postSnapshot(snap);
-      } catch (e) {
-        console.error(e);
-        alert(`스냅샷 저장 실패: ${e.message}`);
-        setGenerating(false);
-        return;
-      }
-      const next = await fetchSnapshots();
-      setSnapshots(next);
-      setSelectedSnapId(next[0]?.id ?? null);
-      setHoldings([]);
-      setAddQty('1'); setAddPrice(initPrice(addAsset, prices[addAsset]));
-      setFormOpen(false);
+    const snap = { id: 'snap_' + Date.now(), datetime: new Date().toISOString(), holdings: holdings.map(h => ({ ...h, snapshotPrice: getPrice(h.id) })) };
+    try {
+      await postSnapshot(snap);
+    } catch (e) {
+      console.error(e);
+      alert(`스냅샷 저장 실패: ${e.message}`);
       setGenerating(false);
-    }, 800);
+      return;
+    }
+    const next = await fetchSnapshots();
+    setSnapshots(next);
+    setSelectedSnapId(next[0]?.id ?? null);
+    setHoldings([]);
+    setAddQty('1'); setAddPrice(initPrice(addAsset, prices[addAsset]));
+    setFormOpen(false);
+    setGenerating(false);
   }
 
   function deleteSnapshot(id) { setDeleteTarget(id); }
@@ -778,23 +782,23 @@ export default function MyReportPage() {
   }
 
   if (!snapshotsLoaded) return (
-    <div style={{ display: 'flex', gap: 20, alignItems: 'stretch' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ display: 'flex', gap: 20, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div className="sec-header">
           <div>
             <div className="sec-title">마이 포트폴리오</div>
             <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관</div>
           </div>
         </div>
-        <div className="other-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 220 }}>
-          <span className="loading-dots" style={{ fontSize: 18 }}>···</span>
+        <div className="other-card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <LoadingSpinner label="포트폴리오를 불러오는 중..." size={36} />
         </div>
       </div>
-      <div style={{ width: 280, flexShrink: 0 }}>
-        <div className="other-card" style={{ height: '100%', padding: '10px 12px', boxSizing: 'border-box' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8 }}>자산 비중 추이</div>
+      <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="other-card" style={{ flex: 1, padding: '10px 12px', boxSizing: 'border-box' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 8 }}>자산 비중 추이</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 140 }}>
-            <span className="loading-dots" style={{ fontSize: 16 }}>···</span>
+            <LoadingSpinner label="" size={28} />
           </div>
         </div>
       </div>
@@ -806,9 +810,9 @@ export default function MyReportPage() {
 
   return (
     <>
-    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 20, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
       {/* 메인 콘텐츠 */}
-      <div style={{ flex: 1, minWidth: 0, overflowX: 'auto' }}>
+      <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
       <div className="sec-header">
         <div>
           <div className="sec-title">마이 포트폴리오</div>
@@ -821,13 +825,19 @@ export default function MyReportPage() {
 
       {/* 새 스냅샷 입력 폼 */}
       {formOpen && (
-        <div className="other-card" style={{ marginBottom: 16, height: 'calc(100vh - 110px)', display: 'flex', flexDirection: 'column' }}>
+        <div className="other-card" style={{ marginBottom: 16, flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+          {generating && (
+            <div style={{ position: 'absolute', inset: 0, background: 'white', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 12, gap: 14 }}>
+              <div style={{ width: 38, height: 38, border: '3.5px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#475569' }}>스냅샷 저장 중...</div>
+            </div>
+          )}
           {/* 스크롤 가능한 컨텐츠 영역 */}
           <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>보유 자산 선택</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>보유 자산 선택</div>
 
           {/* 주식 카드 그리드 */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 3 }}>주식</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 3 }}>주식</div>
           <div className="asset-pick-grid" style={{ marginBottom: 6 }}>
             {STOCK_IDS.map(id => {
               const info = ASSET_INFO[id];
@@ -845,7 +855,7 @@ export default function MyReportPage() {
           </div>
 
           {/* 외화 카드 그리드 */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 3 }}>외화</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 3 }}>외화</div>
           <div className="asset-pick-grid asset-pick-fx" style={{ marginBottom: 8 }}>
             {FX_IDS.map(id => {
               const info = ASSET_INFO[id];
@@ -872,8 +882,8 @@ export default function MyReportPage() {
                   : null
               }
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{ASSET_INFO[addAsset]?.name}</div>
-                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{ASSET_INFO[addAsset]?.sector} · {addAsset}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{ASSET_INFO[addAsset]?.name}</div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{ASSET_INFO[addAsset]?.sector} · {addAsset}</div>
               </div>
             </div>
 
@@ -897,7 +907,7 @@ export default function MyReportPage() {
                   value={formatNumberInput(addPrice)}
                   onChange={e => setAddPrice(e.target.value.replace(/,/g, ''))}
                   style={{ width: '100%', paddingRight: 34 }} />
-                <span style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: '#94a3b8', pointerEvents: 'none' }}>원</span>
+                <span style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 13, fontWeight: 700, color: '#94a3b8', pointerEvents: 'none' }}>원</span>
               </div>
             </div>
 
@@ -905,11 +915,11 @@ export default function MyReportPage() {
           </div>
 
           {holdings.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 4 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 4 }}>
               <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
                 <tr>
                   {['종목', '수량', '평균 매입가', '현재가', '평가액', '예상 비중', ''].map((h, i) => (
-                    <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>{h}</th>
+                    <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 11, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -928,12 +938,12 @@ export default function MyReportPage() {
                       </td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>
                         {isEditing
-                          ? <input type="number" min="1" value={editQty} onChange={e => setEditQty(e.target.value)} className="form-input" style={{ width: 70, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
+                          ? <input type="number" min="1" value={editQty} onChange={e => setEditQty(e.target.value)} className="form-input" style={{ width: 70, textAlign: 'right', padding: '2px 6px', fontSize: 13 }} />
                           : <>{fmt(h.qty)}{info.unit || ''}</>}
                       </td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>
                         {isEditing
-                          ? <input type="text" inputMode="decimal" value={formatNumberInput(editPrice)} onChange={e => setEditPrice(e.target.value.replace(/,/g, ''))} className="form-input" style={{ width: 100, textAlign: 'right', padding: '2px 6px', fontSize: 12 }} />
+                          ? <input type="text" inputMode="decimal" value={formatNumberInput(editPrice)} onChange={e => setEditPrice(e.target.value.replace(/,/g, ''))} className="form-input" style={{ width: 100, textAlign: 'right', padding: '2px 6px', fontSize: 13 }} />
                           : <>{fmtPrice(h.id, h.avgPrice)}원</>}
                       </td>
                       <td style={{ textAlign: 'right', padding: '7px 8px', borderBottom: '1px solid #f8fafc' }}>{fmtPrice(h.id, cur)}원</td>
@@ -942,17 +952,17 @@ export default function MyReportPage() {
                       <td style={{ padding: '7px 8px', borderBottom: '1px solid #f8fafc', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         {isEditing ? (
                           <>
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontSize: 14, marginRight: 4 }} onClick={() => {
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontSize: 15, marginRight: 4 }} onClick={() => {
                               const q = parseFloat(editQty), p = parseNumberInput(editPrice);
                               if (q > 0 && p > 0) setHoldings(prev => prev.map(item => item.id === h.id ? { ...item, qty: q, avgPrice: p } : item));
                               setEditingId(null);
                             }}>✓</button>
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 14 }} onClick={() => setEditingId(null)}>✕</button>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 15 }} onClick={() => setEditingId(null)}>✕</button>
                           </>
                         ) : (
                           <>
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 12, marginRight: 4 }} onClick={() => { setEditingId(h.id); setEditQty(String(h.qty)); setEditPrice(String(h.avgPrice)); }}>✎</button>
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 15 }} onClick={() => removeHolding(h.id)}>×</button>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 13, marginRight: 4 }} onClick={() => { setEditingId(h.id); setEditQty(String(h.qty)); setEditPrice(String(h.avgPrice)); }}>✎</button>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 16 }} onClick={() => removeHolding(h.id)}>×</button>
                           </>
                         )}
                       </td>
@@ -969,7 +979,7 @@ export default function MyReportPage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost" onClick={() => { setFormOpen(false); setHoldings([]); }}>취소</button>
               <button className="btn btn-primary" onClick={saveSnapshot} disabled={generating || holdings.length === 0} style={{ minWidth: 140 }}>
-                {generating ? '⟳ 분석 중...' : '▶ 스냅샷 저장'}
+                {generating ? <><span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', verticalAlign: 'middle', marginRight: 6 }} />저장 중...</> : '▶ 스냅샷 저장'}
               </button>
             </div>
           </div>
@@ -981,7 +991,7 @@ export default function MyReportPage() {
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 340 }}>
             <div className="modal-title">스냅샷 삭제</div>
-            <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, marginBottom: 20 }}>
+            <p style={{ fontSize: 14, color: '#475569', lineHeight: 1.6, marginBottom: 20 }}>
               이 기록을 삭제하면 복구할 수 없습니다.<br />정말 삭제하시겠습니까?
             </p>
             <div className="modal-actions">
@@ -994,22 +1004,24 @@ export default function MyReportPage() {
 
       {/* 스냅샷 뷰 — 폼이 열려 있을 때는 숨김 */}
       {!formOpen && (snapshots.length === 0 ? (
-        <div className="other-card" style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8', fontSize: 13 }}>
+        <div className="other-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
           📋 기록된 스냅샷이 없습니다.<br />
-          <span style={{ fontSize: 12, marginTop: 6, display: 'block' }}>위의 버튼을 눌러 포트폴리오를 기록해보세요.</span>
+          <span style={{ fontSize: 13, marginTop: 6, display: 'block' }}>위의 버튼을 눌러 포트폴리오를 기록해보세요.</span>
         </div>
       ) : (() => {
         const selectedSnap = snapshots.find(s => s.id === selectedSnapId) ?? snapshots[0];
         return selectedSnap ? (
-          <SnapshotCard key={selectedSnap.id} snap={selectedSnap} prices={prices} onDelete={deleteSnapshot} hoveredStockId={hoveredStockId} onHoverStock={setHoveredStockId} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <SnapshotCard key={selectedSnap.id} snap={selectedSnap} prices={prices} onDelete={deleteSnapshot} hoveredStockId={hoveredStockId} onHoverStock={setHoveredStockId} />
+          </div>
         ) : null;
       })())}
       </div>{/* end 메인 콘텐츠 */}
 
       {/* 오른쪽 고정 패널: 비중 추이 */}
-      <div style={{ width: 280, flexShrink: 0 }}>
-        <div className="other-card" style={{ position: 'sticky', top: 16, height: 'calc(100vh - 80px)', overflow: 'hidden', padding: '10px 12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8, flexShrink: 0 }}>
+      <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="other-card" style={{ flex: 1, overflow: 'hidden', padding: '10px 12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 8, flexShrink: 0 }}>
             자산 비중 추이
           </div>
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

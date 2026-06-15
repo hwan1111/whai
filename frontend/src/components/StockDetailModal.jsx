@@ -3,52 +3,31 @@ import { useState, useEffect } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
 import { ASSETS, fetchAssetData, buildPeriodData } from '@/lib/data';
 import LineChart, { computeAnomalies } from '@/components/LineChart';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export const STOCK_CONFIG = {
   '000000': { name: 'KOSPI', sector: null, meta: '한국종합주가지수', logoSrc: '/assets/flags/kr.png', color: '#16a34a',
-    factors: [{ label: '외국인 순매수', pct: 45, color: '#2563eb', val: '+45%', desc: '외국인 투자자 순매수가 지수 상승 방향을 주도' },
-              { label: '글로벌 증시 동조화', pct: 32, color: '#7c3aed', val: '+32%', desc: 'S&P500·나스닥 강세와 동반 상승 흐름' },
-              { label: 'USD/KRW 환율', pct: 8, color: '#dc2626', val: '-8%', desc: '원화 강세 → 수출 기업 실적 부담으로 지수 하방 압력' }] },
+    factors: [{ label: '외국인 순매수' }, { label: '글로벌 증시 동조화' }, { label: 'USD/KRW 환율' }] },
   '005930': { name: '삼성전자', sector: '반도체', meta: '반도체', logo: 'samsung.svg', color: '#034EA2',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 38, color: '#2563eb', val: '+38%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: 'HBM 수요 증가', pct: 42, color: '#7c3aed', val: '+42%', desc: 'AI 서버향 HBM3E 수요 급증' },
-              { label: '환율 영향', pct: 5, color: '#dc2626', val: '-5%', desc: '원화 강세 → 수출 수익 환산 감소' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: 'HBM 수요 증가' }, { label: '환율 영향' }] },
   '000660': { name: 'SK하이닉스', sector: '반도체', meta: '반도체', logo: 'skhynix.svg', color: '#E31837',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 28, color: '#2563eb', val: '+28%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: 'HBM 공급 선도', pct: 55, color: '#7c3aed', val: '+55%', desc: 'HBM 독점 공급 구조 확립' },
-              { label: '환율 영향', pct: 8, color: '#dc2626', val: '-8%', desc: '원화 강세 → 반도체 수출 수익 감소' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: 'HBM 공급 선도' }, { label: '환율 영향' }] },
   '005380': { name: '현대차', sector: '자동차', meta: '자동차', logo: 'hyundai.png', color: '#002C5F',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 42, color: '#2563eb', val: '+42%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: '전동화 전환 성과', pct: 38, color: '#7c3aed', val: '+38%', desc: 'EV 판매 증가 및 프리미엄화 전략' },
-              { label: '환율 영향', pct: 12, color: '#dc2626', val: '-12%', desc: '원화 강세 → 수출 수익 환산 감소' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: '전동화 전환 성과' }, { label: '환율 영향' }] },
   '000270': { name: '기아', sector: '자동차', meta: '자동차', logo: 'kia.png', color: '#C8102E',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 44, color: '#2563eb', val: '+44%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: 'EV9 판매 호조', pct: 38, color: '#7c3aed', val: '+38%', desc: '북미·유럽 전기 SUV 수요 급증' },
-              { label: '환율 영향', pct: 10, color: '#dc2626', val: '-10%', desc: '원화 강세 → 수출 수익 환산 감소' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: 'EV9 판매 호조' }, { label: '환율 영향' }] },
   '079550': { name: 'LIG디펜스앤에어로스페이스', sector: '방산', meta: '방산', logo: 'lignex1.svg', color: '#0077C8',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 18, color: '#2563eb', val: '+18%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: '방산 수주 확대', pct: 68, color: '#7c3aed', val: '+68%', desc: 'K2 전차·K9 자주포 수출 계약 증가' },
-              { label: '환율 영향', pct: 5, color: '#dc2626', val: '-5%', desc: '원화 강세 → 수출 수익 환산 감소' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: '방산 수주 확대' }, { label: '환율 영향' }] },
   '012450': { name: '한화에어로스페이스', sector: '방산', meta: '방산', logo: 'hanwha.svg', color: '#ED7100',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 32, color: '#2563eb', val: '+32%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: '방산 수주 이슈', pct: 52, color: '#7c3aed', val: '+52%', desc: '폴란드·루마니아 수출 계약 뉴스 영향' },
-              { label: '환율 영향', pct: 6, color: '#dc2626', val: '-6%', desc: '원화 강세 → 수출 수익 환산 시 감소' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: '방산 수주 이슈' }, { label: '환율 영향' }] },
   '105560': { name: 'KB금융', sector: '금융', meta: '금융', logo: 'kb.svg', color: '#D4960A',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 48, color: '#2563eb', val: '+48%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: '금리 상승 수혜', pct: 38, color: '#7c3aed', val: '+38%', desc: '순이자마진(NIM) 개선 효과' },
-              { label: '대손충당금 증가', pct: 8, color: '#dc2626', val: '-8%', desc: '부동산 PF 리스크 반영' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: '금리 상승 수혜' }, { label: '대손충당금 증가' }] },
   '055550': { name: '신한지주', sector: '금융', meta: '금융', logo: 'shinhan.svg', color: '#5BADD1',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 45, color: '#2563eb', val: '+45%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: '금리 상승 수혜', pct: 35, color: '#7c3aed', val: '+35%', desc: '이자이익 증가 효과' },
-              { label: '대출 부실 위험', pct: 9, color: '#dc2626', val: '-9%', desc: '기업 구조조정 관련 충당금 부담' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: '금리 상승 수혜' }, { label: '대출 부실 위험' }] },
   '051910': { name: 'LG화학', sector: '화학', meta: '화학', logo: 'lgchem.svg', color: '#A50034',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 42, color: '#2563eb', val: '+42%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: '배터리 사업 부진', pct: 48, color: '#dc2626', val: '-48%', desc: 'EV 배터리 수요 둔화 및 가격 하락' },
-              { label: '글로벌 수요 약세', pct: 18, color: '#dc2626', val: '-18%', desc: '화학 제품 수요 둔화' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: '배터리 사업 부진' }, { label: '글로벌 수요 약세' }] },
   '096770': { name: 'SK이노베이션', sector: '화학', meta: '화학', logo: 'skinnovation.svg', color: '#F46F19',
-    factors: [{ label: '시장 전체 (KOSPI)', pct: 38, color: '#2563eb', val: '+38%', desc: 'KOSPI와 함께 움직인 비율' },
-              { label: '배터리 수주 증가', pct: 45, color: '#7c3aed', val: '+45%', desc: '북미 배터리 공장 가동률 상승' },
-              { label: '유가 변동 영향', pct: 8, color: '#dc2626', val: '-8%', desc: '원유 가격 하락 → 화학 부문 수익성 압박' }] },
+    factors: [{ label: '시장 전체 (KOSPI)' }, { label: '배터리 수주 증가' }, { label: '유가 변동 영향' }] },
 };
 
 function fmt(v) { return v ? Number(v).toLocaleString('ko-KR') : '—'; }
@@ -154,25 +133,25 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
                 </div>
               )}
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', lineHeight: 1.2 }}>{cfg?.name ?? stockId}</div>
-                {stockId !== '000000' && <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{stockId} · {cfg?.meta}</div>}
+                <div style={{ fontSize: 17, fontWeight: 800, color: '#1e293b', lineHeight: 1.2 }}>{cfg?.name ?? stockId}</div>
+                {stockId !== '000000' && <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>{stockId} · {cfg?.meta}</div>}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {detail?.price != null && (
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', lineHeight: 1 }}>
+                  <div style={{ fontSize: 21, fontWeight: 800, color: '#1e293b', lineHeight: 1 }}>
                     {fmt(detail.price)}
-                    <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400, marginLeft: 2 }}>원</span>
+                    <span style={{ fontSize: 13, color: '#64748b', fontWeight: 400, marginLeft: 2 }}>원</span>
                   </div>
                   {chgPct != null && (
-                    <div style={{ fontSize: 12, fontWeight: 600, color: chgColor, marginTop: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: chgColor, marginTop: 2 }}>
                       {chgArrow} {chgAmt != null ? `${fmt(Math.abs(chgAmt))}원` : ''} ({Math.abs(chgPct).toFixed(2)}%)
                     </div>
                   )}
                 </div>
               )}
-              <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#cbd5e1', lineHeight: 1, padding: 0 }}>✕</button>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 19, color: '#cbd5e1', lineHeight: 1, padding: 0 }}>✕</button>
             </div>
           </div>
         </div>
@@ -185,7 +164,7 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 4 }}>
               {['1W','1M','3M','6M','1Y','3Y','ALL'].map(p => (
                 <button key={p} onClick={() => setPeriod(p)} style={{
-                  fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
                   border: period === p ? '1.5px solid #1e293b' : '1.5px solid #e2e8f0',
                   background: period === p ? '#1e293b' : 'white',
                   color: period === p ? 'white' : '#475569',
@@ -195,7 +174,9 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
             </div>
             <div style={{ height: 240, position: 'relative', background: '#fafafa', border: '1px solid #f1f5f9', borderRadius: 10, overflow: 'hidden' }}>
               {loading ? (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 13 }}>···</div>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 28, height: 28, border: '2.5px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                </div>
               ) : pd ? (
                 <>
                   <LineChart
@@ -243,7 +224,7 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
                   })()}
                 </>
               ) : (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12 }}>데이터 없음</div>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 13 }}>데이터 없음</div>
               )}
             </div>
           </div>
@@ -251,7 +232,7 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
           {/* 보유 현황 그리드 (오른쪽) */}
           {holdingItems && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>내 보유 현황</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>내 보유 현황</div>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
@@ -262,8 +243,8 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
               }}>
                 {holdingItems.map(({ label, val, color }) => (
                   <div key={label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px' }}>
-                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: color || '#1e293b' }}>{val}</div>
+                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: color || '#1e293b' }}>{val}</div>
                   </div>
                 ))}
               </div>
@@ -279,12 +260,12 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
                 return (
                   <div style={{ marginTop: 'auto', paddingTop: 5 }}>
                     <div style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 8, minHeight: 68, padding: '11px 12px', boxSizing: 'border-box' }}>
-                      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 6 }}>지금까지 안 팔았다면?</div>
+                      <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 6 }}>지금까지 안 팔았다면?</div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 16, fontWeight: 800, color: col }}>
+                        <span style={{ fontSize: 17, fontWeight: 800, color: col }}>
                           {isZero ? '±' : isUp ? '▲' : '▼'} {Math.abs(changePct).toFixed(2)}%
                         </span>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: col }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: col }}>
                           {isZero ? '±' : isUp ? '+' : '-'}{fmtN(pnl)}원
                         </span>
                       </div>
@@ -309,10 +290,10 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
               padding: '8px 12px', boxShadow: '0 4px 16px rgba(15,23,42,0.12)',
               zIndex: 9999, minWidth: 170, pointerEvents: 'none',
             }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>{anomaly.isoDate} 급변 포착</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>{anomaly.isoDate} 급변 포착</div>
               {anomaly.movers.map(m => (
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
+                  <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: m.chg >= 0 ? '#dc2626' : '#2563eb' }}>
                     {m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(2)}%
                   </span>
                 </div>
@@ -326,13 +307,13 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
           <div style={{ border: '1.5px solid #c4b5fd', borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(160deg,#f5f3ff 0%,#eef2ff 100%)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '12px 14px 14px' }}>
               <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#4c1d95' }}>관련 뉴스</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#4c1d95' }}>관련 뉴스</span>
             </div>
             <div style={{ padding: '0 14px' }}>
               {loading ? (
-                <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', padding: '14px 0' }}>···</div>
+                <div style={{ padding: '14px 0' }}><LoadingSpinner label="뉴스를 불러오는 중..." size={20} compact /></div>
               ) : newsList.length === 0 ? (
-                <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', padding: '14px 0' }}>관련 뉴스가 없습니다.</div>
+                <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center', padding: '14px 0' }}>관련 뉴스가 없습니다.</div>
               ) : (
                 newsList.slice(0, 3).map((n, i) => (
                   <div key={i} className="news-preview-item" style={{ borderBottom: 'none', margin: 0, padding: '4px 0' }}>
@@ -340,7 +321,7 @@ export default function StockDetailModal({ stockId, onClose, holding, snapshotDa
                       <span className={`regime-direction ${n.direction === '상승' ? 'up' : n.direction === '하락' ? 'down' : 'neutral'}`}>{n.direction || '혼조'}</span>
                       <span className="news-date" style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>{fmtNewsPeriod(n.start_date, n.end_date)}</span>
                     </div>
-                    <div className="news-title" style={{ fontSize: 12 }}>{n.cause}</div>
+                    <div className="news-title" style={{ fontSize: 13 }}>{n.cause}</div>
                   </div>
                 ))
               )}

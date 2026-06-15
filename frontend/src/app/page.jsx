@@ -172,7 +172,7 @@ function AuthPageContent() {
         </div>
 
         {sessionExpired && (
-          <div style={{ background: '#fef3cd', border: '1px solid #fbbf24', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#92400e', fontWeight: 500 }}>
+          <div style={{ background: '#fef3cd', border: '1px solid #fbbf24', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 14, color: '#92400e', fontWeight: 500 }}>
             세션이 만료되었습니다. 다시 로그인해 주세요.
           </div>
         )}
@@ -284,7 +284,7 @@ function AuthPageContent() {
                     <div
                       key={o.val}
                       className={`invest-option${regGender === o.val ? ' selected' : ''}`}
-                      style={{ flex: 1, textAlign: 'center', padding: '7px 4px', fontSize: 12 }}
+                      style={{ flex: 1, textAlign: 'center', padding: '7px 4px', fontSize: 13 }}
                       onClick={() => setRegGender(g => g === o.val ? '' : o.val)}
                     >
                       {o.label}

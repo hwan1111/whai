@@ -17,7 +17,7 @@ import boto3
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env.local", override=True)
+load_dotenv(ROOT / ".env", override=True)
 
 BUCKET   = "fisa-news-archive"
 DATA_DIR = ROOT / "data" / "news"

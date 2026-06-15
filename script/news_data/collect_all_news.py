@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def run_collector(script: str, start: str, end: str) -> None:
     command = [
         sys.executable,
-        str(ROOT / "script" / "news_data" / script),
+        str(ROOT / "script" / "news_data" / "collect" / script),
         "--start",
         start,
         "--end",
