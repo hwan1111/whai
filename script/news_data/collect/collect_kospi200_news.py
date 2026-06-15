@@ -412,12 +412,11 @@ def collect_all():
 
 
 if __name__ == "__main__":
-    import sys as _sys
-    global START_DATE, END_DATE, _S3_MODE
-
     parser = argparse.ArgumentParser(description="KOSPI200 뉴스 수집")
     parser.add_argument("--date", default=None, help="기준 날짜 YYYY-MM-DD (미지정 시 전체 기간 로컬 수집)")
     parser.add_argument("--lookback", type=int, default=13, help="--date 사용 시 소급 일수 (기본 13 = 2주)")
+    parser.add_argument("--start", default=None, help="수집 시작일 YYYY-MM-DD")
+    parser.add_argument("--end", default=None, help="수집 종료일 YYYY-MM-DD")
     args = parser.parse_args()
 
     if args.date:
@@ -426,5 +425,10 @@ if __name__ == "__main__":
         START_DATE = _end - timedelta(days=args.lookback)
         END_DATE   = _end
         _S3_MODE   = True
+    elif args.start or args.end:
+        if not (args.start and args.end):
+            parser.error("--start와 --end는 함께 지정해야 합니다.")
+        START_DATE = date.fromisoformat(args.start)
+        END_DATE = date.fromisoformat(args.end)
 
     collect_all()

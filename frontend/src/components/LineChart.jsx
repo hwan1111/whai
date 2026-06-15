@@ -138,15 +138,15 @@ export default function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset
         {showAssetName && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: tooltip.color, flexShrink: 0, display: 'inline-block' }} />
-            <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>{tooltip.name}</span>
+            <span style={{ fontWeight: 700, fontSize: 16, color: '#1e293b' }}>{tooltip.name}</span>
           </div>
         )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 14, marginBottom: 4 }}>
           <span style={{ color: '#94a3b8' }}>날짜</span>
           <span style={{ fontWeight: 600, color: '#374151' }}>{tooltip.date}</span>
         </div>
         {tooltip.close != null && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 14, marginBottom: 4 }}>
             <span style={{ color: '#94a3b8' }}>{tooltip.isFx ? '환율' : '주가'}</span>
             <span style={{ fontWeight: 700, color: '#1e293b' }}>
               {tooltip.isFx
@@ -156,14 +156,14 @@ export default function LineChart({ activeAssets, pd, hoveredAsset, onHoverAsset
           </div>
         )}
         {tooltip.dailyChgPct != null && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13, marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 14, marginBottom: 4 }}>
             <span style={{ color: '#94a3b8' }}>전일 대비</span>
             <span style={{ fontWeight: 700, color: tooltip.dailyChgPct >= 0 ? '#dc2626' : '#2563eb' }}>
               {tooltip.dailyChgPct >= 0 ? '▲' : '▼'} {Math.abs(tooltip.dailyChgPct).toFixed(2)}%
             </span>
           </div>
         )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 13 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontSize: 14 }}>
           <span style={{ color: '#94a3b8' }}>기간 변동률</span>
           <span style={{ fontWeight: 700, color: tooltip.periodVal >= 0 ? '#dc2626' : '#2563eb' }}>
             {tooltip.periodVal >= 0 ? '+' : ''}{Number(tooltip.periodVal).toFixed(2)}%

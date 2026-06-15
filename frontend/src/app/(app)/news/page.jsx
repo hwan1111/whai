@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { getToken } from '@/lib/auth';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function NewsPage() {
   const [ticker, setTicker] = useState('');
@@ -34,7 +35,7 @@ export default function NewsPage() {
       <div className="other-card mb">
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>지수 / 종목 / 환율</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3 }}>지수 / 종목 / 환율</div>
             <select className="fsel" value={ticker} onChange={e => setTicker(e.target.value)}>
               <option value="">전체</option>
               <optgroup label="지수">
@@ -58,7 +59,7 @@ export default function NewsPage() {
             </select>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>기간</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3 }}>기간</div>
             <select className="fsel" value={days} onChange={e => setDays(e.target.value)}>
               <option value="7">최근 7일</option>
               <option value="30">최근 30일</option>
@@ -72,16 +73,16 @@ export default function NewsPage() {
       <div className="other-card">
         <div className="other-card-title">
           뉴스 목록
-          <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>
+          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400, textTransform: 'none' }}>
             {!loading && !error && `총 ${news.length}건`}
           </span>
         </div>
         {loading ? (
-          <div style={{ color: '#94a3b8', fontSize: 12, padding: '16px 0', textAlign: 'center' }}>불러오는 중...</div>
+          <div style={{ padding: '32px 0' }}><LoadingSpinner label="뉴스를 불러오는 중..." /></div>
         ) : error ? (
-          <div style={{ color: '#dc2626', fontSize: 12, padding: '16px 0', textAlign: 'center' }}>뉴스를 불러오지 못했습니다.</div>
+          <div style={{ color: '#dc2626', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>뉴스를 불러오지 못했습니다.</div>
         ) : news.length === 0 ? (
-          <div style={{ color: '#94a3b8', fontSize: 12, padding: '16px 0', textAlign: 'center' }}>해당 조건의 뉴스가 없습니다.</div>
+          <div style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>해당 조건의 뉴스가 없습니다.</div>
         ) : (
           news.map((n, i) => (
             <div key={i} className="news-item" style={{ padding: '14px 0' }}>
@@ -90,14 +91,14 @@ export default function NewsPage() {
                 <span className="news-date">{n.date_str}</span>
                 <span className="news-source">{n.source}</span>
               </div>
-              <div className="news-title" style={{ fontSize: 14 }}>{n.title}</div>
+              <div className="news-title" style={{ fontSize: 15 }}>{n.title}</div>
               <div className="news-body" style={{ marginTop: 4 }}>{n.body}</div>
               {n.ai_summary && (
                 <div className="ai-box" style={{ marginTop: 8, padding: '10px 12px' }}>
                   <div className="ai-header" style={{ marginBottom: 6 }}>
-                    <span className="ai-badge" style={{ fontSize: 9 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 3줄 요약</span>
+                    <span className="ai-badge" style={{ fontSize: 10 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 3줄 요약</span>
                   </div>
-                  <div className="ai-text" style={{ fontSize: 11 }}>{n.ai_summary}</div>
+                  <div className="ai-text" style={{ fontSize: 12 }}>{n.ai_summary}</div>
                 </div>
               )}
             </div>

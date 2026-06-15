@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Cropper from 'react-easy-crop';
 import { getUser, setProfileImage, logout, updateUserName, fetchWithAuth } from '@/lib/auth';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 async function getCroppedBlob(imageSrc, pixelCrop) {
   const image = await new Promise((resolve, reject) => {
@@ -328,7 +329,7 @@ export default function Header({ updateTime }) {
           </Link>
         </div>
         <div className="header-right">
-          {updateTime && <span style={{ fontSize: 11, color: '#64748b' }}>{updateTime}</span>}
+          {updateTime && <span style={{ fontSize: 12, color: '#64748b' }}>{updateTime}</span>}
           {pathname?.startsWith('/my-report') ? (
             <Link href="/dashboard" className="header-report-btn">
               🏠 대시보드
@@ -374,7 +375,7 @@ export default function Header({ updateTime }) {
           <div className="modal-box">
             <div className="modal-title">👤 회원정보</div>
             {profileLoading ? (
-              <div style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>불러오는 중...</div>
+              <div style={{ padding: 24 }}><LoadingSpinner label="회원정보를 불러오는 중..." /></div>
             ) : profileData ? (
               <>
                 <div className="modal-row">
@@ -421,7 +422,7 @@ export default function Header({ updateTime }) {
                 {profileMsg.text && <div className={`modal-msg ${profileMsg.type}`}>{profileMsg.text}</div>}
               </>
             ) : (
-              <div style={{ color: '#dc2626', fontSize: 12 }}>정보를 불러오지 못했습니다.</div>
+              <div style={{ color: '#dc2626', fontSize: 13 }}>정보를 불러오지 못했습니다.</div>
             )}
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setModal(null)}>닫기</button>
@@ -495,7 +496,7 @@ export default function Header({ updateTime }) {
                   />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-                  <span style={{ fontSize: 11, color: '#64748b', flexShrink: 0 }}>확대</span>
+                  <span style={{ fontSize: 12, color: '#64748b', flexShrink: 0 }}>확대</span>
                   <input
                     type="range" min={1} max={3} step={0.02} value={zoom}
                     onChange={e => setZoom(Number(e.target.value))}
@@ -518,7 +519,7 @@ export default function Header({ updateTime }) {
                         alt=""
                       />
                     ) : (
-                      <div style={{ width: 90, height: 90, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 32, fontWeight: 700 }}>
+                      <div style={{ width: 90, height: 90, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 33, fontWeight: 700 }}>
                         {initial}
                       </div>
                     )}
@@ -536,7 +537,7 @@ export default function Header({ updateTime }) {
                     style={{ display: 'none' }}
                     onChange={onFileSelect}
                   />
-                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>JPG · PNG · WEBP · GIF &nbsp;·&nbsp; 최대 5MB</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>JPG · PNG · WEBP · GIF &nbsp;·&nbsp; 최대 5MB</div>
                 </div>
                 {imgMsg.text && <div className={`modal-msg ${imgMsg.type}`}>{imgMsg.text}</div>}
                 <div className="modal-actions">
@@ -558,7 +559,7 @@ export default function Header({ updateTime }) {
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null); }}>
           <div className="modal-box">
             <div className="modal-title">🗑️ 회원탈퇴</div>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 18, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 14, color: '#64748b', marginBottom: 18, lineHeight: 1.6 }}>
               탈퇴하시면 모든 데이터가 삭제되며 복구할 수 없습니다.<br />계속하려면 현재 비밀번호를 입력해 주세요.
             </p>
             <div className="modal-field">

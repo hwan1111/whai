@@ -362,9 +362,9 @@ def run(ticker_code: str,
             llm_client = groq_lib.Groq(api_key=api_key)
         elif provider == "openrouter":
             from openai import OpenAI
-            api_key = os.getenv("GPT_API_KEY", "")
+            api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("GPT_API_KEY", "")
             if not api_key:
-                raise EnvironmentError(".env에 GPT_API_KEY 없음")
+                raise EnvironmentError(".env에 OPENROUTER_API_KEY 없음")
             llm_client = OpenAI(api_key=api_key, base_url=OPENROUTER_BASE_URL)
         else:
             from google import genai

@@ -6,7 +6,7 @@ from pathlib import Path
 import boto3
 
 ROOT = Path(__file__).parent.parent
-load_dotenv(ROOT / ".env.local", override=True)
+load_dotenv(ROOT / ".env", override=True)
 
 conn = pymysql.connect(
     host="mysql-12676458-whai.b.aivencloud.com", port=16935, db="whai_service",

@@ -10,9 +10,9 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# .env 로드 (.env.local이 있으면 우선 사용, 없으면 .env 사용)
+# .env 로드 (.env이 있으면 우선 사용, 없으면 .env 사용)
 env_dir = Path(__file__).parent.parent
-load_dotenv(env_dir / ".env.local" if (env_dir / ".env.local").exists() else env_dir / ".env")
+load_dotenv(env_dir / ".env" if (env_dir / ".env").exists() else env_dir / ".env")
 
 from model.llm.prompt_loader import (
     load_prompt,

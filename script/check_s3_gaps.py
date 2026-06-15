@@ -4,7 +4,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 from datetime import date, timedelta
 import boto3
 from dotenv import load_dotenv
-load_dotenv(".env.local", override=True)
+load_dotenv(".env", override=True)
 
 s3 = boto3.client("s3")
 BUCKET = "fisa-news-archive"

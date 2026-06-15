@@ -12,6 +12,7 @@ News collection starts immediately, while regime analysis waits for market data.
 """
 
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timedelta, date
@@ -71,8 +72,10 @@ default_args = {
     "start_date":       datetime(2026, 6, 10),
     "email_on_failure": True,
     "email_on_retry":   False,
-    "retries":          1,
+    "retries":          3,
     "retry_delay":      timedelta(minutes=10),
+    "retry_exponential_backoff": True,
+    "max_retry_delay":  timedelta(hours=1),
 }
 
 dag = DAG(
@@ -80,7 +83,8 @@ dag = DAG(
     default_args=default_args,
     description="뉴스 수집 → S3 전처리 → LLM 국면 분석 → DB 업로드 (일별)",
     schedule="0 15 * * *",  # 15:00 UTC = 00:00 KST 매일
-    catchup=False,
+    catchup=True,
+    max_active_runs=1,
     tags=["finance", "news", "llm", "pipeline"],
 )
 
@@ -92,9 +96,9 @@ dag.doc_md = __doc__
 wait_for_market_data = ExternalTaskSensor(
     task_id="wait_for_market_data",
     external_dag_id="finance_market_data_daily",
-    external_task_id="sync_market_data",
+    external_task_id=None,
     allowed_states=["success"],
-    failed_states=["failed", "skipped"],
+    failed_states=["failed"],
     mode="reschedule",
     poke_interval=60,
     timeout=60 * 60 * 3,
@@ -139,7 +143,7 @@ task_preprocess = BashOperator(
     task_id="preprocess_upload",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/preprocess_and_upload.py "
+        ".venv/bin/python script/news_data/preprocess/preprocess_and_upload.py "
         "--since {{ ds }}"
     ),
     dag=dag,
@@ -149,7 +153,7 @@ task_preprocess_kospi200 = BashOperator(
     task_id="preprocess_upload_kospi200",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/preprocess_and_upload_kospi200.py "
+        ".venv/bin/python script/news_data/preprocess/preprocess_and_upload_kospi200.py "
         "--since {{ ds }}"
     ),
     dag=dag,
@@ -196,7 +200,7 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
     """마지막 국면 시작일부터 최신 전처리 날짜까지 재분석한다."""
     sys.path.insert(0, str(ROOT))
     from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env.local", override=True)
+    load_dotenv(ROOT / ".env", override=True)
 
     import pymysql
 
@@ -244,32 +248,33 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
 
     print(f"[{ticker_code}] LLM 분석: {start_str} ~ {end_str}")
 
+    analysis_ticker = s3_ticker or ticker_code
     cmd = [
         str(ROOT / ".venv" / "bin" / "python"),
-        str(ROOT / "script" / "news_data" / "regime_news_summary.py"),
-        "--provider",    LLM_PROVIDER,
-        "--ticker-code", ticker_code,
-        "--ticker-name", ticker_name,
-        "--sector",      sector,
-        "--start",       start_str,
-        "--end",         end_str,
+        str(ROOT / "script" / "news_data" / "eval" / "regime_news_summary.py"),
+        "--provider", LLM_PROVIDER,
+        "--ticker",   analysis_ticker,
+        "--start",    start_str,
+        "--end",      end_str,
     ]
-    if s3_ticker:
-        cmd += ["--s3-ticker", s3_ticker]
-    if fdr_ticker:
-        cmd += ["--fdr-ticker", fdr_ticker]
 
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
     print(result.stdout)
     if result.returncode != 0:
         raise RuntimeError(f"regime_news_summary 실패 [{ticker_code}]:\n{result.stderr}")
 
+    if analysis_ticker != ticker_code:
+        source = ROOT / "data" / analysis_ticker / f"regime_news_summary_{analysis_ticker}.json"
+        target = ROOT / "data" / ticker_code / f"regime_news_summary_{ticker_code}.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+
 
 def _load_db_task(ticker_code: str, **context) -> None:
     """regime JSON → MySQL 업로드 (마지막 국면 재삽입)."""
     sys.path.insert(0, str(ROOT))
     from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env.local", override=True)
+    load_dotenv(ROOT / ".env", override=True)
 
     import pymysql
 
