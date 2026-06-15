@@ -102,8 +102,9 @@ wait_for_market_data = ExternalTaskSensor(
 )
 
 
-# 월요일은 주말(토·일) 뉴스까지 소급 수집: ds - 2일(토요일)부터 시작
-_since = "{{ macros.ds_add(ds, -2) if dag_run.logical_date.weekday() == 0 else ds }}"
+# 항상 3일 전부터 소급 수집: 주말·공휴일 공백을 요일 분기 없이 메운다.
+# 수집기는 이미 받은 날짜를 네트워크 요청 전에 파일 존재로 스킵하므로 재수집 비용은 0에 가깝다.
+_since = "{{ macros.ds_add(ds, -3) }}"
 
 # ──────────────────────────────────────────────
 # Stage 1: 전일 뉴스 수집
