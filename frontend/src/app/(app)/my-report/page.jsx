@@ -330,6 +330,26 @@ function buildAiHtmlFromAnalysis(analysis) {
       `<p style="margin:0 0 8px;line-height:1.6;font-size:14px;color:#334155"><strong>${label}</strong>: ${escapeHtml(analysis[key])}</p>`
     );
 
+  // 관련 최신 뉴스 링크 (OpenRouter web search 근거). 기사 URL/제목은 클릭 가능한
+  // 링크로 직접 렌더한다 — escapeHtml 은 따옴표를 이스케이프하지 않으므로 href 용으로
+  // 큰따옴표만 추가 처리한다.
+  if (Array.isArray(analysis.sources) && analysis.sources.length > 0) {
+    const items = analysis.sources
+      .filter(s => s && s.url)
+      .map(s => {
+        const href = escapeHtml(String(s.url)).replace(/"/g, '&quot;');
+        const title = escapeHtml(String(s.title || s.url));
+        const tag = s.ticker
+          ? `<span style="color:#64748b;font-weight:600">${escapeHtml(String(s.ticker))}</span> `
+          : '';
+        return `<li style="margin:0 0 6px;line-height:1.6"><a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-size:14px">${tag}${title}</a></li>`;
+      });
+    if (items.length > 0) {
+      lines.push('<p style="margin:14px 0 6px;line-height:1.8;font-size:16px;color:#334155"><strong>📰 관련 최신 뉴스</strong></p>');
+      lines.push(`<ul style="margin:0 0 12px;padding-left:18px">${items.join('')}</ul>`);
+    }
+  }
+
   if (typeof analysis.confidence === 'number') {
     const pct = Math.round(analysis.confidence * 100);
     lines.push(`<p style="margin:0;font-size: 13px;color:#94a3b8">분석 신뢰도 ${pct}%</p>`);
