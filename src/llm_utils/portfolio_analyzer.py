@@ -66,7 +66,7 @@ from src.llm_utils.token_tracker import TokenTracker
 logger = logging.getLogger(__name__)
 
 # 모든 자격증명/설정(AWS_S3_BUCKET, MLFLOW_*, AWS 키 등)은 프로젝트 루트의
-# `.env` 에서 로드한다. `.env.local` 은 참조하지 않는다.
+# `.env` 에서 로드한다. `.env` 은 참조하지 않는다.
 _ENV_FILE = Path(__file__).parent.parent.parent / ".env"
 if _ENV_FILE.exists():
     load_dotenv(_ENV_FILE, override=True)

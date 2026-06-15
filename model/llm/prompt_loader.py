@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 # .env 파일 자동 로드
 def _load_env():
-    """프로젝트 루트의 .env 또는 .env.local 파일을 로드"""
+    """프로젝트 루트의 .env 또는 .env 파일을 로드"""
     try:
         from dotenv import load_dotenv
         env_dir = Path(__file__).parent.parent.parent  # model/ → project root
-        env_local = env_dir / ".env.local"
+        env_local = env_dir / ".env"
         env_file = env_dir / ".env"
 
         if env_local.exists():

@@ -1,7 +1,7 @@
 import boto3, sys
 sys.stdout.reconfigure(encoding="utf-8")
 from dotenv import load_dotenv
-load_dotenv(".env.local", override=True)
+load_dotenv(".env", override=True)
 s3 = boto3.client("s3")
 
 prefixes = [

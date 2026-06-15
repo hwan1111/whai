@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { fetchWithAuth } from '@/lib/auth';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 const STOCK_CONFIG = {
   '005930': { name: '삼성전자', sector: '반도체', meta: '코스피 · 반도체 · KRX · KRW', logo: 'samsung.svg', color: '#034EA2',
@@ -102,6 +103,7 @@ export default function StockPage() {
   const [chartSvg, setChartSvg] = useState('');
   const [chartLabels, setChartLabels] = useState([]);
   const [news, setNews] = useState([]);
+  const [chartLoading, setChartLoading] = useState(false);
 
   async function selectStock(id) {
     if (!id || !STOCK_CONFIG[id]) { setState('empty'); return; }
@@ -167,12 +169,14 @@ export default function StockPage() {
   async function changePeriod(p) {
     setPeriod(p);
     if (!currentStock) return;
+    setChartLoading(true);
     const histData = await loadChart(currentStock, p);
     if (histData) {
       setChartSvg(buildChartSvg(histData.vals, STOCK_CONFIG[currentStock].color));
       setChartLabels(histData.labels);
       setStockData(prev => prev ? { ...prev, chartPos: histData.pos } : prev);
     }
+    setChartLoading(false);
   }
 
   const sectors = SECTORS;
@@ -210,7 +214,7 @@ export default function StockPage() {
       <div className="other-card mb">
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>종목 선택</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3 }}>종목 선택</div>
             <select className="fsel" value={currentStock} onChange={e => selectStock(e.target.value)}>
               <option value="">종목을 선택하세요</option>
               {sectors.map(sector => (
@@ -227,15 +231,15 @@ export default function StockPage() {
 
       {state === 'empty' && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', gap: 14 }}>
-          <div style={{ fontSize: 40 }}>📊</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#475569' }}>종목을 선택해주세요</div>
-          <div style={{ fontSize: 12, color: '#94a3b8' }}>위 드롭다운에서 분석할 종목을 선택하면 차트와 지표가 표시됩니다</div>
+          <div style={{ fontSize: 41 }}>📊</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#475569' }}>종목을 선택해주세요</div>
+          <div style={{ fontSize: 13, color: '#94a3b8' }}>위 드롭다운에서 분석할 종목을 선택하면 차트와 지표가 표시됩니다</div>
         </div>
       )}
 
       {state === 'loading' && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#64748b' }}>데이터를 불러오는 중...</div>
+          <LoadingSpinner label="종목 데이터를 불러오는 중..." size={36} />
         </div>
       )}
 
@@ -247,19 +251,19 @@ export default function StockPage() {
                 <img src={`/assets/logos/${cfg.logo}`} alt={cfg.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               </div>
               <div>
-                <div style={{ fontSize: 19, fontWeight: 800 }}>
-                  {cfg.name} <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>{currentStock}</span>
+                <div style={{ fontSize: 20, fontWeight: 800 }}>
+                  {cfg.name} <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>{currentStock}</span>
                 </div>
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{cfg.meta}</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{cfg.meta}</div>
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 28, fontWeight: 800 }}>
+              <div style={{ fontSize: 29, fontWeight: 800 }}>
                 {stockData?.price ? Number(stockData.price).toLocaleString('ko-KR') : '—'}
-                <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 400 }}> 원</span>
+                <span style={{ fontSize: 14, color: '#94a3b8', fontWeight: 400 }}> 원</span>
               </div>
               {stockData?.changePct !== null && stockData?.changePct !== undefined && (
-                <div style={{ fontSize: 12, marginTop: 2, color: stockData.changePct >= 0 ? '#16a34a' : '#dc2626' }}>
+                <div style={{ fontSize: 13, marginTop: 2, color: stockData.changePct >= 0 ? '#16a34a' : '#dc2626' }}>
                   {stockData.changePct >= 0 ? '▲' : '▼'} {Math.abs(stockData.changePct).toFixed(2)}% 오늘
                 </div>
               )}
@@ -269,7 +273,7 @@ export default function StockPage() {
           <div className="grid g21 mb">
             <div className="other-card">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>주가 차트 (변동률 기준)</div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>주가 차트 (변동률 기준)</div>
                 <div className="range-sel">
                   {PERIODS.map(p => (
                     <div key={p} className={`rbtn${period === p ? ' active' : ''}`} onClick={() => changePeriod(p)}>{PERIOD_LABELS[p]}</div>
@@ -277,25 +281,30 @@ export default function StockPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+                  {chartLoading && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'white', zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8 }}>
+                      <div style={{ width: 28, height: 28, border: '2.5px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    </div>
+                  )}
                   <svg viewBox="0 0 500 150" width="100%" height={150} style={{ display: 'block' }} dangerouslySetInnerHTML={{ __html: chartSvg }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
                     {shownLabels.map((l, i) => <span key={i}>{l}</span>)}
                   </div>
                 </div>
                 <div style={{ width: 88, flexShrink: 0, paddingTop: 4, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{PERIOD_LABELS[period]} 범위</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{PERIOD_LABELS[period]} 범위</div>
                   <div>
-                    <div style={{ fontSize: 9, color: '#94a3b8' }}>52주 최고</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626' }}>{s?.high52 ? fmt(s.high52) + '원' : '—'}</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>52주 최고</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>{s?.high52 ? fmt(s.high52) + '원' : '—'}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: '#94a3b8' }}>52주 최저</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>{s?.low52 ? fmt(s.low52) + '원' : '—'}</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>52주 최저</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#2563eb' }}>{s?.low52 ? fmt(s.low52) + '원' : '—'}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: '#94a3b8' }}>현재가 위치</div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: cfg.color }}>{stockData?.chartPos !== undefined ? stockData.chartPos + '%' : '—'}</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>현재가 위치</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: cfg.color }}>{stockData?.chartPos !== undefined ? stockData.chartPos + '%' : '—'}</div>
                   </div>
                 </div>
               </div>
@@ -310,7 +319,7 @@ export default function StockPage() {
                 <div className="metric-box">
                   <div className="metric-label">PER</div>
                   <div className="metric-value">
-                    {s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 12, color: '#64748b' }}>적자</span>}
+                    {s?.per != null ? s.per.toFixed(2) : <span style={{ fontSize: 13, color: '#64748b' }}>적자</span>}
                   </div>
                 </div>
                 <div className="metric-box"><div className="metric-label">PBR</div><div className="metric-value">{s?.pbr != null ? s.pbr.toFixed(2) : '-'}</div></div>
@@ -324,13 +333,13 @@ export default function StockPage() {
               <div className="ai-header">
                 <span className="ai-badge">AI 분석</span>
                 <span className="ai-title">{cfg.name} 주가 움직임</span>
-                <span style={{ marginLeft: 'auto', fontSize: 10, color: '#7c6fbb' }}>{PERIOD_LABELS[period]} 기준</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#7c6fbb' }}>{PERIOD_LABELS[period]} 기준</span>
               </div>
               <div className="ai-text">종목을 선택하면 AI 분석 내용이 표시됩니다.</div>
               <div className="ai-sources"></div>
             </div>
             <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: '#374151' }}>주가 변동 원인 분석</div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: '#374151' }}>주가 변동 원인 분석</div>
               {cfg.factors.map(f => (
                 <div key={f.label}>
                   <div className="factor-row">
@@ -347,7 +356,7 @@ export default function StockPage() {
           <div className="other-card">
             <div className="other-card-title">관련 뉴스</div>
             {news.length === 0 ? (
-              <div style={{ color: '#94a3b8', fontSize: 12, padding: '16px 0', textAlign: 'center' }}>관련 뉴스가 없습니다.</div>
+              <div style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>관련 뉴스가 없습니다.</div>
             ) : (
               news.map((n, i) => (
                 <div key={i} className="news-item">

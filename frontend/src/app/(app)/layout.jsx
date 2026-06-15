@@ -28,7 +28,9 @@ export default function AppLayout({ children }) {
       el.style.transformOrigin = 'top left';
       el.style.transform = `scale(${scale})`;
       el.style.width = `${DESIGN_WIDTH}px`;
-      el.style.height = `${window.innerHeight / scale}px`;
+      const designHeight = Math.round(window.innerHeight / scale);
+      el.style.height = `${designHeight}px`;
+      document.documentElement.style.setProperty('--design-height', `${designHeight}px`);
     }
     updateScale();
     window.addEventListener('resize', updateScale);
@@ -47,13 +49,23 @@ export default function AppLayout({ children }) {
           const [year, month, day] = value.slice(0, 10).split('-');
           return year && month && day ? `${Number(month)}/${Number(day)}` : '—';
         };
-        const dates = [data.price, data.news, data.fundamental].map(formatDate);
-        const allSame = dates.every(d => d === dates[0]);
-        setUpdateTime(
-          allSame
-            ? `최신 데이터 기준: ${dates[0]}`
-            : `최신 데이터 기준 · 주가 ${dates[0]} · 뉴스 ${dates[1]} · 펀더멘털 ${dates[2]}`
-        );
+        const sources = [
+          { label: '주가·KOSPI·환율', value: data.price },
+          { label: '펀더멘털', value: data.fundamental },
+          { label: '뉴스 분석', value: data.news },
+        ];
+        const grouped = sources.reduce((acc, source) => {
+          const date = source.value?.slice(0, 10);
+          if (!date) return acc;
+          const existing = acc.find(group => group.date === date);
+          if (existing) existing.labels.push(source.label);
+          else acc.push({ date, labels: [source.label] });
+          return acc;
+        }, []);
+        const freshnessText = grouped
+          .map(group => `${group.labels.join('·')} ${formatDate(group.date)}`)
+          .join(' | ');
+        setUpdateTime(freshnessText ? `최신 데이터 기준: ${freshnessText}` : '');
       } catch { /* silent */ }
     }
     loadDataFreshness();

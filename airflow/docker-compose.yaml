@@ -3,10 +3,7 @@
 # =================================================================
 
 x-airflow-common: &airflow-common
-  image: ${AIRFLOW_IMAGE:-whai-airflow:latest}
-  build:
-    context: ..
-    dockerfile: airflow/Dockerfile
+  image: 295447237396.dkr.ecr.ap-northeast-2.amazonaws.com/whai-airflow:latest
   env_file:
     - ../.env
   environment: &airflow-common-env
@@ -33,9 +30,6 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/../script:/opt/script
     - ${AIRFLOW_PROJ_DIR:-.}/../src:/opt/src
     - ${AIRFLOW_PROJ_DIR:-.}/../data:/opt/data
-    # MySQL(Aiven) SSL 인증서 — DAG의 _get_engine이 /opt/config/certs/ca.pem 참조.
-    # 원본은 EC2에 실제 존재하는 config/backend/certs/ca.pem (cert는 gitignore라 환경별 배치).
-    - ${AIRFLOW_PROJ_DIR:-.}/../config/backend/certs/ca.pem:/opt/config/certs/ca.pem:ro
     - ${AIRFLOW_PROJ_DIR:-.}/../config/certs:/opt/certs
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
