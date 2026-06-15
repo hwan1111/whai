@@ -303,7 +303,11 @@ def _call_gemini(client, model: str, system: str, user: str) -> tuple[dict, int,
 def _call_with_retry(provider: str, client, model: str,
                      system: str, user: str,
                      retries: int = 3) -> tuple[dict, int, int]:
-    import groq as groq_lib
+    try:
+        import groq as groq_lib
+        _groq_rate_limit = groq_lib.RateLimitError
+    except ImportError:
+        _groq_rate_limit = ()  # groq 미설치 시 해당 except 비활성화 (일반 핸들러가 처리)
     for attempt in range(retries):
         try:
             if provider == "groq":
@@ -312,7 +316,7 @@ def _call_with_retry(provider: str, client, model: str,
                 return _call_openrouter(client, model, system, user)
             else:
                 return _call_gemini(client, model, system, user)
-        except groq_lib.RateLimitError as e:
+        except _groq_rate_limit as e:
             msg = str(e).lower()
             if any(s in msg for s in ("daily", "per day", "day quota")):
                 raise DailyQuotaExceeded(str(e))
