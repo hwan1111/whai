@@ -142,7 +142,7 @@ task_preprocess = BashOperator(
     task_id="preprocess_upload",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/preprocess_and_upload.py "
+        ".venv/bin/python script/news_data/preprocess/preprocess_and_upload.py "
         f"--since {_since}"
     ),
     dag=dag,
@@ -152,7 +152,7 @@ task_preprocess_kospi200 = BashOperator(
     task_id="preprocess_upload_kospi200",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/preprocess_and_upload_kospi200.py "
+        ".venv/bin/python script/news_data/preprocess/preprocess_and_upload_kospi200.py "
         f"--since {_since}"
     ),
     dag=dag,
@@ -249,7 +249,7 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
 
     cmd = [
         str(ROOT / ".venv" / "bin" / "python"),
-        str(ROOT / "script" / "news_data" / "regime_news_summary.py"),
+        str(ROOT / "script" / "news_data" / "eval" / "regime_news_summary.py"),
         "--provider",    LLM_PROVIDER,
         "--ticker-code", ticker_code,
         "--ticker-name", ticker_name,
