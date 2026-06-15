@@ -106,6 +106,10 @@ wait_for_market_data = ExternalTaskSensor(
 )
 
 
+# 항상 3일 전부터 소급 수집: 주말·공휴일 공백을 요일 분기 없이 메운다.
+# 수집기는 이미 받은 날짜를 네트워크 요청 전에 파일 존재로 스킵하므로 재수집 비용은 0에 가깝다.
+_since = "{{ macros.ds_add(ds, -3) }}"
+
 # ──────────────────────────────────────────────
 # Stage 1: 전일 뉴스 수집
 # ──────────────────────────────────────────────
@@ -115,7 +119,7 @@ task_collect_all = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         "python script/news_data/collect_all_news.py "
-        "--start {{ ds }} --end {{ ds }}"
+        f"--start {_since} --end {{{{ ds }}}}"
     ),
     dag=dag,
 )
@@ -129,7 +133,7 @@ task_upload_raw = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         "python script/news_data/upload_raw_to_s3.py "
-        "--since {{ ds }}"
+        f"--since {_since}"
     ),
     dag=dag,
 )
@@ -144,7 +148,7 @@ task_preprocess = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         "python script/news_data/preprocess/preprocess_and_upload.py "
-        "--since {{ ds }}"
+        f"--since {_since}"
     ),
     dag=dag,
 )
@@ -154,7 +158,7 @@ task_preprocess_kospi200 = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         "python script/news_data/preprocess/preprocess_and_upload_kospi200.py "
-        "--since {{ ds }}"
+        f"--since {_since}"
     ),
     dag=dag,
 )
