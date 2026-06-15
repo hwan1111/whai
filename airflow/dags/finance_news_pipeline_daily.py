@@ -102,6 +102,9 @@ wait_for_market_data = ExternalTaskSensor(
 )
 
 
+# 월요일은 주말(토·일) 뉴스까지 소급 수집: ds - 2일(토요일)부터 시작
+_since = "{{ macros.ds_add(ds, -2) if dag_run.logical_date.weekday() == 0 else ds }}"
+
 # ──────────────────────────────────────────────
 # Stage 1: 전일 뉴스 수집
 # ──────────────────────────────────────────────
@@ -111,7 +114,7 @@ task_collect_all = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         ".venv/bin/python script/news_data/collect_all_news.py "
-        "--start {{ ds }} --end {{ ds }}"
+        f"--start {_since} --end {{{{ ds }}}}"
     ),
     dag=dag,
 )
@@ -125,7 +128,7 @@ task_upload_raw = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         ".venv/bin/python script/news_data/upload_raw_to_s3.py "
-        "--since {{ ds }}"
+        f"--since {_since}"
     ),
     dag=dag,
 )
@@ -140,7 +143,7 @@ task_preprocess = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         ".venv/bin/python script/news_data/preprocess_and_upload.py "
-        "--since {{ ds }}"
+        f"--since {_since}"
     ),
     dag=dag,
 )
@@ -150,7 +153,7 @@ task_preprocess_kospi200 = BashOperator(
     bash_command=(
         f"cd {ROOT} && "
         ".venv/bin/python script/news_data/preprocess_and_upload_kospi200.py "
-        "--since {{ ds }}"
+        f"--since {_since}"
     ),
     dag=dag,
 )
