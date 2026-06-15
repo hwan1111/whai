@@ -26,7 +26,7 @@ def get_data_freshness(db: Session = Depends(get_db)) -> dict:
     row = db.execute(text("""
         SELECT
             (SELECT MAX(date) FROM price) AS price_date,
-            (SELECT MAX(end_date) FROM regime) AS news_date,
+            (SELECT DATE(MAX(created_at)) FROM regime) AS news_date,
             (SELECT MAX(date) FROM fundamental) AS fundamental_date
     """)).fetchone()
 
