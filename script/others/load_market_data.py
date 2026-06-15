@@ -1,5 +1,5 @@
 """
-Daily market data loader — KOSPI (1), stocks (10), exchange rates (6), fundamentals (10).
+Daily market data loader — KOSPI (1), stocks (10), USD/KRW (1, price ticker='USD'), fundamentals (10).
 
 Run manually:
     python script/load_market_data.py
@@ -39,12 +39,6 @@ def _latest_price_date(engine, ticker: str) -> date:
         row = conn.execute(
             text("SELECT MAX(date) FROM price WHERE ticker = :t"), {"t": ticker}
         ).fetchone()
-    return row[0] if row[0] else date(2020, 1, 1)
-
-
-def _latest_exchange_date(engine) -> date:
-    with engine.connect() as conn:
-        row = conn.execute(text("SELECT MAX(date) FROM exchange_rate")).fetchone()
     return row[0] if row[0] else date(2020, 1, 1)
 
 
@@ -115,7 +109,7 @@ def load_stocks(engine) -> int:
         tickers = {
             r.ticker: r.name
             for r in conn.execute(
-                text("SELECT ticker, name FROM company WHERE currency_code='KRW' AND ticker != '000000'")
+                text("SELECT ticker, name FROM asset WHERE sector NOT IN ('지수', '외화')")
             )
         }
 
@@ -171,11 +165,13 @@ def load_stocks(engine) -> int:
 
 
 def load_exchange_rates(engine) -> int:
-    """BOK ECOS API로 6개 KRW 환율 증분 적재."""
-    from exchange_rate_fetcher import fetch_bok, make_exchange_rate_df
-    from exchange_rate_loader import insert_exchange_rate
+    """BOK ECOS API로 USD/KRW 환율을 price 테이블(ticker='USD')에 증분 적재.
 
-    last = _latest_exchange_date(engine)
+    환율은 자산(asset.sector='외화')으로 통합되어 price에 close=환율, volume=0으로 저장한다.
+    """
+    from exchange_rate_fetcher import fetch_bok, make_exchange_rate_df
+
+    last = _latest_price_date(engine, "USD")
     start = last + timedelta(days=1)
     today = datetime.now(timezone.utc).date()
 
@@ -192,18 +188,32 @@ def load_exchange_rates(engine) -> int:
         print(f"[환율 ERROR] BOK API 호출 실패: {e}")
         return 0
 
-    if not rows:
+    df = make_exchange_rate_df(rows)
+    if df.empty:
         print(f"[환율] 데이터 없음 ({start} ~ {today})")
         return 0
 
-    df = make_exchange_rate_df(rows)
-    if df.empty:
-        print(f"[환율] 파싱된 데이터 없음 ({start} ~ {today})")
+    price_rows = [
+        {"ticker": "USD", "date": rec["date"], "close": rec["rate"], "volume": 0}
+        for rec in df.to_dict(orient="records")
+        if rec["target_currency_code"] == "USD"
+    ]
+    if not price_rows:
+        print(f"[환율] USD 데이터 없음 ({start} ~ {today})")
         return 0
 
-    insert_exchange_rate(engine, df)
-    print(f"[환율] {len(df)}건 적재 ({start} ~ {today})")
-    return len(df)
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO price (ticker, date, close, volume)
+                VALUES (:ticker, :date, :close, :volume)
+                ON DUPLICATE KEY UPDATE close=VALUES(close), volume=VALUES(volume)
+            """),
+            price_rows,
+        )
+
+    print(f"[환율] USD {len(price_rows)}건 price 적재 ({start} ~ {today})")
+    return len(price_rows)
 
 
 def load_fundamentals(engine) -> int:
@@ -217,7 +227,7 @@ def load_fundamentals(engine) -> int:
     with engine.connect() as conn:
         tickers = [
             r.ticker for r in conn.execute(
-                text("SELECT ticker FROM company WHERE currency_code='KRW' AND ticker != '000000'")
+                text("SELECT ticker FROM asset WHERE sector NOT IN ('지수', '외화')")
             )
         ]
 

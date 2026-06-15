@@ -339,6 +339,23 @@ function buildAiHtmlFromAnalysis(analysis) {
     );
   }
 
+  if (Array.isArray(analysis.sources) && analysis.sources.length > 0) {
+    const items = analysis.sources
+      .filter(source => source?.url)
+      .map(source => {
+        const href = escapeHtml(String(source.url)).replace(/"/g, '&quot;');
+        const title = escapeHtml(String(source.title || source.url));
+        const ticker = source.ticker
+          ? `<span style="color:#64748b;font-weight:600">${escapeHtml(String(source.ticker))}</span> `
+          : '';
+        return `<li style="margin:0 0 8px;line-height:1.7"><a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-size:16px">${ticker}${title}</a></li>`;
+      });
+    if (items.length > 0) {
+      lines.push('<p style="margin:16px 0 8px"><strong class="snapshot-ai-section-label">📰 관련 최신 뉴스</strong></p>');
+      lines.push(`<ul style="margin:0 0 14px;padding-left:20px">${items.join('')}</ul>`);
+    }
+  }
+
   return lines.join('');
 }
 

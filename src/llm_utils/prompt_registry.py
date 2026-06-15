@@ -34,6 +34,12 @@ MLFLOW_PROMPTS_CONFIG = {
         "name": "portfolio_analysis",
         "version": "3",
     },
+    # 포트폴리오 분석 결과(출력)를 입력으로 받아 근거 뉴스 링크를 찾는 프롬프트.
+    # MLflow UI 에서 portfolio_news_evidence 프롬프트(Chat)를 등록한 뒤 version 을 확정할 것.
+    "portfolio_news_evidence": {
+        "name": "portfolio_news_evidence",
+        "version": "1",
+    },
 }
 
 
