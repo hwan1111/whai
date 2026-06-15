@@ -201,6 +201,273 @@ function fmtChg(pct) {
   return { text: `${sign} ${Math.abs(pct).toFixed(2)}%`, cls };
 }
 
+function CombinedPredictionChart({ pd, activeAssets, prediction, ticker }) {
+  if (!pd?.labels?.length || !activeAssets.length) {
+    return <div className="prediction-empty">표시할 가격 이력이 없습니다.</div>;
+  }
+
+  const toFiniteNumber = value => {
+    if (value == null || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+  const buildSegments = values => {
+    const segments = [];
+    let segment = [];
+    values.forEach((rawValue, index) => {
+      const value = toFiniteNumber(rawValue);
+      if (value == null) {
+        if (segment.length > 1) segments.push(segment);
+        segment = [];
+        return;
+      }
+      segment.push({ index, value });
+    });
+    if (segment.length > 1) segments.push(segment);
+    return segments;
+  };
+  const forecast = prediction?.forecast?.filter(item => Number.isFinite(Number(item.price))) ?? [];
+  const historyLength = pd.labels.length;
+  const labels = [...pd.labels, ...forecast.map(item => item.date.slice(5).replace('-', '/'))];
+  const width = 1180;
+  const height = 430;
+  const pad = { left: 66, right: 28, top: 28, bottom: 48 };
+  const x = index => pad.left + index / Math.max(labels.length - 1, 1) * (width - pad.left - pad.right);
+
+  const firstClose = pd.closes?.[ticker]?.find(value => value != null);
+  const toReturn = value => firstClose && Number.isFinite(Number(value))
+    ? (Number(value) - firstClose) / firstClose * 100
+    : null;
+  const forecastValues = forecast.map(item => toReturn(item.price));
+  const upperValues = forecast.map(item => toReturn(item.ci_upper));
+  const lowerValues = forecast.map(item => toReturn(item.ci_lower));
+  const historyValues = activeAssets.flatMap(id => (
+    pd.d?.[id]?.map(toFiniteNumber).filter(value => value != null) ?? []
+  ));
+  const allValues = [...historyValues, ...forecastValues, ...upperValues, ...lowerValues].filter(Number.isFinite);
+  const min = Math.min(0, ...allValues);
+  const max = Math.max(0, ...allValues);
+  const range = max - min || 1;
+  const minY = min - range * 0.12;
+  const maxY = max + range * 0.12;
+  const y = value => pad.top + (maxY - value) / (maxY - minY) * (height - pad.top - pad.bottom);
+  const ticks = Array.from({ length: 6 }, (_, index) => minY + (maxY - minY) * index / 5);
+  const xLabelIndices = [...new Set([0, Math.floor((historyLength - 1) / 3), Math.floor((historyLength - 1) * 2 / 3), historyLength - 1, labels.length - 1])];
+  const selectedHistory = pd.d?.[ticker] ?? [];
+  let lastHistoryIndex = selectedHistory.length - 1;
+  while (lastHistoryIndex >= 0 && toFiniteNumber(selectedHistory[lastHistoryIndex]) == null) lastHistoryIndex--;
+  const lastHistoryValue = lastHistoryIndex >= 0 ? toFiniteNumber(selectedHistory[lastHistoryIndex]) : null;
+  const predictionPoints = lastHistoryValue == null ? [] : [
+    `${x(lastHistoryIndex)},${y(lastHistoryValue)}`,
+    ...forecastValues.map((value, index) => value == null ? null : `${x(historyLength + index)},${y(value)}`).filter(Boolean),
+  ];
+  const bandUpper = lastHistoryValue == null ? [] : [
+    `${x(lastHistoryIndex)},${y(lastHistoryValue)}`,
+    ...upperValues.map((value, index) => value == null ? null : `${x(historyLength + index)},${y(value)}`).filter(Boolean),
+  ];
+  const bandLower = lastHistoryValue == null ? [] : [
+    `${x(lastHistoryIndex)},${y(lastHistoryValue)}`,
+    ...lowerValues.map((value, index) => value == null ? null : `${x(historyLength + index)},${y(value)}`).filter(Boolean),
+  ];
+  const band = bandUpper.length > 1 && bandLower.length > 1
+    ? [...bandUpper, ...bandLower.reverse()].join(' ')
+    : null;
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="prediction-combined-chart" preserveAspectRatio="none">
+      {ticks.map(value => (
+        <g key={value}>
+          <line x1={pad.left} x2={width - pad.right} y1={y(value)} y2={y(value)} stroke="#e9eef5" />
+          <text x={pad.left - 10} y={y(value) + 4} textAnchor="end" fontSize="13" fill="#64748b">
+            {value >= 0 ? '+' : ''}{value.toFixed(1)}%
+          </text>
+        </g>
+      ))}
+      {forecast.length > 0 && (
+        <>
+          <rect x={x(historyLength - 1)} y={pad.top} width={width - pad.right - x(historyLength - 1)} height={height - pad.top - pad.bottom} fill="rgba(124,58,237,0.035)" />
+          <line x1={x(historyLength - 1)} x2={x(historyLength - 1)} y1={pad.top} y2={height - pad.bottom} stroke="#a78bfa" strokeDasharray="5 5" />
+          <text x={x(historyLength - 1) + 10} y={pad.top + 18} fontSize="12" fontWeight="700" fill="#7c3aed">예측 구간</text>
+        </>
+      )}
+      {band && <polygon points={band} fill="rgba(124,58,237,0.12)" />}
+      {activeAssets.map(id => {
+        const values = pd.d?.[id];
+        if (!values) return null;
+        const segments = buildSegments(values);
+        return (
+          <g key={id} opacity={id === ticker ? 1 : 0.72}>
+            {segments.map((segment, segmentIndex) => (
+              <polyline
+                key={segmentIndex}
+                points={segment.map(point => `${x(point.index)},${y(point.value)}`).join(' ')}
+                fill="none"
+                stroke={ASSETS[id]?.color || '#64748b'}
+                strokeWidth={id === ticker ? 3 : 2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            ))}
+          </g>
+        );
+      })}
+      {predictionPoints.length > 1 && (
+        <polyline points={predictionPoints.join(' ')} fill="none" stroke="#7c3aed" strokeWidth="3.5" strokeDasharray="8 6" strokeLinejoin="round" strokeLinecap="round" />
+      )}
+      {predictionPoints.slice(1).map((point, index) => {
+        const [cx, cy] = point.split(',');
+        return <circle key={forecast[index]?.date} cx={cx} cy={cy} r="4" fill="#7c3aed" stroke="white" strokeWidth="2" />;
+      })}
+      {xLabelIndices.map(index => (
+        <text key={index} x={x(index)} y={height - 16} textAnchor={index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'} fontSize="13" fill="#64748b">
+          {labels[index]}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+function PredictionAnalysisModal({ open, onClose, ticker, activeAssets, pd, legend }) {
+  const [prediction, setPrediction] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open || !ticker) return;
+    let cancelled = false;
+    setLoading(true);
+    setPrediction(null);
+    setError('');
+    fetchWithAuth(`/api/v1/prices/${ticker}/prediction`, { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(body?.detail || '예측 데이터를 불러오지 못했습니다.');
+        }
+        return response.json();
+      })
+      .then(data => { if (!cancelled) setPrediction(data); })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, ticker]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [open, onClose]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  const predictedChange = prediction
+    ? (prediction.pred_price_d5 - prediction.base_price) / prediction.base_price * 100
+    : 0;
+  const predictedColor = predictedChange >= 0 ? '#dc2626' : '#2563eb';
+  const predictionUnit = ticker === '000000' ? 'pt' : '원';
+  const predictionDigits = ticker === '000000' || ticker === 'USD' ? 2 : 0;
+  const formatPredictionValue = value => Number(value).toLocaleString('ko-KR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: predictionDigits,
+  });
+
+  return createPortal(
+    <div className="prediction-modal-backdrop" onMouseDown={onClose}>
+      <div className="prediction-modal" onMouseDown={event => event.stopPropagation()}>
+        <div className="prediction-modal-header">
+          <div>
+            <div className="prediction-modal-eyebrow">WHAi 자산 예측</div>
+            <div className="prediction-modal-title">
+              {ASSETS[ticker]?.label || STOCK_NAMES[ticker] || ticker} 예측 분석
+            </div>
+          </div>
+          <button type="button" className="prediction-modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="prediction-modal-body">
+          <section className="prediction-history-panel">
+            <div className="prediction-panel-heading">
+              <div>
+                <strong>시장 흐름 및 예측</strong>
+                <span>실선은 실제 흐름, 보라색 점선과 음영은 선택 자산의 D+1~D+5 예측 구간입니다.</span>
+              </div>
+            </div>
+            <div className="prediction-history-chart">
+              <CombinedPredictionChart
+                pd={pd}
+                activeAssets={activeAssets}
+                prediction={prediction}
+                ticker={ticker}
+              />
+              {loading && (
+                <div className="prediction-chart-state">
+                  <LoadingSpinner label="최신 예측을 불러오는 중..." size={34} />
+                </div>
+              )}
+            </div>
+            <div className="prediction-history-legend">
+              {legend.map(item => (
+                <span key={item.id}>
+                  <i style={{ background: ASSETS[item.id]?.color }} />
+                  {ASSETS[item.id]?.label}
+                </span>
+              ))}
+              {prediction && <span className="prediction-legend-forecast"><i />{ASSETS[ticker]?.label || ticker} 예측</span>}
+            </div>
+            {error ? (
+              <div className="prediction-data-notice">
+                <strong>{ASSETS[ticker]?.label || ticker} 예측을 표시할 수 없습니다.</strong>
+                <span>
+                  {ticker === '000000' || ticker === 'USD'
+                    ? '새 예측 DAG가 성공적으로 실행된 뒤 데이터가 표시됩니다.'
+                    : error}
+                </span>
+              </div>
+            ) : prediction ? (
+              <div className="prediction-details">
+                <div className="prediction-summary">
+                  <div>
+                    <span>D+5 예상가</span>
+                    <strong style={{ color: predictedColor }}>
+                      {formatPredictionValue(prediction.pred_price_d5)}{predictionUnit}
+                    </strong>
+                    <em style={{ color: predictedColor }}>
+                      {predictedChange >= 0 ? '▲' : '▼'} {Math.abs(predictedChange).toFixed(2)}%
+                    </em>
+                  </div>
+                  <div className="prediction-target-date">
+                    기준 {prediction.date}<br />목표 {prediction.target_date}
+                  </div>
+                </div>
+                <div className="prediction-metrics">
+                  <div><span>기준 종가</span><strong>{formatPredictionValue(prediction.base_price)}{predictionUnit}</strong></div>
+                  <div><span>{Math.round(prediction.ci_pct * 100)}% 신뢰구간</span><strong>{formatPredictionValue(prediction.ci_lower_d5)} ~ {formatPredictionValue(prediction.ci_upper_d5)}{predictionUnit}</strong></div>
+                  <div><span>사용 모델</span><strong>{prediction.model_name}</strong></div>
+                  <div><span>모델 출처</span><strong>{prediction.model_source} · {prediction.model_used === 'priority_1' ? '1순위' : '2순위'}</strong></div>
+                  <div><span>최근 MAPE</span><strong>{prediction.rolling_mape == null ? '산출 전' : `${prediction.rolling_mape.toFixed(2)}%`}</strong></div>
+                  <div>
+                    <span>모델 상태</span>
+                    <strong className={prediction.drift_detected ? 'prediction-status-warning' : prediction.threshold === 0 ? '' : 'prediction-status-ok'}>
+                      {prediction.drift_detected ? '드리프트 감지' : prediction.threshold === 0 ? '기준 수집 중' : '정상'}
+                    </strong>
+                  </div>
+                </div>
+                <p className="prediction-disclaimer">
+                  예측값은 통계·머신러닝 모델의 추정치이며 투자 수익을 보장하지 않습니다.
+                </p>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 
 function FactorInsightPanel({ rawFactors, cachedData, title, marketChangePct, hasSelection }) {
   const isLoading = hasSelection && cachedData === undefined;
@@ -288,7 +555,7 @@ function FactorInsightPanel({ rawFactors, cachedData, title, marketChangePct, ha
         )}
       </div>
 
-      {/* ── 현 시장 투자 유의사항 카드 (ai-main-panel과 동일 flex: 1) ── */}
+      {/* ── 자산 분석 시 유의사항 카드 (ai-main-panel과 동일 flex: 1) ── */}
       <div
         className="ai-main-card"
         style={{
@@ -303,7 +570,7 @@ function FactorInsightPanel({ rawFactors, cachedData, title, marketChangePct, ha
       >
         <div className="ai-main-title dashboard-section-title dashboard-section-title--purple" style={{ marginBottom: 14 }}>
           <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-          <span>선택 종목 투자 유의사항</span>
+          <span>자산 분석 시 유의사항</span>
         </div>
         <div className="market-caution-body">
           {isLoading ? (
@@ -337,6 +604,7 @@ export default function DashboardPage() {
   const [allStockData, setAllStockData] = useState({});
   const [rightOpen, setRightOpen] = useState(false);
   const [newsDrawerOpen, setNewsDrawerOpen] = useState(false);
+  const [predictionOpen, setPredictionOpen] = useState(false);
   const [selectedStockId, setSelectedStockId] = useState(null);
   const [selectedFxId, setSelectedFxId] = useState(null);
   const [fxStats, setFxStats] = useState(null);
@@ -827,10 +1095,24 @@ export default function DashboardPage() {
     const jo = v / 1e12;
     return jo >= 1 ? jo.toFixed(1) + '조원' : (v / 1e8).toFixed(1) + '억원';
   }
+  const predictionTicker = selectedFxId || selectedStockId;
+  const predictionButtonLabel = predictionTicker === 'USD'
+    ? '환율 예측 분석'
+    : predictionTicker === '000000'
+      ? '지수 예측 분석'
+      : '주가 예측 분석';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <NewsDrawer open={newsDrawerOpen} onClose={() => setNewsDrawerOpen(false)} defaultTicker={selectedFxId || selectedStockId || ''} width={panelWidth} />
+      <PredictionAnalysisModal
+        open={predictionOpen}
+        onClose={() => setPredictionOpen(false)}
+        ticker={predictionTicker}
+        activeAssets={activeAssets}
+        pd={chartPd}
+        legend={legend}
+      />
       {anomalyPopup && !anomalyClick && (() => {
         const { anomaly, clientX, clientY } = anomalyPopup;
         const { border: popColor, bg: popBg, text: popText, badge: popBadge } = anomalyColor(anomaly.movers.length, anomaly.totalAssets);
@@ -1129,6 +1411,15 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                className="prediction-open-btn"
+                disabled={!predictionTicker}
+                title={predictionTicker ? `${ASSETS[predictionTicker]?.label || predictionTicker} 예측 보기` : '예측할 자산을 선택해주세요'}
+                onClick={() => setPredictionOpen(true)}
+              >
+                {predictionButtonLabel}
+              </button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid var(--border)', borderRadius: 8, padding: '2px 10px' }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', flexShrink: 0 }}>즐겨찾기 <span style={{ fontWeight: 400, fontSize: 12 }}>(최대 3개)</span></span>
@@ -1499,7 +1790,7 @@ export default function DashboardPage() {
             const rawFactors = selectedFxId ? FX_INFO[selectedFxId]?.factors : cfg?.factors;
             const ticker = selectedFxId || selectedStockId;
             const cachedData = hasSelection ? factorDescCache[ticker] : null;
-            const title = selectedFxId ? '환율 변동 원인 분석' : selectedStockId === '000000' ? '지수 변동 원인 분석' : '주가 변동 원인 분석';
+            const title = selectedFxId ? '환율 변동 요인 분석' : selectedStockId === '000000' ? '지수 변동 요인 분석' : '주가 변동 요인 분석';
             const marketChangePct = selectedFxId ? prices[selectedFxId]?.change_pct : favDetail?.changePct;
             return (
               <FactorInsightPanel
