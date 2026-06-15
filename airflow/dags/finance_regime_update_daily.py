@@ -112,6 +112,7 @@ for t in TICKERS:
             bash_command=(
                 f"cd '{ROOT}' && python '{_script}/news_data/eval/regime_news_summary.py'"
                 f" --ticker {code}"
+                f" --provider openrouter"
             ),
             execution_timeout=timedelta(hours=3),
             dag=dag,
