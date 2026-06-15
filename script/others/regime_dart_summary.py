@@ -30,7 +30,6 @@ import pandas as pd
 from dotenv import load_dotenv
 from scipy import stats
 
-load_dotenv(".env")
 load_dotenv(".env", override=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

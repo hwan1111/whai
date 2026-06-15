@@ -1,25 +1,41 @@
 """
 포트폴리오 스냅샷 LLM 종합 분석 모듈
 
-`my-report` 페이지에서 새 스냅샷을 저장할 때, 보유 종목/섹터 구성·뉴스·투자자
-프로필을 종합해 LLM 포트폴리오 분석을 생성한다.
+`my-report` 페이지에서 새 스냅샷을 저장할 때, 투자자 성향·보유 종목별 손익·뉴스를
+종합해 LLM 포트폴리오 분석을 생성한다.
+
+LLM 입력(4종 핵심 + 보조 집계):
+  1. 투자 성향           — user.invest_type (whai_service.user)
+  2. 종목별 최근 한달 뉴스 — S3 s3://fisa-news-archive/summary/{ticker}/{start}_{end}.json
+  3. 진입가(평균 매입가)  — holdings[].avgPrice
+  4. 현재가(스냅샷 가격)  — holdings[].snapshotPrice
+  + 보조 집계: 종목별 비중·손익률, 섹터 구성, 총 수익률 (`calcTotals` 포팅)
+  ※ 연령/성별 등 인구통계는 입력에서 제외한다.
 
 흐름:
-  1. 보유 종목 집계 (종목별 비중, 섹터 구성, 손익, 수익/손실 상위, 총 수익률)
-     — 프론트엔드 `calcTotals`/`buildAiHtml` 로직을 Python으로 포팅
-  2. 보유 종목별 최근 30일 국면 뉴스 요약 조회
-     (S3 s3://fisa-news-archive/summary/{ticker}/{start}_{end}.json)
-  3. 투자자 프로필 조회 (user.invest_type, birth_year, gender) — 개인화용
-  4. `portfolio_analysis` 프롬프트 로드 (MLflow Prompt Registry 우선, 로컬 YAML fallback)
-  5. MLflow Gateway(`mid_performance_llm`)로 LLM 호출 — `@mlflow.trace` + start_span,
+  1. 보유 종목 집계 (종목별 비중·진입가·현재가·손익, 섹터 구성, 총 수익률)
+  2. 보유 종목별 최근 30일 국면 뉴스 요약 조회 (S3 summary/)
+  3. 투자 성향(invest_type) 조회 — 개인화용
+  4. 종목별 {진입가·현재가·손익·뉴스} 를 묶은 holdings payload 구성
+  5. `portfolio_analysis` 프롬프트 로드 (MLflow Prompt Registry 우선, 로컬 YAML fallback)
+  6. MLflow Gateway(`mid_performance_llm`)로 LLM 호출 — `@mlflow.trace` + start_span,
      `mlflow.chat.tokenUsage` / `mlflow.llm.cost` span attribute 기록
-  6. JSON 응답 파싱 후 반환
+  7. JSON 응답 파싱 후 반환
+
+MLflow Prompt Registry 계약 (프롬프트는 MLflow UI 에서 직접 등록/관리):
+  - 템플릿 변수: {invest_type} {total_return_pct} {total_value} {total_cost}
+    {holdings_json} {sector_breakdown}
+    · holdings_json: [{ticker, name, sector, entry_price, current_price,
+      weight_pct, pnl_pct, news:[{end_date, direction, cause, vol_insight}]}]
+  - 출력 JSON 필수 키(REQUIRED_KEYS): overall_summary, per_holding,
+    risk_alignment, suggestions, confidence
+    · per_holding: 종목별 코멘트 리스트 (예: [{ticker, comment}])
 
 MLflow Gateway / Prompt Registry / 뉴스·프로필 데이터가 없을 경우 graceful 하게
 degrade 한다 (예외를 잡고 None 반환 → 호출 측은 ai_analysis = NULL 저장).
 
 보안(.claude/rules/security.md): 보유 종목은 PII 이므로 INFO 이상 레벨로 로깅하지
-않으며, MLflow span 속성에도 원본 PII(보유 수량·평가액·생년)는 넣지 않는다.
+않으며, MLflow span 속성에도 원본 PII(보유 수량·평가액)는 넣지 않는다.
 """
 
 import json
@@ -68,13 +84,11 @@ SUMMARY_PREFIX = "summary"
 # 현금성/비주식 자산 — 뉴스 조회에서 제외
 CASH_IDS = {"USD", "KRW", "CASH"}
 
-# portfolio_analysis/1 에 등록된 구조화 출력 스키마의 필수 키
+# portfolio_analysis 프롬프트(MLflow 등록)의 구조화 출력 스키마 필수 키.
+# 입력을 4종 핵심(성향·뉴스·진입가·현재가) 중심으로 단순화하면서 출력도 축소했다.
 REQUIRED_KEYS = {
     "overall_summary",
-    "concentration",
-    "sector_allocation",
-    "performance",
-    "news_highlights",
+    "per_holding",
     "risk_alignment",
     "suggestions",
     "confidence",
@@ -96,7 +110,9 @@ def _parse_llm_response(text: str) -> dict[str, Any]:
         raise ValueError("LLM 응답이 비어 있습니다")
 
     if "```" in content:
-        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+        # greedy `\{.*\}` 로 최외곽 객체를 잡는다 — per_holding 처럼 중첩 객체가
+        # 있을 때 non-greedy 는 첫 내부 `}` 에서 잘려 파싱이 깨진다.
+        m = re.search(r"```(?:json)?\s*(\{.*\})\s*```", content, re.DOTALL)
         if m:
             content = m.group(1)
 
@@ -214,6 +230,8 @@ def aggregate_holdings(
             "ticker": ticker,
             "name": info.get("name") or ticker,
             "sector": info.get("sector") or "기타",
+            "entry_price": avg_price,
+            "current_price": cur_price,
             "cur_val": cur_val,
             "cost": cost,
         })
@@ -234,6 +252,8 @@ def aggregate_holdings(
             "ticker": r["ticker"],
             "name": r["name"],
             "sector": r["sector"],
+            "entry_price": float(r["entry_price"]),
+            "current_price": float(r["current_price"]),
             "weight_pct": round(weight, 1),
             "pnl_pct": round(pnl_pct, 1),
             "cur_val": float(r["cur_val"]),
@@ -358,53 +378,36 @@ def _load_summary_object(s3_client: Any, bucket: str, key: str) -> Optional[dict
         return None
 
 
-def _build_news_context(news_by_ticker: dict[str, dict[str, Any]]) -> str:
-    """종목별 뉴스 요약을 프롬프트용 텍스트 블록으로 변환"""
-    if not news_by_ticker:
-        return "(최근 30일 관련 뉴스 없음)"
-
-    parts = []
-    for ticker, info in news_by_ticker.items():
-        items = info["news"]
-        if not items:
-            continue
-        header = f"▶ {info['name']}({ticker})"
-        lines = [
-            f"  · [{n['end_date']} {n['direction']}] {n['cause']}"
-            + (f" / 수급: {n['vol_insight']}" if n["vol_insight"] else "")
-            for n in items
-        ]
-        parts.append(header + "\n" + "\n".join(lines))
-
-    return "\n\n".join(parts) if parts else "(최근 30일 관련 뉴스 없음)"
-
-
-def _age_band(birth_year: Optional[int]) -> str:
-    """생년 → 연령대 문자열 (원본 생년은 노출/로깅하지 않기 위해 밴드로 변환)"""
-    if not birth_year:
+def _get_invest_type(user: Optional[User]) -> str:
+    """투자 성향(invest_type) 조회 — 개인화 입력. 연령/성별 등은 입력에서 제외한다."""
+    if user is None or not user.invest_type:
         return "미상"
-    age = date.today().year - int(birth_year)
-    if age < 20:
-        return "10대"
-    if age >= 70:
-        return "70대 이상"
-    return f"{(age // 10) * 10}대"
+    return user.invest_type
 
 
-def _gender_label(gender: Any) -> str:
-    value = getattr(gender, "value", gender)
-    return {"M": "남성", "F": "여성"}.get(value, "미상")
+def _build_holdings_payload(
+    weights: list[dict[str, Any]],
+    news_by_ticker: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """종목별 {진입가·현재가·비중·손익·뉴스} 를 묶어 LLM 입력용 payload 로 구성.
 
-
-def _build_investor_profile(user: Optional[User]) -> dict[str, str]:
-    """투자자 프로필을 마스킹된 표현으로 구성 (원본 PII 미노출)"""
-    if user is None:
-        return {"invest_type": "미상", "age_band": "미상", "gender": "미상"}
-    return {
-        "invest_type": user.invest_type or "미상",
-        "age_band": _age_band(user.birth_year),
-        "gender": _gender_label(user.gender),
-    }
+    4종 핵심 입력(성향·뉴스·진입가·현재가) 중 종목 단위인 뉴스/진입가/현재가를
+    한 종목 단위로 묶어, LLM 이 종목별로 일관되게 분석하도록 한다.
+    """
+    payload: list[dict[str, Any]] = []
+    for w in weights:
+        ticker = w["ticker"]
+        payload.append({
+            "ticker": ticker,
+            "name": w["name"],
+            "sector": w["sector"],
+            "entry_price": w["entry_price"],
+            "current_price": w["current_price"],
+            "weight_pct": w["weight_pct"],
+            "pnl_pct": w["pnl_pct"],
+            "news": news_by_ticker.get(ticker, {}).get("news", []),
+        })
+    return payload
 
 
 # ── 메인 분석 진입점 ──────────────────────────────────────────────────
@@ -468,27 +471,24 @@ def _analyze_portfolio_traced(
             name = asset_info.get(ticker, {}).get("name") or ticker
             news_by_ticker[ticker] = {"name": name, "news": news}
             total_news += len(news)
-    news_context = _build_news_context(news_by_ticker)
 
-    # 투자자 프로필
+    # 투자 성향 (개인화 입력 — 연령/성별 등 인구통계는 제외)
     user = db.query(User).filter(User.user_id == user_id).first()
-    profile = _build_investor_profile(user)
+    invest_type = _get_invest_type(user)
+
+    # 종목별 {진입가·현재가·비중·손익·뉴스} payload — 4종 핵심 입력의 종목 단위 묶음
+    holdings_payload = _build_holdings_payload(aggregation["weights"], news_by_ticker)
 
     # 프롬프트 로드 & 렌더링
     system_prompt, user_template = _load_prompt()
     user_prompt = _render(
         user_template,
-        invest_type=profile["invest_type"],
-        age_band=profile["age_band"],
-        gender=profile["gender"],
+        invest_type=invest_type,
         total_return_pct=f"{aggregation['total_return_pct']:+.2f}%",
         total_value=f"{aggregation['total_value']:,.0f}",
         total_cost=f"{aggregation['total_cost']:,.0f}",
-        holdings_json=json.dumps(aggregation["weights"], ensure_ascii=False),
+        holdings_json=json.dumps(holdings_payload, ensure_ascii=False),
         sector_breakdown=json.dumps(aggregation["sector_breakdown"], ensure_ascii=False),
-        top_gainers=json.dumps(aggregation["top_gainers"], ensure_ascii=False),
-        top_losers=json.dumps(aggregation["top_losers"], ensure_ascii=False),
-        news_context=news_context,
     )
     full_prompt = f"{system_prompt}\n\n{user_prompt}".strip() if system_prompt else user_prompt
 
@@ -496,13 +496,13 @@ def _analyze_portfolio_traced(
     token_tracker = TokenTracker()
 
     with mlflow.start_span(name="portfolio_analysis") as span:
-        # 보안: 원본 PII(보유 수량·평가액·생년) 대신 종목 수/뉴스 수/마스킹 프로필만 기록
+        # 보안: 원본 PII(보유 수량·평가액) 대신 종목 수/뉴스 수/투자 성향만 기록
         span.set_inputs({
             "tickers": tickers,
             "equity_count": len(equity_tickers),
             "news_count": total_news,
             "endpoint": GATEWAY_ENDPOINT,
-            "investor_profile": profile,
+            "invest_type": invest_type,
         })
 
         content, input_tokens, output_tokens = gateway_client.call_with_usage(
