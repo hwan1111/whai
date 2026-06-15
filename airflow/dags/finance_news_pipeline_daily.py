@@ -114,7 +114,7 @@ task_collect_all = BashOperator(
     task_id="collect_all_news",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/collect_all_news.py "
+        "python script/news_data/collect_all_news.py "
         "--start {{ ds }} --end {{ ds }}"
     ),
     dag=dag,
@@ -128,7 +128,7 @@ task_upload_raw = BashOperator(
     task_id="upload_raw_to_s3",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/upload_raw_to_s3.py "
+        "python script/news_data/upload_raw_to_s3.py "
         "--since {{ ds }}"
     ),
     dag=dag,
@@ -143,7 +143,7 @@ task_preprocess = BashOperator(
     task_id="preprocess_upload",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/preprocess/preprocess_and_upload.py "
+        "python script/news_data/preprocess/preprocess_and_upload.py "
         "--since {{ ds }}"
     ),
     dag=dag,
@@ -153,7 +153,7 @@ task_preprocess_kospi200 = BashOperator(
     task_id="preprocess_upload_kospi200",
     bash_command=(
         f"cd {ROOT} && "
-        ".venv/bin/python script/news_data/preprocess/preprocess_and_upload_kospi200.py "
+        "python script/news_data/preprocess/preprocess_and_upload_kospi200.py "
         "--since {{ ds }}"
     ),
     dag=dag,
@@ -209,7 +209,7 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
     if end_date is None:
         raise AirflowSkipException(f"[{ticker_code}] 전처리 뉴스 없음 ({news_ticker})")
 
-    ca_path = str(ROOT / "config" / "certs" / "ca.pem")
+    ca_path = str(Path("/opt/certs/ca.pem"))
     conn = pymysql.connect(
         host="mysql-12676458-whai.b.aivencloud.com", port=16935,
         db="whai_service",
@@ -250,7 +250,7 @@ def _regime_summary_task(ticker_code: str, ticker_name: str, sector: str,
 
     analysis_ticker = s3_ticker or ticker_code
     cmd = [
-        str(ROOT / ".venv" / "bin" / "python"),
+        sys.executable,
         str(ROOT / "script" / "news_data" / "eval" / "regime_news_summary.py"),
         "--provider", LLM_PROVIDER,
         "--ticker",   analysis_ticker,
@@ -284,7 +284,7 @@ def _load_db_task(ticker_code: str, **context) -> None:
     db_ticker   = _DB_TICKER.get(file_ticker, file_ticker)
 
     cmd = [
-        str(ROOT / ".venv" / "bin" / "python"),
+        sys.executable,
         str(ROOT / "script" / "others" / "upload_regime_to_db.py"),
         "--ticker", file_ticker,
         "--mode",   "append",
