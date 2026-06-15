@@ -13,9 +13,8 @@ import pytest
 from src.llm_utils import portfolio_analyzer as pa
 from src.llm_utils.portfolio_analyzer import (
     REQUIRED_KEYS,
-    _age_band,
-    _build_investor_profile,
-    _build_news_context,
+    _build_holdings_payload,
+    _get_invest_type,
     _parse_llm_response,
     aggregate_holdings,
     analyze_portfolio,
@@ -31,10 +30,9 @@ def _isolate_mlflow_tracking(tmp_path, monkeypatch):
 def _full_analysis() -> dict:
     return {
         "overall_summary": "전반적으로 균형 잡힌 포트폴리오입니다.",
-        "concentration": "삼성전자 비중이 다소 높습니다.",
-        "sector_allocation": "반도체 섹터에 집중되어 있습니다.",
-        "performance": "총 수익률은 마이너스 구간입니다.",
-        "news_highlights": "최근 반도체 업황 회복 뉴스가 있습니다.",
+        "per_holding": [
+            {"ticker": "005930", "comment": "최근 반도체 업황 회복으로 평가익 구간입니다."},
+        ],
         "risk_alignment": "공격투자형 성향과 부합합니다.",
         "suggestions": "섹터 분산을 권장합니다.",
         "confidence": 0.8,
@@ -89,6 +87,10 @@ def test_aggregate_holdings_weights_sectors_and_return():
     assert agg["sector_breakdown"][0]["weight_pct"] == pytest.approx(100.0, abs=0.1)
     assert agg["top_gainers"][0]["ticker"] == "005930"
     assert agg["top_losers"][0]["ticker"] == "000660"
+    # 진입가(avgPrice)/현재가(snapshotPrice)가 종목별로 노출되어야 한다
+    top = agg["weights"][0]
+    assert top["entry_price"] == pytest.approx(100.0, abs=0.01)
+    assert top["current_price"] == pytest.approx(150.0, abs=0.01)
 
 
 def test_aggregate_holdings_uses_avg_price_when_snapshot_price_missing():
@@ -105,40 +107,52 @@ def test_aggregate_holdings_uppercases_ticker():
     assert agg["weights"][0]["ticker"] == "AAPL"
 
 
-# ── 프로필 / 뉴스 컨텍스트 ───────────────────────────────────────────
+# ── 투자 성향 / 종목별 payload ───────────────────────────────────────
 
 
-def test_age_band_buckets_by_decade():
-    this_year = pa.date.today().year
-    assert _age_band(this_year - 35) == "30대"
-    assert _age_band(this_year - 8) == "10대"
-    assert _age_band(this_year - 75) == "70대 이상"
-    assert _age_band(None) == "미상"
-
-
-def test_build_investor_profile_masks_birth_year():
+def test_get_invest_type_returns_value():
     user = SimpleNamespace(invest_type="공격투자형", birth_year=1990, gender="M")
-    profile = _build_investor_profile(user)
-    assert profile["invest_type"] == "공격투자형"
-    assert profile["gender"] == "남성"
-    assert "1990" not in json.dumps(profile, ensure_ascii=False)  # 원본 생년 미노출
+    assert _get_invest_type(user) == "공격투자형"
 
 
-def test_build_news_context_placeholder_when_empty():
-    assert _build_news_context({}) == "(최근 30일 관련 뉴스 없음)"
+def test_get_invest_type_defaults_when_missing():
+    assert _get_invest_type(None) == "미상"
+    assert _get_invest_type(SimpleNamespace(invest_type=None)) == "미상"
 
 
-def test_build_news_context_formats_per_ticker():
-    ctx = _build_news_context({
+def test_build_holdings_payload_merges_price_and_news():
+    weights = [{
+        "ticker": "005930", "name": "삼성전자", "sector": "반도체",
+        "entry_price": 100.0, "current_price": 150.0,
+        "weight_pct": 60.0, "pnl_pct": 50.0, "cur_val": 1500.0, "cost": 1000.0,
+    }]
+    news_by_ticker = {
         "005930": {
             "name": "삼성전자",
-            "news": [
-                {"end_date": "2026-06-01", "direction": "상승", "cause": "실적 호조", "vol_insight": ""},
-            ],
+            "news": [{"end_date": "2026-06-01", "direction": "상승",
+                      "cause": "실적 호조", "vol_insight": ""}],
         }
-    })
-    assert "삼성전자(005930)" in ctx
-    assert "실적 호조" in ctx
+    }
+    payload = _build_holdings_payload(weights, news_by_ticker)
+    assert len(payload) == 1
+    item = payload[0]
+    # 4종 핵심 입력 중 종목 단위(진입가·현재가·뉴스)가 한 종목으로 묶여야 한다
+    assert item["entry_price"] == 100.0
+    assert item["current_price"] == 150.0
+    assert item["news"][0]["cause"] == "실적 호조"
+    # 보조 집계(비중·손익)도 함께 노출
+    assert item["weight_pct"] == 60.0
+    assert item["pnl_pct"] == 50.0
+
+
+def test_build_holdings_payload_empty_news_when_missing():
+    weights = [{
+        "ticker": "AAPL", "name": "Apple", "sector": "기타",
+        "entry_price": 10.0, "current_price": 10.0,
+        "weight_pct": 100.0, "pnl_pct": 0.0, "cur_val": 10.0, "cost": 10.0,
+    }]
+    payload = _build_holdings_payload(weights, {})
+    assert payload[0]["news"] == []
 
 
 # ── S3 요약 로드 (summary/{ticker}/{start}_{end}.json) ───────────────
@@ -223,7 +237,7 @@ def _patch_pipeline(monkeypatch, gateway_return):
         {"end_date": "2026-06-01", "direction": "상승", "cause": "실적 호조", "vol_insight": "거래량 증가"},
     ]))
     monkeypatch.setattr(pa, "_load_prompt", MagicMock(return_value=(
-        "시스템", "프로필:{invest_type} {age_band} {gender}\n종목:{holdings_json}\n뉴스:{news_context}",
+        "시스템", "성향:{invest_type}\n종목:{holdings_json}\n섹터:{sector_breakdown}",
     )))
     mock_gateway = MagicMock()
     mock_gateway.call_with_usage.return_value = gateway_return
@@ -277,10 +291,10 @@ def test_analyze_portfolio_sets_mlflow_standard_token_usage_and_cost(monkeypatch
     assert attrs["mlflow.llm.cost"]["input_cost"] == pytest.approx(100 / 1_000_000 * 0.003)
     assert attrs["mlflow.llm.cost"]["output_cost"] == pytest.approx(50 / 1_000_000 * 0.009)
     assert attrs["endpoint"] == "mid_performance_llm"
-    # 보안: span 입력에 원본 PII 대신 종목 수/뉴스 수/마스킹 프로필만 기록
+    # 보안: span 입력에 원본 PII 대신 종목 수/뉴스 수/투자 성향만 기록
     inputs = mock_span.set_inputs.call_args[0][0]
     assert inputs["endpoint"] == "mid_performance_llm"
-    assert "investor_profile" in inputs
+    assert inputs["invest_type"] == "미상"  # db user=None → 미상
 
 
 def test_analyze_portfolio_returns_none_on_empty_holdings():
