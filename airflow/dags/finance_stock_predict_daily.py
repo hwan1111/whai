@@ -1,8 +1,8 @@
 """
-매일 장 마감 후 (06:30 UTC = 15:30 KST) 종목별 D+5 주가 예측 DAG.
+매일 장 마감 후 종목·KOSPI·USD/KRW D+5 예측 DAG.
 
 흐름:
-  predict_and_save(×10 병렬)
+  predict_and_save(×12 동적 매핑)
 
 predict_and_save 태스크:
   1. 1순위 모델로 D+5 예측 (Choi: ARIMA/Prophet/VECM | SU: sklearn/PatchTST)
@@ -227,6 +227,47 @@ MODEL_PRIORITY: dict[str, dict] = {
             },
         },
     },
+    '000000': {
+        'name': 'KOSPI',
+        'asset_type': 'index',
+        'yf_symbol': '^KS11',
+        'drift_enabled': False,
+        'priority_1': {
+            'model': 'Prophet', 'source': 'Choi', 'mape': None,
+            'config': {
+                'preprocess': 'log', 'train_window': 'Long',
+            },
+        },
+        'priority_2': {
+            'model': 'ARIMA', 'source': 'Choi', 'mape': None,
+            'config': {
+                'order': (2, 0, 1), 'preprocess': 'log',
+                'train_window': 'Long',
+            },
+        },
+    },
+    'USD': {
+        'name': 'USD/KRW',
+        'asset_type': 'fx',
+        'yf_symbol': 'KRW=X',
+        'drift_enabled': False,
+        'priority_1': {
+            'model': 'VECM', 'source': 'Choi', 'mape': None,
+            'config': {
+                'preprocess': 'level',
+                'train_window': 'Long',
+                'exog_cols': ['KOSPI200', 'WTI', 'VIX'],
+                'fixed_cols': ['close'],
+                'deterministic': 'co',
+            },
+        },
+        'priority_2': {
+            'model': 'Prophet', 'source': 'Choi', 'mape': None,
+            'config': {
+                'preprocess': 'log', 'train_window': 'Long',
+            },
+        },
+    },
 }
 
 
@@ -392,10 +433,10 @@ def finance_stock_predict_daily():
             }
 
         def _fetch_choi() -> dict:
-            """yfinance에서 종목·외생변수 데이터 수집."""
+            """yfinance에서 대상 자산·외생변수 데이터 수집."""
             import yfinance as yf
             start  = "2020-01-01"
-            yfcode = f"{ticker}.KS"
+            yfcode = info.get("yf_symbol", f"{ticker}.KS")
 
             def _col(raw_df, name: str):
                 """MultiIndex/단일 컬럼 모두에서 name을 1차원 Series로 추출.
@@ -413,7 +454,14 @@ def finance_stock_predict_daily():
                 yfcode, start=start, auto_adjust=True, progress=False, timeout=60
             )
             close  = _col(raw, "Close").dropna().rename("close")
-            volume = _col(raw, "Volume").rename("volume")
+            try:
+                volume = _col(raw, "Volume").reindex(close.index).rename("volume")
+                if volume.dropna().empty:
+                    raise ValueError("volume data is empty")
+                volume = volume.ffill().fillna(0.0)
+            except (KeyError, ValueError):
+                # 환율처럼 거래량이 없는 자산도 동일 파이프라인에서 처리한다.
+                volume = pd.Series(1.0, index=close.index, name="volume")
 
             exog = {}
             for col, sym in [("KOSPI200","^KS200"), ("USDKRW","KRW=X"),
@@ -757,6 +805,11 @@ def finance_stock_predict_daily():
             p1        = info["priority_1"]
             p2        = info["priority_2"]
             target_dt = (today + BDay(HORIZON)).date()
+            drift_enabled = info.get("drift_enabled", True)
+
+            def _threshold(priority: dict) -> float:
+                baseline = priority.get("mape")
+                return round(baseline * DRIFT_MULTIPLIER, 4) if baseline is not None else 0.0
 
             choi_data: dict | None = None
             su_df:     pd.DataFrame | None = None
@@ -779,7 +832,7 @@ def finance_stock_predict_daily():
                     f"[{ticker}/{name}] model_config 강제 전환 "
                     f"→ {p2['model']}({p2['source']}) 사용"
                 )
-                threshold = round(p2["mape"] * DRIFT_MULTIPLIER, 4)
+                threshold = _threshold(p2)
                 if p2["source"] == "Choi":
                     choi_data = _fetch_choi()
                     d5, vol, prices = _run_choi(p2, choi_data)
@@ -793,7 +846,7 @@ def finance_stock_predict_daily():
                 model_name   = p2["model"]
                 model_source = p2["source"]
             elif p1["source"] == "Choi":
-                threshold = round(p1["mape"] * DRIFT_MULTIPLIER, 4)
+                threshold = _threshold(p1)
                 choi_data = _fetch_choi()
                 d5, vol, prices = _run_choi(p1, choi_data)
                 base_price    = float(choi_data["close"].iloc[-1])
@@ -802,7 +855,7 @@ def finance_stock_predict_daily():
                 model_name   = p1["model"]
                 model_source = p1["source"]
             else:
-                threshold = round(p1["mape"] * DRIFT_MULTIPLIER, 4)
+                threshold = _threshold(p1)
                 su_df = _fetch_su()
                 d5, vol, forecast_json = _run_su(p1, su_df)
                 base_price = float(su_df["close"].iloc[-1])
@@ -815,7 +868,11 @@ def finance_stock_predict_daily():
 
             # Step 2: 드리프트 감지 ───────────────────────────────────────
             rolling_mape, n_samples = _rolling_mape()
-            drift   = rolling_mape is not None and rolling_mape > threshold
+            drift   = (
+                drift_enabled
+                and rolling_mape is not None
+                and rolling_mape > threshold
+            )
             retrain = False
 
             # Step 3: 드리프트 시 2순위 실행 (force_priority 없을 때만) ──
@@ -844,7 +901,8 @@ def finance_stock_predict_daily():
                     model_source = p2["source"]
 
                     # 2순위도 임계값 초과 → 재학습 필요
-                    if rolling_mape > p2["mape"] * DRIFT_MULTIPLIER:
+                    p2_threshold = _threshold(p2)
+                    if p2_threshold and rolling_mape > p2_threshold:
                         retrain = True
                         log.warning(f"[{ticker}/{name}] 2순위도 임계값 초과 → 재학습 필요")
 
