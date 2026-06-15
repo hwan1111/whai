@@ -123,6 +123,12 @@ docs/
 *.pickle
 logs/
 
+# data/ 규칙이 소스 디렉터리 src/data/ 까지 무시하는 문제 보정 —
+# 소스 모듈 regime_db_loader.py 만 추적, 실제 데이터 파일은 계속 무시한다.
+!src/data/
+src/data/*
+!src/data/regime_db_loader.py
+
 # ============================================
 # IDE & 에디터
 # ============================================
