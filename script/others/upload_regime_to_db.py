@@ -224,6 +224,7 @@ def upload(ticker: str, mode: str = "skip", dry_run: bool = False,
 
             inserted_regime  = 0
             inserted_summary = 0
+            deleted_overlap  = 0
 
             for rec in summaries:
                 rid       = rec["regime_id"]
@@ -246,6 +247,32 @@ def upload(ticker: str, mode: str = "skip", dry_run: bool = False,
                 if dry_run:
                     print(f"  [DRY] regime  #{rid}  {rec['start']}~{rec['end']}  {rec.get('direction')}")
                     continue
+
+                # append 모드: 날짜 범위가 겹치는 기존 레코드 삭제 후 신규 삽입
+                # (재감지로 날짜 경계가 달라진 경우 → 최신 감지 결과가 더 정확하므로 교체)
+                if mode == "append":
+                    cur.execute(
+                        "SELECT id FROM regime "
+                        "WHERE ticker=%s AND start_date <= %s AND end_date >= %s "
+                        "AND regime_id != %s",
+                        (db_ticker, rec["end"], rec["start"], rid),
+                    )
+                    overlap_ids = [r["id"] for r in cur.fetchall()]
+                    if overlap_ids:
+                        placeholders = ",".join(["%s"] * len(overlap_ids))
+                        cur.execute(
+                            f"DELETE FROM regime_summary WHERE regime_pk IN ({placeholders})",
+                            overlap_ids,
+                        )
+                        cur.execute(
+                            f"DELETE FROM regime WHERE id IN ({placeholders})",
+                            overlap_ids,
+                        )
+                        deleted_overlap += len(overlap_ids)
+                        print(
+                            f"  [overlap 제거] #{rid} {rec['start']}~{rec['end']} 와 겹치는 "
+                            f"{len(overlap_ids)}건 삭제 (id={overlap_ids})"
+                        )
 
                 cur.execute(regime_sql, regime_params)
 
@@ -297,7 +324,8 @@ def upload(ticker: str, mode: str = "skip", dry_run: bool = False,
             )
             summary_cnt = cur.fetchone()["cnt"]
 
-        print(f"\n  regime 입력:         {inserted_regime}건")
+        print(f"\n  overlap 제거:        {deleted_overlap}건")
+        print(f"  regime 입력:         {inserted_regime}건")
         print(f"  regime_summary 입력: {inserted_summary}건")
         print(f"  DB 확인 — regime: {regime_cnt}건  regime_summary: {summary_cnt}건")
 

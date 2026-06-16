@@ -386,7 +386,7 @@ function PredictionAnalysisModal({ open, onClose, ticker, activeAssets, pd, lege
     ? (prediction.pred_price_d5 - prediction.base_price) / prediction.base_price * 100
     : 0;
   const predictedColor = predictedChange >= 0 ? '#dc2626' : '#2563eb';
-  const predictionUnit = ticker === '000000' ? 'pt' : '원';
+  const predictionUnit = ticker === '000000' ? '' : '원';
   const predictionDigits = ticker === '000000' || ticker === 'USD' ? 2 : 0;
   const formatPredictionValue = value => Number(value).toLocaleString('ko-KR', {
     minimumFractionDigits: 0,
@@ -397,10 +397,23 @@ function PredictionAnalysisModal({ open, onClose, ticker, activeAssets, pd, lege
     <div className="prediction-modal-backdrop" onMouseDown={onClose}>
       <div className="prediction-modal" onMouseDown={event => event.stopPropagation()}>
         <div className="prediction-modal-header">
-          <div>
-            <div className="prediction-modal-eyebrow">WHAi 자산 예측</div>
-            <div className="prediction-modal-title">
-              {ASSETS[ticker]?.label || STOCK_NAMES[ticker] || ticker} 예측 분석
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {ticker === '000000' ? (
+              <img src="/assets/flags/kr.png" alt="대한민국" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }} />
+            ) : ticker === 'USD' ? (
+              <img src="/assets/flags/us.png" alt="미국" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }} />
+            ) : STOCK_NAMES[ticker] ? (
+              <img src={LOGO(ticker)} alt={STOCK_NAMES[ticker]} style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'contain', background: '#f1f5f9', padding: 2 }} />
+            ) : null}
+            <div>
+              <div className="prediction-modal-eyebrow">WHAi 자산 예측</div>
+              <div className="prediction-modal-title">
+                {ticker === '000000'
+                  ? 'KOSPI 지수 예측 분석'
+                  : ticker === 'USD'
+                  ? 'USD/KRW 환율 예측 분석'
+                  : `${STOCK_NAMES[ticker] || ticker} 주가 예측 분석`}
+              </div>
             </div>
           </div>
           <button type="button" className="prediction-modal-close" onClick={onClose}>✕</button>
@@ -413,13 +426,18 @@ function PredictionAnalysisModal({ open, onClose, ticker, activeAssets, pd, lege
                 <strong>시장 흐름 및 예측</strong>
                 <span>실선은 실제 흐름, 보라색 점선과 음영은 선택 자산의 D+1~D+5 예측 구간입니다.</span>
               </div>
+              {prediction && (
+                <div style={{ color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  기준 {prediction.date} → 목표 {prediction.target_date}
+                </div>
+              )}
             </div>
             <div className="prediction-history-layout">
               <div className="prediction-history-main">
                 <div className="prediction-history-chart">
                   <CombinedPredictionChart
                     pd={pd}
-                    activeAssets={activeAssets}
+                    activeAssets={[ticker]}
                     prediction={prediction}
                     ticker={ticker}
                   />
@@ -430,13 +448,11 @@ function PredictionAnalysisModal({ open, onClose, ticker, activeAssets, pd, lege
                   )}
                 </div>
                 <div className="prediction-history-legend">
-                  {legend.map(item => (
-                    <span key={item.id}>
-                      <i style={{ background: ASSETS[item.id]?.color }} />
-                      {ASSETS[item.id]?.label}
-                    </span>
-                  ))}
-                  {prediction && <span className="prediction-legend-forecast"><i />{ASSETS[ticker]?.label || ticker} 예측</span>}
+                  <span>
+                    <i style={{ background: ASSETS[ticker]?.color || '#64748b' }} />
+                    {ASSETS[ticker]?.label || STOCK_NAMES[ticker] || ticker}
+                  </span>
+                  {prediction && <span className="prediction-legend-forecast"><i />{ASSETS[ticker]?.label || STOCK_NAMES[ticker] || ticker} 예측</span>}
                 </div>
               </div>
               {error ? (
@@ -450,38 +466,60 @@ function PredictionAnalysisModal({ open, onClose, ticker, activeAssets, pd, lege
                 </div>
               ) : prediction ? (
                 <aside className="prediction-summary-panel">
-                  <div className="prediction-details">
-                    <div className="prediction-summary">
-                      <div>
-                        <span>D+5 예상가</span>
-                        <strong style={{ color: predictedColor }}>
+                  <div className="pred-grid">
+                    <div className="pred-card pred-card--hero">
+                      <div className="pred-card-label">D+5 예상가</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                        <strong className="pred-card-val--hero" style={{ color: predictedColor }}>
                           {formatPredictionValue(prediction.pred_price_d5)}{predictionUnit}
                         </strong>
-                        <em style={{ color: predictedColor }}>
+                        <em style={{ color: predictedColor, fontSize: 14, fontStyle: 'normal', fontWeight: 800 }}>
                           {predictedChange >= 0 ? '▲' : '▼'} {Math.abs(predictedChange).toFixed(2)}%
                         </em>
                       </div>
-                      <div className="prediction-target-date">
-                        기준 {prediction.date}<br />목표 {prediction.target_date}
-                      </div>
                     </div>
-                    <div className="prediction-metrics">
-                      <div><span>기준 종가</span><strong>{formatPredictionValue(prediction.base_price)}{predictionUnit}</strong></div>
-                      <div><span>{Math.round(prediction.ci_pct * 100)}% 신뢰구간</span><strong>{formatPredictionValue(prediction.ci_lower_d5)} ~ {formatPredictionValue(prediction.ci_upper_d5)}{predictionUnit}</strong></div>
-                      <div><span>사용 모델</span><strong>{prediction.model_name}</strong></div>
-                      <div><span>모델 출처</span><strong>{prediction.model_source} · {prediction.model_used === 'priority_1' ? '1순위' : '2순위'}</strong></div>
-                      <div><span>최근 MAPE</span><strong>{prediction.rolling_mape == null ? '산출 전' : `${prediction.rolling_mape.toFixed(2)}%`}</strong></div>
-                      <div>
-                        <span>모델 상태</span>
-                        <strong className={prediction.drift_detected ? 'prediction-status-warning' : prediction.threshold === 0 ? '' : 'prediction-status-ok'}>
-                          {prediction.drift_detected ? '드리프트 감지' : prediction.threshold === 0 ? '기준 수집 중' : '정상'}
-                        </strong>
-                      </div>
+
+                    <div className="pred-card">
+                      <div className="pred-card-label">기준 종가</div>
+                      <div className="pred-card-val">{formatPredictionValue(prediction.base_price)}{predictionUnit}</div>
                     </div>
-                    <p className="prediction-disclaimer">
-                      예측값은 통계·머신러닝 모델의 추정치이며 투자 수익을 보장하지 않습니다.
-                    </p>
+                    <div className="pred-card">
+                      <div className="pred-card-label">사용 모델</div>
+                      <div className="pred-card-val">{prediction.model_name}</div>
+                    </div>
+
+                    <div className="pred-card">
+                      <div className="pred-card-label">{Math.round(prediction.ci_pct * 100)}% 신뢰 하한</div>
+                      <div className="pred-card-val">{formatPredictionValue(prediction.ci_lower_d5)}{predictionUnit}</div>
+                    </div>
+                    <div className="pred-card">
+                      <div className="pred-card-label">{Math.round(prediction.ci_pct * 100)}% 신뢰 상한</div>
+                      <div className="pred-card-val">{formatPredictionValue(prediction.ci_upper_d5)}{predictionUnit}</div>
+                    </div>
+
+                    {prediction.forecast?.length > 0 && (
+                      <div className="pred-card pred-card--forecast">
+                        <div className="pred-card-label">일별 예측가</div>
+                        {prediction.forecast.map((item, i) => {
+                          const pct = (Number(item.price) - prediction.base_price) / prediction.base_price * 100;
+                          const color = pct >= 0 ? '#dc2626' : '#2563eb';
+                          return (
+                            <div key={item.date} className="prediction-forecast-row">
+                              <span className="prediction-forecast-day">D+{i + 1}</span>
+                              <span className="prediction-forecast-date">{item.date.slice(5).replace('-', '/')}</span>
+                              <span className="prediction-forecast-price">{formatPredictionValue(item.price)}{predictionUnit}</span>
+                              <span className="prediction-forecast-chg" style={{ color }}>
+                                <span style={{ color: '#94a3b8', fontWeight: 400, fontSize: 11 }}>분석일 기준 </span>{pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
+                  <p className="prediction-disclaimer">
+                    예측값은 통계·머신러닝 모델의 추정치이며 투자 수익을 보장하지 않습니다.
+                  </p>
                 </aside>
               ) : null}
             </div>

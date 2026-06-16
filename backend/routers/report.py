@@ -1,8 +1,10 @@
 import json
 import logging
+import os
 import re
 from datetime import date, timedelta
 
+import boto3
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,6 +14,20 @@ from backend.db import get_db
 from backend.routers.auth import _get_user_id
 from src.llm_utils import portfolio_analyzer
 from src.llm_utils.gateway_client import GatewayClient
+
+_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "fisa-news-archive")
+_S3_REGION = "ap-northeast-2"
+
+
+def _fetch_cause_from_s3(s3_client, ticker: str, start_date: str, end_date: str) -> str:
+    """summary/{ticker}/{start}_{end}.json 에서 cause 추출."""
+    key = f"summary/{ticker}/{start_date}_{end_date}.json"
+    try:
+        resp = s3_client.get_object(Bucket=_S3_BUCKET, Key=key)
+        payload = json.loads(resp["Body"].read().decode("utf-8"))
+        return (payload.get("llm_analysis") or {}).get("cause", "")
+    except Exception:
+        return ""
 
 logger = logging.getLogger(__name__)
 
@@ -100,22 +116,52 @@ def get_factor_insights(
     user_id: str = Depends(_get_user_id),
     db: Session = Depends(get_db),
 ) -> dict:
+    today_str = date.today().isoformat()
+
+    # DAG가 미리 생성한 캐시 조회 (오늘치가 있으면 LLM 호출 없이 즉시 반환)
+    cached = db.execute(
+        text(
+            "SELECT labels, directions, strengths, descs, advice "
+            "FROM factor_insight "
+            "WHERE ticker = :ticker AND date = :date"
+        ),
+        {"ticker": body.ticker, "date": today_str},
+    ).fetchone()
+    if cached:
+        return {
+            "labels": json.loads(cached.labels),
+            "directions": json.loads(cached.directions),
+            "strengths": json.loads(cached.strengths),
+            "descs": json.loads(cached.descs),
+            "advice": json.loads(cached.advice),
+        }
+
+    # 캐시 미스 — 실시간 LLM 호출 (DAG 실패 / 장중 첫 요청 시 폴백)
     cutoff = (date.today() - timedelta(days=21)).isoformat()
     rows = db.execute(
         text(
-            "SELECT r.direction, r.cum_return, rs.cause "
-            "FROM regime r "
-            "LEFT JOIN regime_summary rs ON rs.regime_pk = r.id "
-            "WHERE r.ticker = :ticker AND r.end_date >= :cutoff "
-            "ORDER BY r.end_date DESC LIMIT 6"
+            "SELECT start_date, end_date, direction, cum_return "
+            "FROM regime "
+            "WHERE ticker = :ticker AND end_date >= :cutoff "
+            "ORDER BY end_date DESC LIMIT 6"
         ),
         {"ticker": body.ticker, "cutoff": cutoff},
     ).fetchall()
 
-    news_lines = [
-        f"- {r.direction or ''} {(r.cum_return or 0):.1f}%: {r.cause or ''}"
-        for r in rows if r.cause
-    ]
+    # S3 summary/{ticker}/{start}_{end}.json 에서 cause 로드
+    news_lines: list[str] = []
+    try:
+        s3 = boto3.client("s3", region_name=_S3_REGION)
+        for r in rows:
+            cause = _fetch_cause_from_s3(
+                s3, body.ticker, str(r.start_date), str(r.end_date)
+            )
+            if cause:
+                news_lines.append(
+                    f"- {r.direction or ''} {(r.cum_return or 0):.1f}%: {cause}"
+                )
+    except Exception as e:
+        logger.warning("S3 뉴스 로드 실패 (컨텍스트 없이 진행): %s", e)
     news_context = "\n".join(news_lines) if news_lines else "(최근 뉴스 없음)"
     factors_text = "\n".join(f"{i+1}. {f['label']}" for i, f in enumerate(body.factors))
     n = len(body.factors)
@@ -160,6 +206,35 @@ def get_factor_insights(
     except Exception as e:
         logger.error("factor-insights LLM 실패: %s", e)
         raise HTTPException(status_code=502, detail="LLM 호출 실패")
+
+    # 실시간 결과를 DB에 저장 → 같은 날 다른 사용자나 재요청은 캐시 히트
+    try:
+        db.execute(
+            text("""
+                INSERT INTO factor_insight
+                    (ticker, date, labels, directions, strengths, descs, advice, created_at)
+                VALUES (:ticker, :date, :labels, :directions, :strengths, :descs, :advice, NOW())
+                ON DUPLICATE KEY UPDATE
+                    labels=VALUES(labels),
+                    directions=VALUES(directions),
+                    strengths=VALUES(strengths),
+                    descs=VALUES(descs),
+                    advice=VALUES(advice)
+            """),
+            {
+                "ticker": body.ticker,
+                "date": today_str,
+                "labels": json.dumps(labels, ensure_ascii=False),
+                "directions": json.dumps(directions[:n], ensure_ascii=False),
+                "strengths": json.dumps(strengths[:n], ensure_ascii=False),
+                "descs": json.dumps(descs, ensure_ascii=False),
+                "advice": json.dumps(advice, ensure_ascii=False),
+            },
+        )
+        db.commit()
+    except Exception as e:
+        logger.warning("factor_insight DB 저장 실패 (응답은 정상 반환): %s", e)
+
     return {
         "labels": labels,
         "directions": directions[:n],
