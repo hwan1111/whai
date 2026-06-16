@@ -59,13 +59,13 @@ logger = logging.getLogger(__name__)
 
 
 # 국면 업데이트 DAG가 완료될 때까지 대기.
-# Flow B(0 21)와 regime_update(30 15)는 스케줄 시각이 달라 logical_date가 어긋난다.
-# execution_delta(=21:00-15:30=5h30m)로 같은 날 regime_update run을 가리키게 보정한다.
+# Flow B(30 16)와 regime_update(0 16)는 30분 차이라 logical_date가 어긋난다.
+# execution_delta(=16:30-16:00=30m)로 같은 날 regime_update run을 가리키게 보정한다.
 wait_for_regime_update = ExternalTaskSensor(
     task_id="wait_for_regime_update",
     external_dag_id="finance_regime_update_daily",
     external_task_id=None,  # DAG 전체 완료 대기
-    execution_delta=timedelta(hours=5, minutes=30),
+    execution_delta=timedelta(minutes=30),
     allowed_states=["success"],
     failed_states=["failed"],
     mode="reschedule",
