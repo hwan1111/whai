@@ -165,7 +165,7 @@ function DonutChart({ sorted, totalVal, size = 180, onSegmentClick, hoveredStock
     return `M${ox1} ${oy1} A${outerR} ${outerR} 0 ${large} 1 ${ox2} ${oy2} L${ix1} ${iy1} A${innerR} ${innerR} 0 ${large} 0 ${ix2} ${iy2}Z`;
   }
 
-  const fs1 = Math.round(size * 0.067), fs2 = Math.round(size * 0.078);
+  const fs1 = Math.round(size * 0.085), fs2 = Math.round(size * 0.104);
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
@@ -302,7 +302,7 @@ function buildAiHtml(sorted, totalVal, totalCost) {
   // 5. 메모
   lines.push(`<strong>📝 메모</strong>: 포트폴리오 AI는 대시보드 AI보다는 좀 더 포트폴리오 쪽에 치중하도록! 나이대, 성별, 투자성향은 여기에 반영하는게 맞을까?`);
 
-  return lines.map(l => `<p style="margin:0 0 8px;line-height:1.6;font-size:14px;color:#334155">${l}</p>`).join('');
+  return lines.map(l => `<p style="margin:0 0 14px;line-height:1.8;font-size:18px;color:#475569;font-weight:500">${l}</p>`).join('');
 }
 
 function escapeHtml(str) {
@@ -315,46 +315,57 @@ function escapeHtml(str) {
 // LLM이 생성한 구조화 분석(ai_analysis)을 HTML로 렌더링.
 // 필드가 없으면(레거시 스냅샷/실패) 호출 측에서 buildAiHtml() fallback 사용.
 function buildAiHtmlFromAnalysis(analysis) {
-  const sections = [
-    { key: 'overall_summary',   label: '🧭 종합 요약' },
-    { key: 'concentration',     label: '⚖️ 집중도' },
-    { key: 'sector_allocation', label: '📂 섹터 구성' },
-    { key: 'performance',       label: '📈 성과' },
-    { key: 'news_highlights',   label: '📰 뉴스 하이라이트' },
-    { key: 'risk_alignment',    label: '🎯 투자성향 적합도' },
-    { key: 'suggestions',       label: '💡 제안' },
-  ];
-  const lines = sections
-    .filter(({ key }) => analysis[key])
-    .map(({ key, label }) =>
-      `<p style="margin:0 0 8px;line-height:1.6;font-size:14px;color:#334155"><strong>${label}</strong>: ${escapeHtml(analysis[key])}</p>`
-    );
+  const lines = [];
+  const pStyle = 'margin:0 0 14px;line-height:1.8;font-size:18px;color:#475569;font-weight:500';
 
-  // 관련 최신 뉴스 링크 (OpenRouter web search 근거). 기사 URL/제목은 클릭 가능한
-  // 링크로 직접 렌더한다 — escapeHtml 은 따옴표를 이스케이프하지 않으므로 href 용으로
-  // 큰따옴표만 추가 처리한다.
+  if (analysis.overall_summary) {
+    lines.push(
+      `<p style="${pStyle}"><strong class="snapshot-ai-section-label">🧭 종합 요약</strong>: ${escapeHtml(analysis.overall_summary)}</p>`
+    );
+  }
+
+  if (analysis.risk_alignment) {
+    lines.push(
+      `<p style="${pStyle}"><strong class="snapshot-ai-section-label">🎯 투자성향 적합도</strong>: ${escapeHtml(analysis.risk_alignment)}</p>`
+    );
+  }
+
+  if (analysis.suggestions) {
+    const sugText = Array.isArray(analysis.suggestions)
+      ? analysis.suggestions.map((s, i) => `${i + 1}. ${escapeHtml(s)}`).join('<br/>')
+      : escapeHtml(String(analysis.suggestions));
+    lines.push(
+      `<p style="${pStyle}"><strong class="snapshot-ai-section-label">💡 제안</strong>: ${sugText}</p>`
+    );
+  }
+
   if (Array.isArray(analysis.sources) && analysis.sources.length > 0) {
     const items = analysis.sources
-      .filter(s => s && s.url)
-      .map(s => {
-        const href = escapeHtml(String(s.url)).replace(/"/g, '&quot;');
-        const title = escapeHtml(String(s.title || s.url));
-        const tag = s.ticker
-          ? `<span style="color:#64748b;font-weight:600">${escapeHtml(String(s.ticker))}</span> `
+      .filter(source => source?.url)
+      .map(source => {
+        const href = escapeHtml(String(source.url)).replace(/"/g, '&quot;');
+        const title = escapeHtml(String(source.title || source.url));
+        const ticker = source.ticker
+          ? `<span style="color:#64748b;font-weight:600">${escapeHtml(String(source.ticker))}</span> `
           : '';
-        return `<li style="margin:0 0 6px;line-height:1.6"><a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-size:14px">${tag}${title}</a></li>`;
+        return `<li style="margin:0 0 8px;line-height:1.7"><a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-size:16px">${ticker}${title}</a></li>`;
       });
     if (items.length > 0) {
-      lines.push('<p style="margin:14px 0 6px;line-height:1.8;font-size:16px;color:#334155"><strong>📰 관련 최신 뉴스</strong></p>');
-      lines.push(`<ul style="margin:0 0 12px;padding-left:18px">${items.join('')}</ul>`);
+      lines.push('<p style="margin:16px 0 8px"><strong class="snapshot-ai-section-label">📰 관련 최신 뉴스</strong></p>');
+      lines.push(`<ul style="margin:0 0 14px;padding-left:20px">${items.join('')}</ul>`);
     }
   }
 
-  if (typeof analysis.confidence === 'number') {
-    const pct = Math.round(analysis.confidence * 100);
-    lines.push(`<p style="margin:0;font-size: 13px;color:#94a3b8">분석 신뢰도 ${pct}%</p>`);
-  }
   return lines.join('');
+}
+
+function buildAiFooter(analysis) {
+  const footerParts = [];
+  if (typeof analysis.confidence === 'number') {
+    footerParts.push(`분석 신뢰도 ${Math.round(analysis.confidence * 100)}%`);
+  }
+  footerParts.push('최근 30일 뉴스 요약 기반');
+  return footerParts.join(' · ');
 }
 
 function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) {
@@ -384,7 +395,7 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
       <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0 }}>
         {[{ key: 'value', label: '금액순' }, { key: 'name', label: '가나다순' }].map(({ key, label }) => (
           <button key={key} onClick={() => setSortMode(key)} style={{
-            padding: '3px 9px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+            padding: '3px 9px', fontSize: 13, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
             background: sortMode === key ? '#2563eb' : '#f1f5f9',
             color: sortMode === key ? 'white' : '#64748b',
           }}>{label}</button>
@@ -402,8 +413,8 @@ function WeightHistoryChart({ snapshots, prices, onSnapClick, selectedSnapId }) 
         return (
           <div key={snap.id} onClick={() => onSnapClick?.(snap.id)} style={{ cursor: 'pointer', borderRadius: 7, padding: '4px 6px', margin: '0 -6px', minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: selectedSnapId === snap.id ? '#eff6ff' : 'transparent', outline: selectedSnapId === snap.id ? '1.5px solid #bfdbfe' : '1.5px solid transparent', transition: 'background 0.15s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-              <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>{label}</span>
-              <span style={{ fontSize: 12, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
+              <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>{label}</span>
+              <span style={{ fontSize: 13, color: '#1e293b', fontWeight: 700 }}>{fmtCompact(totalVal)}</span>
             </div>
             <div style={{ height: barHeight, overflow: 'hidden', position: 'relative', borderRadius: 3 }}>
               <div style={{ width: `${barWidthPct}%`, height: '100%', display: 'flex', borderRadius: 3, overflow: 'hidden' }}>
@@ -580,6 +591,7 @@ function AssetDrawer({ holding, prices, onClose }) {
 function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [drawerHolding, setDrawerHolding] = useState(null);
+  const [holdingTooltip, setHoldingTooltip] = useState(null);
   const { totalVal, totalCost, sorted } = calcTotals(snap.holdings, prices);
 
   const totalPnl = totalVal - totalCost;
@@ -589,6 +601,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
   const aiHtml = snap.ai_analysis
     ? buildAiHtmlFromAnalysis(snap.ai_analysis)
     : buildAiHtml(sorted, totalVal, totalCost);
+  const aiFooter = snap.ai_analysis ? buildAiFooter(snap.ai_analysis) : null;
 
   return (
     <>
@@ -602,7 +615,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
         <span className="snapshot-datetime">{fmtDatetime(snap.datetime)}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
-            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 10px', fontSize: 12, color: '#64748b', cursor: 'pointer' }}
+            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 10px', fontSize: 14, color: '#64748b', cursor: 'pointer' }}
             onClick={() => setDetailOpen(true)}
           >
             자세히 보기
@@ -675,18 +688,118 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
         {/* 1열: AI 분석 */}
         <div className="snapshot-ai">
           <div className="snapshot-ai-header">
-            <span className="ai-badge" style={{ fontSize: 12 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-            <span style={{ fontSize: 14, color: '#475569', fontWeight: 600 }}>포트폴리오 분석</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span className="ai-badge" style={{ fontSize: 12 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+              <span className="dashboard-section-title">포트폴리오 분석</span>
+            </div>
+            {aiFooter && <span className="snapshot-ai-meta">{aiFooter}</span>}
           </div>
-          <div dangerouslySetInnerHTML={{ __html: aiHtml }} />
+          <div className="snapshot-ai-scroll-wrap">
+            <div className="snapshot-ai-scroll">
+              <div className="snapshot-ai-content" dangerouslySetInnerHTML={{ __html: aiHtml }} />
+              {/* 종목별 분석 — JSX로 렌더링해 클릭 핸들러 사용 */}
+              {snap.ai_analysis?.per_holding?.length > 0 && (
+                <div className="holding-analysis" style={{ marginTop: aiHtml ? 2 : 0 }}>
+                  <div className="snapshot-ai-section-label holding-analysis-title">📊 종목별 분석</div>
+                {snap.ai_analysis.per_holding.map(h => {
+                  const info = ASSET_INFO[h.ticker] || {};
+                  const name = info.name || h.ticker;
+                  const color = info.color || '#94a3b8';
+                  const holding = sorted.find(s => s.id === h.ticker);
+                  const holdingPct = totalVal > 0 && holding ? holding.curVal / totalVal * 100 : 0;
+                  const prefix = name.slice(0, Math.min(3, name.length));
+                  const comment = (h.comment || '').startsWith(prefix)
+                    ? (h.comment || '').replace(/^[^\s,.(]+[은는이가을를도]?\s+/, '').trim()
+                    : (h.comment || '');
+                  return (
+                    <div key={h.ticker} className="holding-entry" style={{ marginBottom: 8 }}>
+                      <button className="holding-name"
+                        onClick={() => holding && setDrawerHolding(holding)}
+                        onMouseEnter={e => {
+                          if (!holding) return;
+                          onHoverStock?.(h.ticker);
+                          const pnl = holding.curVal - holding.cost;
+                          const retPct = holding.cost > 0 ? pnl / holding.cost * 100 : 0;
+                          setHoldingTooltip({
+                            name: holding.info.name || holding.id,
+                            pct: holdingPct.toFixed(1),
+                            val: fmtCompact(holding.curVal),
+                            pnl: pnl >= 0 ? `+${fmtCompact(pnl)}` : `-${fmtCompact(Math.abs(pnl))}`,
+                            retPct: retPct.toFixed(2),
+                            color: holding.info.color || '#94a3b8',
+                            x: e.clientX,
+                            y: e.clientY,
+                          });
+                        }}
+                        onMouseMove={e => setHoldingTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
+                        onMouseLeave={() => {
+                          onHoverStock?.(null);
+                          setHoldingTooltip(null);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color,
+                          cursor: holding ? 'pointer' : 'default',
+                          flexShrink: 0,
+                          fontFamily: 'inherit',
+                          textDecoration: 'none',
+                          lineHeight: 1.4,
+                          opacity: hoveredStockId !== null && hoveredStockId !== h.ticker ? 0.75 : 1,
+                          transition: 'opacity 0.2s',
+                        }}
+                      >
+                        {name}
+                      </button>
+                      <span className="holding-comment" style={{ fontSize: 18, color: '#475569', lineHeight: 1.75, fontWeight: 500 }}>{comment}</span>
+                    </div>
+                  );
+                })}
+                {holdingTooltip && typeof document !== 'undefined' && createPortal(
+                  <div style={{
+                    position: 'fixed',
+                    left: holdingTooltip.x > window.innerWidth - 240 ? holdingTooltip.x - 220 : holdingTooltip.x + 10,
+                    top: Math.max(8, Math.min(holdingTooltip.y + 10, window.innerHeight - 178)),
+                    background: 'white',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    padding: '7px 14px',
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: '#1e293b',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                    pointerEvents: 'none',
+                    whiteSpace: 'nowrap',
+                    zIndex: 9999,
+                    minWidth: 200,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
+                      <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: holdingTooltip.color, flexShrink: 0 }} />
+                      <span style={{ fontWeight: 700, fontSize: 18 }}>{holdingTooltip.name}</span>
+                    </div>
+                    <div style={{ fontSize: 16, color: '#475569', lineHeight: 1.6 }}>
+                      <div>비중: <span style={{ marginLeft: 8 }}>{holdingTooltip.pct}%</span></div>
+                      <div>평가액: <span style={{ marginLeft: 8 }}>{holdingTooltip.val}</span></div>
+                      <div>손익: <span style={{ marginLeft: 8, color: holdingTooltip.pnl && holdingTooltip.pnl.startsWith('+') ? '#dc2626' : '#2563eb', fontWeight: 700 }}>{holdingTooltip.pnl}</span></div>
+                      <div>수익률: <span style={{ marginLeft: 8, color: holdingTooltip.retPct && Number(holdingTooltip.retPct) >= 0 ? '#dc2626' : '#2563eb', fontWeight: 700 }}>{holdingTooltip.retPct}%</span></div>
+                    </div>
+                  </div>, document.body)
+                }
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* 2열: 도넛 차트 (상단) + 1행 4열 요약 (하단) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', alignItems: 'center' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
-            <DonutChart sorted={sorted} totalVal={totalVal} size={180} onSegmentClick={setDrawerHolding} hoveredStockId={hoveredStockId} onHoverStock={onHoverStock} />
+            <DonutChart sorted={sorted} totalVal={totalVal} size={170} onSegmentClick={setDrawerHolding} hoveredStockId={hoveredStockId} onHoverStock={onHoverStock} />
           </div>
-          <div className="snapshot-summary">
+          <div className="snapshot-summary" style={{ width: '100%' }}>
             {[
               { label: '총 매입 원가', val: fmtCompact(totalCost) },
               { label: '총 평가액',   val: fmtCompact(totalVal) },
@@ -802,26 +915,8 @@ export default function MyReportPage() {
   }
 
   if (!snapshotsLoaded) return (
-    <div style={{ display: 'flex', gap: 20, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <div className="sec-header">
-          <div>
-            <div className="sec-title">마이 포트폴리오</div>
-            <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관</div>
-          </div>
-        </div>
-        <div className="other-card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <LoadingSpinner label="포트폴리오를 불러오는 중..." size={36} />
-        </div>
-      </div>
-      <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-        <div className="other-card" style={{ flex: 1, padding: '10px 12px', boxSizing: 'border-box' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 8 }}>자산 비중 추이</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 140 }}>
-            <LoadingSpinner label="" size={28} />
-          </div>
-        </div>
-      </div>
+    <div className="dashboard-empty-state" style={{ flex: 1, minHeight: '100%', padding: '0 16px' }}>
+      <LoadingSpinner label="포트폴리오를 불러오는 중..." size={36} />
     </div>
   );
 
@@ -835,10 +930,12 @@ export default function MyReportPage() {
       <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
       <div className="sec-header">
         <div>
-          <div className="sec-title">마이 포트폴리오</div>
-          <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관 {totalCount > 0 ? `· 현재 ${totalCount}개` : ''}</div>
+          <div>
+            <div className="sec-title">마이 포트폴리오</div>
+            <div className="sec-sub">포트폴리오 스냅샷 · 최대 {MAX_SNAPSHOTS}개 보관 {totalCount > 0 ? `· 현재 ${totalCount}개` : ''}</div>
+          </div>
         </div>
-        <button className="btn btn-primary" onClick={() => { setFormOpen(o => !o); if (!formOpen) setHoldings((snapshots[0]?.holdings || []).map(({ id, qty, avgPrice }) => ({ id, qty, avgPrice }))); }}>
+        <button className="btn btn-primary" style={{ fontSize: 15 }} onClick={() => { setFormOpen(o => !o); if (!formOpen) setHoldings((snapshots[0]?.holdings || []).map(({ id, qty, avgPrice }) => ({ id, qty, avgPrice }))); }}>
           {formOpen ? '✕ 취소' : '＋ 새 스냅샷 기록'}
         </button>
       </div>

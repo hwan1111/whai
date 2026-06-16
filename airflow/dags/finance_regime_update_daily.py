@@ -55,7 +55,7 @@ dag = DAG(
     "finance_regime_update_daily",
     default_args=default_args,
     description="12개 종목 국면 계산, LLM 요약, 평가, DB 적재",
-    schedule="30 15 * * 1-5",
+    schedule="0 16 * * 1-5",  # 16:00 UTC = 01:00 KST
     catchup=False,
     tags=["finance", "regime", "llm"],
 )

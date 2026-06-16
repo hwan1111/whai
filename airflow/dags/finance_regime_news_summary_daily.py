@@ -13,17 +13,11 @@ Depends on: finance_news_pipeline_daily 완료
 
 import logging
 import os
-import subprocess
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from airflow import DAG
-from airflow.exceptions import AirflowSkipException
 from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.utils.task_group import TaskGroup
 
 try:
     from airflow.providers.standard.sensors.external_task import ExternalTaskSensor
@@ -54,7 +48,7 @@ dag = DAG(
     "finance_regime_news_summary_daily",
     default_args=default_args,
     description="국면별 뉴스 LLM 요약 생성 (일별)",
-    schedule="0 21 * * 1-5",  # 21:00 UTC = 06:00 KST 평일 (regime_update 완료 후)
+    schedule="30 16 * * 1-5",  # 16:30 UTC = 01:30 KST 평일 (regime_update 완료 후)
     catchup=False,
     tags=["finance", "news", "llm", "regime", "summary"],
 )
@@ -65,13 +59,13 @@ logger = logging.getLogger(__name__)
 
 
 # 국면 업데이트 DAG가 완료될 때까지 대기.
-# Flow B(0 21)와 regime_update(30 15)는 스케줄 시각이 달라 logical_date가 어긋난다.
-# execution_delta(=21:00-15:30=5h30m)로 같은 날 regime_update run을 가리키게 보정한다.
+# Flow B(30 16)와 regime_update(0 16)는 30분 차이라 logical_date가 어긋난다.
+# execution_delta(=16:30-16:00=30m)로 같은 날 regime_update run을 가리키게 보정한다.
 wait_for_regime_update = ExternalTaskSensor(
     task_id="wait_for_regime_update",
     external_dag_id="finance_regime_update_daily",
     external_task_id=None,  # DAG 전체 완료 대기
-    execution_delta=timedelta(hours=5, minutes=30),
+    execution_delta=timedelta(minutes=30),
     allowed_states=["success"],
     failed_states=["failed"],
     mode="reschedule",

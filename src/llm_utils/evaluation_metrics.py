@@ -6,7 +6,7 @@ ROUGE, BERTScore, 정성적 지표를 계산합니다.
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 

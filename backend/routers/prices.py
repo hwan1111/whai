@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import date, timedelta
 
@@ -26,7 +27,7 @@ def get_data_freshness(db: Session = Depends(get_db)) -> dict:
     row = db.execute(text("""
         SELECT
             (SELECT MAX(date) FROM price) AS price_date,
-            (SELECT MAX(end_date) FROM regime) AS news_date,
+            (SELECT DATE(MAX(created_at)) FROM regime) AS news_date,
             (SELECT MAX(date) FROM fundamental) AS fundamental_date
     """)).fetchone()
 
@@ -67,6 +68,63 @@ def get_latest_prices(db: Session = Depends(get_db)) -> list[dict]:
             "date": str(r.date),
         })
     return result
+
+
+@router.get("/{ticker}/prediction")
+def get_latest_prediction(
+    ticker: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    _validate_ticker(ticker)
+    row = db.execute(text("""
+        SELECT
+            p.ticker, p.date, p.target_date, p.model_used, p.model_name,
+            p.model_source, p.base_price, p.pred_price_d5, p.pred_return_d5,
+            p.ci_pct, p.ci_upper_d5, p.ci_lower_d5, p.vol_20d,
+            p.drift_detected, p.rolling_mape, p.threshold,
+            p.retrain_needed, p.forecast_json, p.created_at,
+            a.name
+        FROM prediction p
+        LEFT JOIN asset a ON a.ticker = p.ticker
+        WHERE p.ticker = :ticker
+        ORDER BY p.date DESC
+        LIMIT 1
+    """), {"ticker": ticker}).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="해당 종목의 예측 데이터가 없습니다.")
+
+    forecast = row.forecast_json
+    if isinstance(forecast, str):
+        try:
+            forecast = json.loads(forecast)
+        except json.JSONDecodeError:
+            forecast = []
+    if not isinstance(forecast, list):
+        forecast = []
+
+    return {
+        "ticker": row.ticker,
+        "name": row.name or row.ticker,
+        "date": str(row.date),
+        "target_date": str(row.target_date),
+        "model_used": row.model_used,
+        "model_name": row.model_name,
+        "model_source": row.model_source,
+        "base_price": float(row.base_price),
+        "pred_price_d5": float(row.pred_price_d5),
+        "pred_return_d5": float(row.pred_return_d5),
+        "ci_pct": float(row.ci_pct),
+        "ci_upper_d5": float(row.ci_upper_d5),
+        "ci_lower_d5": float(row.ci_lower_d5),
+        "vol_20d": float(row.vol_20d),
+        "drift_detected": bool(row.drift_detected),
+        "rolling_mape": float(row.rolling_mape) if row.rolling_mape is not None else None,
+        "threshold": float(row.threshold),
+        "retrain_needed": bool(row.retrain_needed),
+        "forecast": forecast,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
 
 
 @router.get("/{ticker}/history")

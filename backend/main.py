@@ -13,6 +13,7 @@ import backend.models.user         # noqa: F401 — Base에 모델 등록
 import backend.models.news         # noqa: F401
 import backend.models.user_portfolio  # noqa: F401
 import backend.models.favorite     # noqa: F401
+import backend.models.correlation  # noqa: F401
 
 UPLOAD_DIR = Path("uploads/profile_images")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

@@ -13,5 +13,5 @@ RUN pip install --no-cache-dir \
     boto3 \
     beautifulsoup4 \
     pymysql \
-    FinanceDataReader \
+    finance-datareader \
     && playwright install chromium

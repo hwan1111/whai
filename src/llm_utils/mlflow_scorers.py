@@ -5,7 +5,6 @@ ROUGE, BERTScore를 @mlflow.genai.scorer 데코레이터로 구현합니다.
 """
 
 import logging
-from typing import Any, Dict, Optional
 import mlflow
 
 logger = logging.getLogger(__name__)
