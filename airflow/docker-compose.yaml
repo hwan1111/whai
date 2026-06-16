@@ -39,6 +39,8 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/../src:/opt/src
     - ${AIRFLOW_PROJ_DIR:-.}/../model:/opt/model
     - ${AIRFLOW_PROJ_DIR:-.}/../data:/opt/data
+    # config 패키지(config.mlflow_config 등) — Flow B가 import. certs와 별도 마운트.
+    - ${AIRFLOW_PROJ_DIR:-.}/../config:/opt/config
     - ${AIRFLOW_PROJ_DIR:-.}/../config/backend/certs:/opt/certs
     - ${AIRFLOW_PROJ_DIR:-.}/../.env:/opt/.env
   user: "${AIRFLOW_UID:-50000}:0"
