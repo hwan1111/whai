@@ -8,7 +8,7 @@ import boto3
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from backend.db import get_db
 from backend.routers.auth import _get_user_id
@@ -259,33 +259,73 @@ class CorrInsightsBatchBody(BaseModel):
 def get_correlation_insights(
     body: CorrInsightsBatchBody,
     user_id: str = Depends(_get_user_id),
+    db: Session = Depends(get_db),
 ) -> dict:
     if not body.pairs:
         return {"descriptions": {}}
 
-    pairs_text = "\n".join(
-        f"{i+1}. {p.asset_a_name} · {p.asset_b_name}  r={p.correlation:+.2f}"
-        for i, p in enumerate(body.pairs)
-    )
-    prompt = (
-        f"아래 {len(body.pairs)}개 금융 자산 쌍의 상관관계를 각각 한국어 1문장으로 설명하세요.\n\n"
-        f"{pairs_text}\n\n"
-        f"규칙:\n"
-        f"- 각 1문장(30자 이내), 왜 이런 상관관계가 나타나는지 금융·경제적 원인\n"
-        f"- 종목명을 직접 사용, 학술 용어 없이 투자자 관점\n"
-        f"- 번호 순서대로 JSON 배열만 반환\n"
-        f'형식: {{"descs":["설명1","설명2",...]}}'
-    )
-    try:
-        client = GatewayClient(endpoint="low_performance_llm", validate_connection=False)
-        raw = client.call(text=prompt, temperature=0.3, max_tokens=600)
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        descs = json.loads(match.group()).get("descs", []) if match else []
-    except Exception as e:
-        logger.error("상관관계 배치 LLM 실패: %s", e)
-        raise HTTPException(status_code=502, detail="LLM 호출 실패")
+    today = date.today()
 
-    return {"descriptions": {p.key: descs[i] for i, p in enumerate(body.pairs) if i < len(descs)}}
+    # 오늘치 캐시 조회 (pair_key + today)
+    cached_rows = db.execute(
+        text(
+            "SELECT pair_key, description FROM correlation_insight "
+            "WHERE pair_key IN :keys AND date = :date"
+        ).bindparams(bindparam("keys", expanding=True)),
+        {"keys": [p.key for p in body.pairs], "date": today},
+    ).fetchall()
+    cached = {r.pair_key: r.description for r in cached_rows}
+
+    # 캐시 미스 페어만 LLM 호출
+    uncached = [p for p in body.pairs if p.key not in cached]
+    new_descs: dict[str, str] = {}
+
+    if uncached:
+        pairs_text = "\n".join(
+            f"{i+1}. {p.asset_a_name} · {p.asset_b_name}  r={p.correlation:+.2f}"
+            for i, p in enumerate(uncached)
+        )
+        prompt = (
+            f"아래 {len(uncached)}개 금융 자산 쌍의 상관관계를 각각 한국어 1문장으로 설명하세요.\n\n"
+            f"{pairs_text}\n\n"
+            f"규칙:\n"
+            f"- 각 1문장(30자 이내), 왜 이런 상관관계가 나타나는지 금융·경제적 원인\n"
+            f"- 종목명을 직접 사용, 학술 용어 없이 투자자 관점\n"
+            f"- 번호 순서대로 JSON 배열만 반환\n"
+            f'형식: {{"descs":["설명1","설명2",...]}}'
+        )
+        try:
+            client = GatewayClient(endpoint="low_performance_llm", validate_connection=False)
+            raw = client.call(text=prompt, temperature=0.3, max_tokens=600)
+            match = re.search(r'\{.*\}', raw, re.DOTALL)
+            descs = json.loads(match.group()).get("descs", []) if match else []
+        except Exception as e:
+            logger.error("상관관계 배치 LLM 실패: %s", e)
+            raise HTTPException(status_code=502, detail="LLM 호출 실패")
+
+        for i, p in enumerate(uncached):
+            if i < len(descs):
+                new_descs[p.key] = descs[i]
+
+        # 새 결과 DB 저장
+        if new_descs:
+            try:
+                db.execute(
+                    text("""
+                        INSERT INTO correlation_insight (pair_key, date, description, created_at)
+                        VALUES (:pair_key, :date, :description, NOW())
+                        ON DUPLICATE KEY UPDATE description = VALUES(description)
+                    """),
+                    [
+                        {"pair_key": key, "date": today, "description": desc}
+                        for key, desc in new_descs.items()
+                    ],
+                )
+                db.commit()
+            except Exception as e:
+                logger.warning("correlation_insight DB 저장 실패 (응답은 정상 반환): %s", e)
+
+    return {"descriptions": {**cached, **new_descs}}
 
 
 _VALID_PERIODS = {"1W", "1M", "3M", "6M", "1Y", "3Y", "ALL"}
