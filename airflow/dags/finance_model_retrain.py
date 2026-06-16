@@ -161,7 +161,7 @@ def finance_model_retrain():
         warnings.filterwarnings("ignore")
         load_dotenv(PROJECT_ROOT / ".env", override=True)
         os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "admin")
-        os.environ.setdefault("MLFLOW_TRACKING_PASSWORD", "Woorifisateam4")
+        # MLFLOW_TRACKING_PASSWORD는 .env(env_file)로 주입 — 하드코딩 금지
         mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://52.78.237.104:5001"))
 
         ticker = context["dag_run"].conf.get("ticker", "")
