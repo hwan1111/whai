@@ -184,7 +184,7 @@ class PromptRegistry:
         Returns:
             프롬프트 키 리스트
         """
-        return list(MLFLOW_PROMPT_MODELS.keys())
+        return list(MLFLOW_PROMPTS_CONFIG.keys())
 
     @staticmethod
     def _get_template_vars(template: str) -> list[str]:

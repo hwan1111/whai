@@ -13,17 +13,11 @@ Depends on: finance_news_pipeline_daily 완료
 
 import logging
 import os
-import subprocess
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from airflow import DAG
-from airflow.exceptions import AirflowSkipException
 from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.utils.task_group import TaskGroup
 
 try:
     from airflow.providers.standard.sensors.external_task import ExternalTaskSensor
