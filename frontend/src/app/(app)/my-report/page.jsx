@@ -688,10 +688,7 @@ function SnapshotCard({ snap, prices, onDelete, hoveredStockId, onHoverStock }) 
         {/* 1열: AI 분석 */}
         <div className="snapshot-ai">
           <div className="snapshot-ai-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span className="ai-badge" style={{ fontSize: 12 }}>WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
-              <span className="dashboard-section-title">포트폴리오 분석</span>
-            </div>
+            <div className="dashboard-section-title">포트폴리오 분석</div>
             {aiFooter && <span className="snapshot-ai-meta">{aiFooter}</span>}
           </div>
           <div className="snapshot-ai-scroll-wrap">
