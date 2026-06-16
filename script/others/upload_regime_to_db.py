@@ -265,6 +265,11 @@ def upload(ticker: str, mode: str = "skip", dry_run: bool = False,
 
                 inserted_regime += 1
 
+                # detect-only 산출물(llm_analysis 없음)은 regime 테이블만 적재.
+                # 요약은 Flow B(finance_regime_news_summary_daily)가 S3에 기록한다.
+                if not llm:
+                    continue
+
                 summary_params = (
                     regime_pk,
                     llm.get("cause"),
