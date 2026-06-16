@@ -1,11 +1,13 @@
 """
-Daily regime detection, LLM summary, evaluation, and DB upload.
+Daily regime detection + DB upload (regime table only).
 
 For each of 12 tickers (10 stocks + KOSPI200 + USD_KRW):
-  1. regime_news_summary  — recalculate regimes + LLM summary (incremental)
-  2. branch               — compare JSON output vs DB; skip if no new regimes
-  3. eval_regime_summary  — coverage / semantic similarity evaluation
-  4. upload_regime_to_db  — append-mode insert to regime / regime_summary tables
+  1. regime_news_summary --detect-only  — 국면 탐지만 (LLM 요약 없음), 경계 JSON 기록
+  2. branch                             — compare JSON output vs DB; skip if no new regimes
+  3. upload_regime_to_db                — append-mode insert to regime table
+
+LLM 국면 요약은 별도 DAG(finance_regime_news_summary_daily, Flow B)가
+DB regime을 읽어 MLflow Gateway로 생성하고 S3 summary/에 저장한다.
 
 Schedule: 15:30 UTC (00:30 KST) weekdays, 30 min after collect DAG.
 """
@@ -90,7 +92,7 @@ def _make_branch_fn(code: str, db_ticker: str, group_id: str):
         conn.close()
 
         if json_ids - db_ids:
-            return f"{group_id}.eval_{code}"
+            return f"{group_id}.upload_{code}"
         return f"{group_id}.skip_{code}"
 
     _branch.__name__ = f"branch_{code}"
@@ -112,26 +114,15 @@ for t in TICKERS:
             bash_command=(
                 f"cd '{ROOT}' && python '{_script}/news_data/eval/regime_news_summary.py'"
                 f" --ticker {code}"
-                f" --provider openrouter"
+                f" --detect-only"
             ),
-            execution_timeout=timedelta(hours=3),
+            execution_timeout=timedelta(hours=1),
             dag=dag,
         )
 
         branch = BranchPythonOperator(
             task_id=f"branch_{code}",
             python_callable=_make_branch_fn(code, db_ticker, group_id),
-            dag=dag,
-        )
-
-        eval_task = BashOperator(
-            task_id=f"eval_{code}",
-            bash_command=(
-                f"cd '{ROOT}' && python '{_script}/news_data/eval/eval_regime_summary.py'"
-                f" --ticker {code}"
-                f" --output /opt/data/{code}/eval_regime_summary_{code}.json"
-            ),
-            execution_timeout=timedelta(hours=1),
             dag=dag,
         )
 
@@ -157,6 +148,5 @@ for t in TICKERS:
             dag=dag,
         )
 
-        summary >> branch >> [eval_task, skip]
-        eval_task >> upload
+        summary >> branch >> [upload, skip]
         skip >> skip_cleanup

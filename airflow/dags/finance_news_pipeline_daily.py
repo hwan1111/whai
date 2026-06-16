@@ -1,11 +1,13 @@
 """
-Daily news pipeline: collect → raw S3 → preprocess/S3.
+Daily news pipeline: collect → raw S3 → preprocessed_final S3.
 
 Schedule: 15:00 UTC (00:00 KST) every day.
   Stage 1.   collect_all_news          — 뉴스 크롤링 (주식 10종 + USD/KRW + KOSPI200)
-  Stage 1.5. upload_raw_to_s3          — raw S3 업로드
-  Stage 2.   preprocess_upload(_*)     — 전처리 후 S3 preprocessed/{ticker}/ 업로드
+  Stage 1.5. upload_raw_to_s3          — raw/ S3 업로드
+  Stage 2.   preprocess_to_final       — raw/ → preprocessed_final/ 전처리 (전 종목)
 
+전처리 출력 경로는 preprocessed_final/ — Flow A(regime 탐지)와
+Flow B(regime LLM 요약)가 모두 이 경로를 읽는다.
 국면(regime) × 뉴스 LLM 요약은 별도 DAG(finance_regime_news_summary_daily)에서
 regime_update와 이 파이프라인이 모두 끝난 뒤 수행한다.
 """
@@ -77,32 +79,21 @@ task_upload_raw = BashOperator(
 
 
 # ──────────────────────────────────────────────
-# Stage 2: 전처리 + S3 업로드
+# Stage 2: raw/ → preprocessed_final/ 전처리 (전 종목)
+# Flow A(eval)·Flow B(요약) 둘 다 preprocessed_final/을 읽으므로 이 경로로 적재한다.
+# raw/ S3를 직접 읽어 종목 구분 없이 한 번에 처리(주식·KOSPI200·USD 포함).
 # ──────────────────────────────────────────────
 
 task_preprocess = BashOperator(
-    task_id="preprocess_upload",
+    task_id="preprocess_to_final",
     bash_command=(
         f"cd {ROOT} && "
-        "python script/news_data/preprocess/preprocess_and_upload.py "
-        f"--since {_since}"
-    ),
-    dag=dag,
-)
-
-task_preprocess_kospi200 = BashOperator(
-    task_id="preprocess_upload_kospi200",
-    bash_command=(
-        f"cd {ROOT} && "
-        "python script/news_data/preprocess/preprocess_and_upload_kospi200.py "
-        f"--since {_since}"
+        "python script/news_data/preprocess/preprocess_s3_to_final.py"
     ),
     dag=dag,
 )
 
 
 # Stage 1 → Stage 1.5 → Stage 2
-# 통합 수집이 끝난 뒤 raw 한 번 업로드, 그 다음 각 전처리 실행
-task_collect_all >> task_upload_raw
-task_upload_raw >> task_preprocess
-task_upload_raw >> task_preprocess_kospi200
+# 수집(로컬) → raw/ 업로드 → raw/를 읽어 preprocessed_final/ 적재
+task_collect_all >> task_upload_raw >> task_preprocess

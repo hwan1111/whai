@@ -350,14 +350,17 @@ def run(ticker_code: str,
         start:       str = START_DATE,
         end:         str = END_DATE,
         dry_run:     bool = False,
-        rerun_ids:   set[int] | None = None) -> None:
+        rerun_ids:   set[int] | None = None,
+        detect_only: bool = False) -> None:
     rerun_ids   = rerun_ids or set()
     model       = model or DEFAULT_MODEL[provider]
     sleep_sec   = SLEEP_SEC[provider]
     output_path = Path(f"data/{ticker_code}/regime_news_summary_{ticker_code}.json")
 
+    # detect_only: 국면 탐지만 수행하고 LLM 요약은 건너뛴다 (Flow A 중복 제거).
+    #              regime 경계만 JSON에 기록 → upload는 regime 테이블만 적재.
     llm_client = None
-    if not dry_run:
+    if not dry_run and not detect_only:
         if provider == "groq":
             import groq as groq_lib
             api_key = os.getenv("GROQ_API_KEY", "")
@@ -495,6 +498,28 @@ def run(ticker_code: str,
             log.info(f"  → 이미 완료(날짜 겹침), 스킵")
             continue
 
+        # 탐지 전용: LLM 호출 없이 경계 메타데이터만 기록
+        if detect_only:
+            results.append({
+                "regime_id":   i,
+                "regime_key":  regime_key,
+                "ticker":      ticker_name,
+                "ticker_code": ticker_code,
+                "start":       start_str,
+                "end":         end_str,
+                "days":        reg["days"],
+                "direction":   reg["direction"],
+                "cum_return":  round(cum_ret, 6),
+                "vol_trend":   vol_trend,
+                "news_count":  len(news_articles),
+            })
+            valid_done.append((start_str, end_str))
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            continue
+
         news_context = _build_news_context(news_articles)
 
         user_prompt = _USER_TMPL.format(
@@ -567,6 +592,8 @@ if __name__ == "__main__":
     parser.add_argument("--start",     default=START_DATE)
     parser.add_argument("--end",       default=END_DATE)
     parser.add_argument("--dry-run",   action="store_true")
+    parser.add_argument("--detect-only", action="store_true",
+                        help="국면 탐지만 수행하고 LLM 요약은 건너뜀 (regime 테이블만 적재)")
     parser.add_argument("--rerun-ids", nargs="+", type=int, default=[],
                         metavar="ID", help="강제 재처리할 regime_id (예: --rerun-ids 21 22)")
     args = parser.parse_args()
@@ -582,4 +609,5 @@ if __name__ == "__main__":
         end         = args.end,
         dry_run     = args.dry_run,
         rerun_ids   = set(args.rerun_ids),
+        detect_only = args.detect_only,
     )
