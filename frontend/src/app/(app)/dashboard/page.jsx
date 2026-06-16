@@ -574,7 +574,7 @@ function FactorInsightPanel({ rawFactors, cachedData, title, marketChangePct, ha
       {/* ── 요인 분석 카드 (chart-panel과 동일 flex: 2) ── */}
       <div className="ai-main-card" style={{ flex: '2 1 0', minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
         <div className="factor-insight-header">
-          <div className="ai-main-title dashboard-section-title">{title}</div>
+          <div className="dashboard-section-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>{title}</div>
         </div>
         {isLoading ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 100 }}>
@@ -627,12 +627,9 @@ function FactorInsightPanel({ rawFactors, cachedData, title, marketChangePct, ha
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-          background: 'linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%)',
-          borderColor: '#c4b5fd',
         }}
       >
-        <div className="ai-main-title dashboard-section-title dashboard-section-title--purple" style={{ marginBottom: 14 }}>
-          <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+        <div className="dashboard-section-title" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
           <span>자산 분석 시 유의사항</span>
         </div>
         <div className="market-caution-body">
@@ -1567,7 +1564,7 @@ export default function DashboardPage() {
 
         {/* 종목/환율 상세 패널 */}
         <div className="ai-main-panel">
-          <div className="ai-main-card" style={{ flex: 1, minHeight: 0 }}>
+          <div className="ai-main-card" style={{ flex: 1, minHeight: 0, background: 'linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%)', borderColor: '#c4b5fd' }}>
             {/* ── 환율 상세 ── */}
             {selectedFxId ? (() => {
               const fxInfo = FX_INFO[selectedFxId];
@@ -2117,16 +2114,15 @@ export default function DashboardPage() {
         <div className="news-col">
           <div className="news-preview-card" style={{ flex: 1, overflow: 'hidden' }}>
             <div className="news-preview-header">
-              <div className="news-preview-title dashboard-section-title dashboard-section-title--purple">
-                <span className="ai-badge">WH<span style={{ color: '#93c5fd' }}>Ai</span> 분석</span>
+              <div className="news-preview-title dashboard-section-title">
                 관련 뉴스
               </div>
               <button className="news-preview-more" onClick={() => setNewsDrawerOpen(true)}>전체 보기 →</button>
             </div>
             <div className="news-preview-body">
               {(favDetailLoading || (selectedFxId && fxStatsLoading)) ? (
-                <div style={{ color: '#94a3b8', fontSize: 14, padding: '16px 0', textAlign: 'center' }}>
-                  <span className="loading-dots">···</span>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <LoadingSpinner label="뉴스를 불러오는 중..." />
                 </div>
               ) : (() => {
                 const newsList = selectedFxId ? fxNews : (favDetail?.news ?? []);

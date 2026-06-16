@@ -50,6 +50,11 @@ NEWS_PREFIX = "preprocessed_final"
 SUMMARY_PREFIX = "summary"
 EXPERIMENT_NAME = "regime_news_summary"
 
+# DB ticker → S3 preprocessed_final 경로 ticker 매핑 (이름이 다를 때만 지정)
+NEWS_TICKER_MAP: dict[str, str] = {
+    "USD": "USD_KRW",
+}
+
 REQUIRED_KEYS = {"cause", "evidence", "vol_insight", "confidence", "reasoning"}
 
 DIR_STR = {"상승": "상승 ▲", "하락": "하락 ▼"}
@@ -150,8 +155,9 @@ class RegimeNewsSummaryPipeline:
 
     def _fetch_regime_news(self, ticker: str, start_str: str, end_str: str) -> list[dict[str, Any]]:
         """국면 구간(start_date ~ end_date)의 뉴스를 S3에서 로드하고 중복 제거"""
+        news_ticker = NEWS_TICKER_MAP.get(ticker, ticker)
         articles = self.news_loader.load_news(
-            ticker=ticker, start_date=start_str, end_date=end_str
+            ticker=news_ticker, start_date=start_str, end_date=end_str
         )
 
         seen: set[str] = set()
