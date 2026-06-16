@@ -64,11 +64,14 @@ dag.doc_md = __doc__
 logger = logging.getLogger(__name__)
 
 
-# 국면 업데이트 DAG가 완료될 때까지 대기
+# 국면 업데이트 DAG가 완료될 때까지 대기.
+# Flow B(0 21)와 regime_update(30 15)는 스케줄 시각이 달라 logical_date가 어긋난다.
+# execution_delta(=21:00-15:30=5h30m)로 같은 날 regime_update run을 가리키게 보정한다.
 wait_for_regime_update = ExternalTaskSensor(
     task_id="wait_for_regime_update",
     external_dag_id="finance_regime_update_daily",
     external_task_id=None,  # DAG 전체 완료 대기
+    execution_delta=timedelta(hours=5, minutes=30),
     allowed_states=["success"],
     failed_states=["failed"],
     mode="reschedule",
@@ -89,7 +92,7 @@ validate_env = BashOperator(
 run_summary = BashOperator(
     task_id="run_regime_summary_all_tickers",
     bash_command="""
-    cd /app
+    cd /opt
     python script/llm/regime_news_summary_pipeline.py \\
       --endpoint low_performance_llm \\
       --max-tokens 800 \\
