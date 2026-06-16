@@ -288,26 +288,28 @@ html, body { height: 100%; overflow: hidden; }
 .prediction-history-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .prediction-history-legend i { width: 8px; height: 8px; border-radius: 50%; }
 .prediction-legend-forecast i { width: 18px; height: 0; border-top: 3px dashed #7c3aed; border-radius: 0; background: transparent !important; }
-.prediction-summary-panel { display: flex; flex-direction: column; gap: 14px; padding: 16px; background: #f8fafc; border-radius: 16px; min-height: min(430px, max-content); }
-.prediction-details { display: grid; gap: 14px; margin: 0; padding: 0; background: transparent; border-radius: 0; }
+.prediction-summary-panel { display: flex; flex-direction: column; gap: 8px; padding: 14px; background: white; border-radius: 16px; min-height: min(430px, max-content); }
 .prediction-data-notice { display: flex; flex-direction: column; justify-content: center; gap: 10px; margin: 0; padding: 20px; border: 1px solid #ddd6fe; border-radius: 14px; background: #f5f3ff; }
 .prediction-data-notice strong { color: #5b21b6; font-size: 14px; }
 .prediction-data-notice span { color: #64748b; font-size: 12px; }
 .prediction-result-panel { display: flex; flex-direction: column; overflow-y: auto; padding: 18px; }
 .prediction-result-panel > .loading-wrap, .prediction-result-panel > .prediction-empty { margin: auto; }
-.prediction-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.prediction-summary span { display: block; margin-bottom: 4px; color: #64748b; font-size: 13px; font-weight: 700; }
-.prediction-summary strong { display: inline-block; margin-right: 8px; font-size: 27px; line-height: 1.2; }
-.prediction-summary em { font-size: 14px; font-style: normal; font-weight: 800; }
-.prediction-target-date { color: #64748b; font-size: 12px; line-height: 1.7; text-align: right; white-space: nowrap; }
-.prediction-forecast-chart { width: 100%; height: auto; margin: 12px 0 4px; overflow: visible; }
-.prediction-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.prediction-metrics > div { min-width: 0; padding: 10px 11px; background: #f8fafc; border-radius: 9px; }
-.prediction-metrics span { display: block; margin-bottom: 4px; color: #64748b; font-size: 11px; font-weight: 700; }
-.prediction-metrics strong { display: block; overflow: hidden; color: #1e293b; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.pred-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pred-card { background: #f8fafc; border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.pred-card--hero { grid-column: 1 / -1; }
+.pred-card--forecast { grid-column: 1 / -1; }
+.pred-card-label { font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 3px; }
+.pred-card-val { font-size: 17px; font-weight: 700; color: #1e293b; }
+.pred-card-val--hero { font-size: 26px; font-weight: 800; line-height: 1.2; }
 .prediction-status-ok { color: #059669 !important; }
 .prediction-status-warning { color: #dc2626 !important; }
-.prediction-disclaimer { grid-column: 1 / -1; margin: 0; color: #94a3b8; font-size: 11px; line-height: 1.55; }
+.prediction-disclaimer { margin: 0; color: #94a3b8; font-size: 11px; line-height: 1.55; }
+.prediction-forecast-row { display: grid; grid-template-columns: 36px 46px auto 1fr; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid #e2e8f0; }
+.prediction-forecast-row:first-child { border-top: none; padding-top: 0; }
+.prediction-forecast-day { font-size: 13px; font-weight: 700; color: #7c3aed; }
+.prediction-forecast-date { font-size: 13px; color: #94a3b8; }
+.prediction-forecast-price { font-size: 15px; font-weight: 700; color: #1e293b; padding-left: 24px; }
+.prediction-forecast-chg { font-size: 13px; font-weight: 700; text-align: right; white-space: nowrap; }
 .prediction-empty { display: flex; align-items: center; justify-content: center; min-height: 160px; color: #64748b; font-size: 14px; text-align: center; }
 
 @media (max-width: 1200px) {

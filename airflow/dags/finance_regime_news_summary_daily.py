@@ -77,7 +77,7 @@ wait_for_regime_update = ExternalTaskSensor(
 
 validate_env = BashOperator(
     task_id="validate_python_env",
-    bash_command="python -c 'import mlflow, boto3; from model.llm.prompt_loader import load_prompt; print(\"✓ 의존성 확인 완료\")'",
+    bash_command="cd /opt && python -c 'import mlflow, boto3; from model.llm.prompt_loader import load_prompt; print(\"✓ 의존성 확인 완료\")'",
     dag=dag,
 )
 
