@@ -55,6 +55,7 @@ def check(days: int = 15):
               ON a.ticker = b.ticker
              AND a.id < b.id
              AND a.end_date >= b.start_date   -- 날짜 범위 겹침 조건
+             AND a.start_date <= b.end_date  -- 양방향 체크 필수
              AND b.start_date >= %s           -- 최근 N일 이내
             ORDER BY a.ticker, a.start_date
         """, (cutoff,))

@@ -59,6 +59,7 @@ def fix(dry_run: bool = False):
                   ON a.ticker = b.ticker
                  AND a.id < b.id
                  AND a.end_date >= b.start_date
+                 AND a.start_date <= b.end_date
                 ORDER BY a.ticker, a.start_date
             """)
             overlaps = cur.fetchall()

@@ -27,13 +27,24 @@ This is a greenfield ML/data engineering project with a monorepo layout. The dir
 | Layer | Technology |
 |-------|------------|
 | Language | Python 3.12.10 — use 3.12 features freely, no backward compatibility needed |
-| Frontend | Next.js (App Router) + React — Node.js v24, npm v11 |
+| Frontend | Next.js 16.2.6 (App Router) + React 19.2.4 — Node.js v24, npm v11; Tailwind CSS v4; Webpack |
 | Container | Docker on Ubuntu 22.04 — all shell scripts and system commands target this environment |
-| DB (primary) | MySQL via Aiven |
-| DB (archive) | AWS S3 — large CSV/Parquet datasets live here, not in `data/`; use boto3 or s3fs for access |
-| DB (search) | Opensearch via Aiven |
+| DB (primary) | MySQL via Aiven — SQLAlchemy 2.0 + PyMySQL |
+| DB (metadata) | PostgreSQL 15 — Airflow 및 MLflow 메타데이터 저장소 |
+| DB (archive) | AWS S3 — large CSV/Parquet datasets live here, not in `data/`; use boto3 for access |
+| DB (search) | OpenSearch via Aiven — 패키지 설치됨(opensearch-py), 현재 코드에서 미사용 |
 | In-memory | Pandas DataFrame — keep inference results as DataFrames to support downstream XAI computation |
-| Pipeline | Apache Airflow |
+| Pipeline | Apache Airflow 3.0.6 — CeleryExecutor; Redis 7 브로커; 7개 DAG 운영 |
+| Experiment tracking | MLflow 3.12 (full) — OpenRouter 게이트웨이 통합; 기본 인증 활성화 |
+| Backend API | FastAPI 0.109 + Uvicorn — JWT 인증(python-jose + bcrypt), slowapi Rate Limiting |
+| Async HTTP | aiohttp 3.9 / httpx — LLM 게이트웨이 및 외부 API 호출 |
+| LLM | OpenRouter API (Claude 모델 라우팅) — `OPENROUTER_API_KEY`; OpenAI SDK는 일부 평가 스크립트에서만 사용 |
+| Financial data | pykrx (KRX 주가), yfinance (글로벌 지수), finance-datareader (환율·거시지표) |
+| ML models | Prophet (D+5 예측, 일부 종목), statsmodels (ARIMA/VECM/Markov), PyTorch ≥ 2.0 (PatchTST), arch (GARCH) |
+| ML extras | scikit-learn, XGBoost, LightGBM, SciPy — 모델 파이프라인 보조 |
+| Embeddings / NLP | sentence-transformers (ko-sroberta-multitask) — 국면 요약 품질 평가 |
+| Evaluation metrics | rouge-score, bert-score — 뉴스 요약 평가 |
+| Web scraping | Playwright + BeautifulSoup4 — 동적 뉴스 크롤링 (네이버 뉴스 등) |
 | Deploy | AWS EC2 |
 
 ## Environment

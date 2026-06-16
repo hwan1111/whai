@@ -341,9 +341,8 @@ html, body { height: 100%; overflow: hidden; }
 .matrix-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100%; min-height: 0; align-self: stretch; }
 .news-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100%; min-height: 0; align-self: stretch; }
 .ai-main-card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: flex-start; overflow: hidden; }
-.ai-main-title { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
-.dashboard-section-title { font-size: 14px; font-weight: 600; line-height: 1.4; color: #475569; text-transform: none; letter-spacing: 0; }
-.dashboard-section-title.dashboard-section-title--purple { font-size: 14px; font-weight: 600; line-height: 1.4; color: #4c1d95; text-transform: none; letter-spacing: 0; }
+.ai-main-title { color: var(--ai); margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
+.dashboard-section-title { font-size: 12px; font-weight: 700; color: #4c1d95; letter-spacing: 0.5px; display: flex; align-items: center; gap: 7px; }
 .detail-section-title { font-size: 12px; font-weight: 600; color: #64748b; line-height: 1.3; letter-spacing: 0; text-transform: none; }
 .ai-main-body { flex: 1; font-size: 14px; line-height: 1.8; color: #334155; }
 .factor-insight-header { display: flex; align-items: center; margin-bottom: 12px; }
@@ -365,7 +364,7 @@ html, body { height: 100%; overflow: hidden; }
 .market-caution-list li::marker { color: #7c3aed; }
 
 /* ── 관심종목 뉴스 미리보기 카드 ── */
-.news-preview-card { background: linear-gradient(160deg, #f5f3ff 0%, #eef2ff 100%); border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; }
+.news-preview-card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; }
 .news-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .news-preview-body { flex: 1; min-height: 0; overflow-y: auto; position: relative; padding-right: 3px; }
 .news-preview-body { scrollbar-width: none; -ms-overflow-style: none; }
