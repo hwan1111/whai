@@ -93,7 +93,7 @@ class MLflowLogger:
         try:
             # 간단한 테스트: 원격 서버에 접근 가능한지 확인
             client = mlflow.tracking.MlflowClient(tracking_uri=self.tracking_uri)
-            experiments = client.search_experiments(max_results=1)
+            client.search_experiments(max_results=1)
             logger.info("✓ MLflow 원격 서버 연결 검증 완료")
             return True
         except Exception as e:
