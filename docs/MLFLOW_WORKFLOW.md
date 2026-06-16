@@ -255,7 +255,7 @@ MLflow UI 링크: http://52.78.237.104:5001
 
 **확인**:
 ```bash
-curl -u admin:Woorifisateam4 http://52.78.237.104:5001/health
+curl -u "$MLFLOW_TRACKING_USERNAME:$MLFLOW_TRACKING_PASSWORD" http://52.78.237.104:5001/health
 ```
 
 응답이 `OK`이면 정상

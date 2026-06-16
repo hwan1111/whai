@@ -317,7 +317,7 @@ def finance_stock_predict_daily():
 
         # MLflow 설정 (auth env 변수를 먼저 세팅해야 load_dotenv 덮어쓰기 방지)
         os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "admin")
-        os.environ.setdefault("MLFLOW_TRACKING_PASSWORD", "Woorifisateam4")
+        # MLFLOW_TRACKING_PASSWORD는 .env(env_file)로 주입 — 하드코딩 금지
         mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://52.78.237.104:5001"))
 
         today    = pd.Timestamp.today().normalize()

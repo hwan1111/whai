@@ -26,7 +26,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 # auth env 설정 후 URI는 직접 지정 (.env의 구 loclx URI 덮어쓰기 방지)
 os.environ["MLFLOW_TRACKING_USERNAME"] = os.environ.get("MLFLOW_TRACKING_USERNAME", "admin")
-os.environ["MLFLOW_TRACKING_PASSWORD"] = os.environ.get("MLFLOW_TRACKING_PASSWORD", "Woorifisateam4")
+# MLFLOW_TRACKING_PASSWORD는 .env로 주입 — 하드코딩 금지
 MLFLOW_URI = "http://52.78.237.104:5001"
 mlflow.set_tracking_uri(MLFLOW_URI)
 
