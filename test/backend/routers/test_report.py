@@ -41,11 +41,11 @@ def test_add_snapshot_stores_ai_analysis_when_available(monkeypatch):
     out = report.add_snapshot(body, user_id="user1", db=db)
 
     assert out == {"ok": True}
-    # INSERT 호출의 ai 파라미터에 직렬화된 분석이 담겨야 한다
-    insert_call = db.execute.call_args
-    params = insert_call.args[1]
-    assert json.loads(params["ai"]) == analysis
-    db.commit.assert_called_once()
+    # INSERT 먼저 커밋 후 UPDATE로 ai_analysis 업데이트 → commit 2회
+    assert db.commit.call_count == 2
+    # 마지막 execute 호출(UPDATE)의 ai 파라미터에 직렬화된 분석이 담겨야 한다
+    update_params = db.execute.call_args.args[1]
+    assert json.loads(update_params["ai"]) == analysis
 
 
 def test_add_snapshot_stores_null_when_analysis_returns_none(monkeypatch):
@@ -63,7 +63,10 @@ def test_add_snapshot_stores_null_when_analysis_returns_none(monkeypatch):
     out = report.add_snapshot(body, user_id="user1", db=db)
 
     assert out == {"ok": True}
-    assert db.execute.call_args.args[1]["ai"] is None
+    # 분석 없으면 UPDATE 없이 INSERT 커밋 1회, INSERT 파라미터에 ai 키 없음
+    db.commit.assert_called_once()
+    insert_params = db.execute.call_args.args[1]
+    assert "ai" not in insert_params
 
 
 def test_add_snapshot_succeeds_even_if_analyzer_raises(monkeypatch):
@@ -81,10 +84,10 @@ def test_add_snapshot_succeeds_even_if_analyzer_raises(monkeypatch):
     )
     out = report.add_snapshot(body, user_id="user1", db=db)
 
-    # 분석 실패해도 스냅샷 저장은 성공하고 ai 는 NULL
+    # 분석 실패해도 스냅샷 저장은 성공, commit 1회 + rollback 1회
     assert out == {"ok": True}
-    assert db.execute.call_args.args[1]["ai"] is None
     db.commit.assert_called_once()
+    db.rollback.assert_called_once()
 
 
 # ── get_snapshots ────────────────────────────────────────────────────
