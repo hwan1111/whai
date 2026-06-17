@@ -38,7 +38,7 @@
 
 ```mermaid
 ---
-title: LLM 워크플로우
+title: LLM Workflow (whai)
 ---
 flowchart LR
  subgraph CORE["🧩 공유 LLM 코어 · src/llm_utils"]
@@ -69,8 +69,7 @@ flowchart LR
         F2F["⑥ 관련 최신 뉴스 검색<br>news_evidence_client<br>OpenRouter web_search 직접 호출<br>annotation 교차검증"]
         F2G["⑦ JSON 파싱 후 반환<br>실패 시 graceful degrade → NULL"]
   end
- subgraph F3["🧪 Flow 3 · 요약 품질 평가 
-(script/llm/news_summary_pipeline.py)"]
+ subgraph F3["🧪 Flow 3 · 요약 품질 평가 (script/llm/news_summary_pipeline.py --mode evaluation)"]
     direction TB
         F3A["① 뉴스 샘플링"]
         F3B["② 레퍼런스 요약 생성<br>mid_performance_llm"]
@@ -83,6 +82,12 @@ flowchart LR
         F4A["① 선행 DAG 완료 대기<br>regime_news_summary_daily<br>ExternalTaskSensor"]
         F4B["② 12개 종목 변동요인 LLM 분석<br>종목별 개별 실패 허용"]
         F4C["③ MySQL factor_insight UPSERT<br>멱등 (ticker+date 중복 스킵)"]
+  end
+ subgraph JUDGE["⚖️ MLflow UI · LLM-as-Judge"]
+    direction TB
+        JSAMP["트레이스 샘플링<br>흐름마다 표본 기준·비율 상이"]
+        JLLM["고성능 LLM 심판 호출<br>각 흐름 운영 LLM보다 상위 티어<br>(상황에 맞게 선택)"]
+        JSCORE["품질 점수/판정 기록<br>MLflow Evaluation · Assessment"]
   end
     PROMPT --> GW
     GW --> GATEWAY & TOK & MLF
@@ -106,6 +111,13 @@ flowchart LR
     F3D --> F3E
     F4A --> F4B
     F4B --> F4C & GW
+    JSAMP --> JLLM
+    JLLM --> JSCORE
+    F1E -. Flow1 표본 .-> JSAMP
+    F2E -. Flow2 표본 .-> JSAMP
+    F3E -. Flow3 표본 .-> JSAMP
+    F4B -. Flow4 표본 .-> JSAMP
+    MLF -. 트레이스 적재 .-> JSAMP
     F1F -. summary/ 재사용 .-> F2B
     F1F -. 선행 산출물 .-> F4A
 
@@ -115,6 +127,7 @@ flowchart LR
      OR:::gw
      TOK:::core
      MLF:::core
+     TIER:::gw
      F1A:::step
      F1B:::step
      F1C:::step
@@ -136,12 +149,15 @@ flowchart LR
      F4A:::step
      F4B:::llm
      F4C:::step
-     TIER:::gw
+     JSAMP:::judge
+     JLLM:::llm
+     JSCORE:::judge
     classDef core fill:#1f2937,stroke:#60a5fa,stroke-width:2px,color:#f9fafb
     classDef gw fill:#0f766e,stroke:#5eead4,stroke-width:2px,color:#ecfeff
     classDef step fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,color:#0f172a
     classDef llm fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#7c2d12
     classDef store fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#3b0764
+    classDef judge fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
 ```
 
 ### 설명
