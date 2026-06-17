@@ -84,23 +84,33 @@ def add_snapshot(
         )
     content = json.dumps({"datetime": body.datetime, "holdings": body.holdings}, ensure_ascii=False)
 
-    # LLM 종합 분석 — 실패하더라도 스냅샷 저장은 성공해야 하므로 전체를 try/except 로 감싼다.
-    ai_analysis_json = None
+    # 스냅샷 먼저 저장 — LLM 호출(수 초~수십 초) 중 MySQL 연결이 끊기기 전에 커밋한다.
+    db.execute(
+        text(
+            "INSERT INTO user_portfolio (id, user_id, content, ai_analysis, created_at) "
+            "VALUES (:id, :uid, :content, NULL, NOW())"
+        ),
+        {"id": body.id, "uid": user_id, "content": content},
+    )
+    db.commit()
+
+    # LLM 종합 분석 — 실패해도 스냅샷은 이미 저장됨
     try:
         analysis = portfolio_analyzer.analyze_portfolio(user_id, body.holdings, db)
         if analysis is not None:
             ai_analysis_json = json.dumps(analysis, ensure_ascii=False)
+            db.execute(
+                text(
+                    "UPDATE user_portfolio SET ai_analysis = :ai "
+                    "WHERE id = :id AND user_id = :uid"
+                ),
+                {"ai": ai_analysis_json, "id": body.id, "uid": user_id},
+            )
+            db.commit()
     except Exception as e:  # noqa: BLE001
-        logger.error("AI 포트폴리오 분석 실패 (스냅샷은 그대로 저장): %s", e)
+        logger.error("AI 포트폴리오 분석 실패 (스냅샷은 저장됨): %s", e)
+        db.rollback()
 
-    db.execute(
-        text(
-            "INSERT INTO user_portfolio (id, user_id, content, ai_analysis, created_at) "
-            "VALUES (:id, :uid, :content, :ai, NOW())"
-        ),
-        {"id": body.id, "uid": user_id, "content": content, "ai": ai_analysis_json},
-    )
-    db.commit()
     return {"ok": True}
 
 
