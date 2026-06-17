@@ -40,120 +40,109 @@
 ---
 title: LLM 워크플로우
 ---
-flowchart TD
-
-%% ─────────────────────────────────────────────
-%% 공유 LLM 코어 (src/llm_utils)
-%% ─────────────────────────────────────────────
-subgraph CORE["🧩 공유 LLM 코어 · src/llm_utils"]
+flowchart LR
+ subgraph CORE["🧩 공유 LLM 코어 · src/llm_utils"]
     direction TB
-    PROMPT["프롬프트 로드<br/>prompt_registry / prompt_loader<br/>MLflow Prompt Registry 우선<br/>실패 시 로컬 YAML fallback"]
-    GW["GatewayClient.call_with_usage<br/>gateway_client.py<br/>POST /chat/completions<br/>(httpx · Basic Auth)"]
-    GATEWAY{{"MLflow Gateway REST API<br/>52.78.237.104:5001"}}
-    OR(("OpenRouter<br/>Claude 모델 라우팅"))
-    TOK["TokenTracker<br/>토큰·비용 집계"]
-    MLF["MLflowLogger<br/>run/params/metrics<br/>@mlflow.trace + span"]
-
-    PROMPT --> GW
-    GW --> GATEWAY
-    GATEWAY --> OR
-    OR -. "응답(JSON)" .-> GW
-    GW --> TOK
-    GW --> MLF
-end
-
-%% Gateway 엔드포인트 티어
-GATEWAY --- TIER["엔드포인트 티어<br/>low_performance_llm · mid_performance_llm<br/>high_performance_llm"]
-
-%% ─────────────────────────────────────────────
-%% Flow 1: 국면 × 뉴스 요약 배치
-%% ─────────────────────────────────────────────
-subgraph F1["📈 Flow 1 · 국면×뉴스 요약 배치 (script/llm/regime_news_summary_pipeline.py)"]
+        PROMPT["프롬프트 로드<br>prompt_registry / prompt_loader<br>MLflow Prompt Registry 우선<br>실패 시 로컬 YAML fallback"]
+        GW["GatewayClient.call_with_usage<br>gateway_client.py<br>POST /chat/completions<br>(httpx · Basic Auth)"]
+        GATEWAY{{"MLflow Gateway REST API<br>52.78.237.104:5001"}}
+        OR(("OpenRouter<br>Claude 모델 라우팅"))
+        TOK["TokenTracker<br>토큰·비용 집계"]
+        MLF["MLflowLogger<br>run/params/metrics<br>@mlflow.trace + span"]
+  end
+ subgraph F1["📈 Flow 1 · 국면×뉴스 요약 배치 (script/llm/regime_news_summary_pipeline.py)"]
     direction TB
-    F1A["① regime 테이블 조회<br/>RegimeDBLoader<br/>종목별 상승/하락 국면 목록"]
-    F1B["② 국면 구간 뉴스 로드<br/>S3 preprocessed_final/<br/>중복 제거 + 컨텍스트 빌드"]
-    F1C["③ 종목 메타 조회<br/>asset 테이블 / fallback 매핑<br/>종목명·섹터"]
-    F1D["④ regime_analysis 프롬프트 렌더<br/>국면·수익률·변동성·뉴스 주입"]
-    F1E["⑤ LLM 요약 호출 + 재시도<br/>low_performance_llm · 최대 3회<br/>JSON 파싱 + 필수키 검증"]
-    F1F["⑥ S3 저장<br/>summary/{ticker}/{start}_{end}.json"]
-
-    F1A --> F1B --> F1C --> F1D --> F1E --> F1F
-end
-
-%% ─────────────────────────────────────────────
-%% Flow 2: 포트폴리오 실시간 종합 분석
-%% ─────────────────────────────────────────────
-subgraph F2["💼 Flow 2 · 포트폴리오 실시간 분석 (src/llm_utils/portfolio_analyzer.py)"]
+        F1A["① regime 테이블 조회<br>RegimeDBLoader<br>종목별 상승/하락 국면 목록"]
+        F1B["② 국면 구간 뉴스 로드<br>S3 preprocessed_final/<br>중복 제거 + 컨텍스트 빌드"]
+        F1C["③ 종목 메타 조회<br>asset 테이블 / fallback 매핑<br>종목명·섹터"]
+        F1D["④ regime_analysis 프롬프트 렌더<br>국면·수익률·변동성·뉴스 주입"]
+        F1E["⑤ LLM 요약 호출 + 재시도<br>low_performance_llm · 최대 3회<br>JSON 파싱 + 필수키 검증"]
+        F1F["⑥ S3 저장<br>summary/{ticker}/{start}_{end}.json"]
+  end
+ subgraph F2["💼 Flow 2 · 포트폴리오 실시간 분석 (src/llm_utils/portfolio_analyzer.py)"]
     direction TB
-    F2A["① 보유 종목 집계<br/>비중·진입가·현재가·손익·섹터·총수익률"]
-    F2B["② 종목별 최근 30일 국면 뉴스 조회<br/>S3 summary/ (Flow 1 산출물)"]
-    F2C["③ 투자성향 조회<br/>user.invest_type (개인화)"]
-    F2D["④ portfolio_analysis 프롬프트 렌더<br/>holdings payload 구성 (PII 제외)"]
-    F2E["⑤ LLM 종합 분석 호출<br/>mid_performance_llm"]
-    F2F["⑥ 관련 최신 뉴스 검색<br/>news_evidence_client<br/>OpenRouter web_search 직접 호출<br/>annotation 교차검증"]
-    F2G["⑦ JSON 파싱 후 반환<br/>실패 시 graceful degrade → NULL"]
-
-    F2A --> F2B --> F2C --> F2D --> F2E --> F2F --> F2G
-end
-
-%% ─────────────────────────────────────────────
-%% Flow 3: 요약 품질 평가
-%% ─────────────────────────────────────────────
-subgraph F3["🧪 Flow 3 · 요약 품질 평가 
+        F2A["① 보유 종목 집계<br>비중·진입가·현재가·손익·섹터·총수익률"]
+        F2B["② 종목별 최근 30일 국면 뉴스 조회<br>S3 summary/ (Flow 1 산출물)"]
+        F2C["③ 투자성향 조회<br>user.invest_type (개인화)"]
+        F2D["④ portfolio_analysis 프롬프트 렌더<br>holdings payload 구성 (PII 제외)"]
+        F2E["⑤ LLM 종합 분석 호출<br>mid_performance_llm"]
+        F2F["⑥ 관련 최신 뉴스 검색<br>news_evidence_client<br>OpenRouter web_search 직접 호출<br>annotation 교차검증"]
+        F2G["⑦ JSON 파싱 후 반환<br>실패 시 graceful degrade → NULL"]
+  end
+ subgraph F3["🧪 Flow 3 · 요약 품질 평가 
 (script/llm/news_summary_pipeline.py)"]
     direction TB
-    F3A["① 뉴스 샘플링"]
-    F3B["② 레퍼런스 요약 생성<br/>mid_performance_llm"]
-    F3C["③ 프로덕션 요약 생성<br/>low_performance_llm"]
-    F3D["④ 비교 평가<br/>evaluation_engine<br/>ROUGE · BERTScore · 정성 점수"]
-    F3E["⑤ MLflow evaluation 등록"]
-
-    F3A --> F3B --> F3C --> F3D --> F3E
-end
-
-%% ─────────────────────────────────────────────
-%% Flow 4: 변동요인 일배치 DAG
-%% ─────────────────────────────────────────────
-subgraph F4["⏱️ Flow 4 · 변동요인 일배치 (airflow/dags/finance_factor_insights_daily.py)"]
+        F3A["① 뉴스 샘플링"]
+        F3B["② 레퍼런스 요약 생성<br>mid_performance_llm"]
+        F3C["③ 프로덕션 요약 생성<br>low_performance_llm"]
+        F3D["④ 비교 평가<br>evaluation_engine<br>ROUGE · BERTScore · 정성 점수"]
+        F3E["⑤ MLflow evaluation 등록"]
+  end
+ subgraph F4["⏱️ Flow 4 · 변동요인 일배치 (airflow/dags/finance_factor_insights_daily.py)"]
     direction TB
-    F4A["① 선행 DAG 완료 대기<br/>regime_news_summary_daily<br/>ExternalTaskSensor"]
-    F4B["② 12개 종목 변동요인 LLM 분석<br/>종목별 개별 실패 허용"]
-    F4C["③ MySQL factor_insight UPSERT<br/>멱등 (ticker+date 중복 스킵)"]
+        F4A["① 선행 DAG 완료 대기<br>regime_news_summary_daily<br>ExternalTaskSensor"]
+        F4B["② 12개 종목 변동요인 LLM 분석<br>종목별 개별 실패 허용"]
+        F4C["③ MySQL factor_insight UPSERT<br>멱등 (ticker+date 중복 스킵)"]
+  end
+    PROMPT --> GW
+    GW --> GATEWAY & TOK & MLF
+    GATEWAY --> OR
+    OR -. 응답(JSON) .-> GW
+    GATEWAY --- TIER["엔드포인트 티어<br>low_performance_llm · mid_performance_llm<br>high_performance_llm"]
+    F1A --> F1B
+    F1B --> F1C
+    F1C --> F1D
+    F1D --> F1E & PROMPT
+    F1E --> F1F & GW
+    F2A --> F2B
+    F2B --> F2C
+    F2C --> F2D
+    F2D --> F2E & PROMPT
+    F2E --> F2F & GW
+    F2F --> F2G
+    F3A --> F3B
+    F3B --> F3C & GW
+    F3C --> F3D & GW
+    F3D --> F3E
+    F4A --> F4B
+    F4B --> F4C & GW
+    F1F -. summary/ 재사용 .-> F2B
+    F1F -. 선행 산출물 .-> F4A
 
-    F4A --> F4B --> F4C
-end
-
-%% ─────────────────────────────────────────────
-%% 각 흐름 → 공유 코어 연결
-%% ─────────────────────────────────────────────
-F1D --> PROMPT
-F1E --> GW
-F2D --> PROMPT
-F2E --> GW
-F3B --> GW
-F3C --> GW
-F4B --> GW
-
-%% 산출물 의존성 (Flow 1 → Flow 2/4)
-F1F -. "summary/ 재사용" .-> F2B
-F1F -. "선행 산출물" .-> F4A
-
-%% ─────────────────────────────────────────────
-%% 스타일
-%% ─────────────────────────────────────────────
-classDef core fill:#1f2937,stroke:#60a5fa,stroke-width:2px,color:#f9fafb;
-classDef gw fill:#0f766e,stroke:#5eead4,stroke-width:2px,color:#ecfeff;
-classDef step fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,color:#0f172a;
-classDef llm fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#7c2d12;
-classDef store fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#3b0764;
-
-class PROMPT,TOK,MLF core;
-class GW,GATEWAY,OR,TIER gw;
-class F1A,F1B,F1C,F1D,F2A,F2B,F2C,F2D,F2G,F3A,F3D,F3E,F4A,F4C step;
-class F1E,F2E,F2F,F3B,F3C,F4B llm;
-class F1F store;
+     PROMPT:::core
+     GW:::gw
+     GATEWAY:::gw
+     OR:::gw
+     TOK:::core
+     MLF:::core
+     F1A:::step
+     F1B:::step
+     F1C:::step
+     F1D:::step
+     F1E:::llm
+     F1F:::store
+     F2A:::step
+     F2B:::step
+     F2C:::step
+     F2D:::step
+     F2E:::llm
+     F2F:::llm
+     F2G:::step
+     F3A:::step
+     F3B:::llm
+     F3C:::llm
+     F3D:::step
+     F3E:::step
+     F4A:::step
+     F4B:::llm
+     F4C:::step
+     TIER:::gw
+    classDef core fill:#1f2937,stroke:#60a5fa,stroke-width:2px,color:#f9fafb
+    classDef gw fill:#0f766e,stroke:#5eead4,stroke-width:2px,color:#ecfeff
+    classDef step fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,color:#0f172a
+    classDef llm fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#7c2d12
+    classDef store fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#3b0764
 ```
-
 
 ### 설명
 
