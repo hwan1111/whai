@@ -21,7 +21,7 @@
     | ML 모델 | LightGBM · XGBoost · ExtraTrees · ElasticNet · Huber · PatchTST(Transformer) · Markov Switching AR(국면 탐지) |
     | Pipeline | Apache Airflow (CeleryExecutor + Redis) |
     | Data | Aiven MySQL(서비스 DB) · AWS S3(뉴스·모델 아티팩트) ·  pykrx / FinanceDataReader |
-    | Infra / CI·CD | Docker · AWS EC2 · AWS ECR · GitHub Actions · MLflow(Postgres backend) |
+    | Infra / CI·CD | Docker · AWS EC2 Ubuntu 24.04.4 LTS   · AWS ECR · GitHub Actions · MLflow(Postgres backend),  |
 
 ## 2. 아키텍쳐
 
