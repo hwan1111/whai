@@ -75,7 +75,7 @@ if _ENV_FILE.exists():
 GATEWAY_ENDPOINT = "mid_performance_llm"
 EXPERIMENT_NAME = "portfolio_analysis"
 NEWS_DAYS = 30
-MAX_TOKENS = 1200
+MAX_TOKENS = 5000
 TEMPERATURE = 0.4
 MAX_NEWS_PER_TICKER = 3
 
@@ -124,7 +124,12 @@ def _parse_llm_response(text: str) -> dict[str, Any]:
     if start == -1 or end == 0:
         raise ValueError(f"응답에서 JSON을 찾을 수 없습니다: {content[:200]}")
 
-    return json.loads(content[start:end])
+    raw = content[start:end]
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        logger.debug("JSON 파싱 실패 — raw 응답(앞 500자): %s", raw[:500])
+        raise
 
 
 def _render(template: str, **kwargs: str) -> str:
