@@ -17,9 +17,9 @@
     | Language | Python 3.12 |
     | Frontend | Next.js 16 (App Router) · React 19 · Tailwind CSS 4 |
     | Backend | FastAPI · SQLAlchemy · slowapi(rate limit) · JWT 인증 |
-    | LLM / Agent | MLflow Gateway → OpenRouter(Claude · OpenAI) · MLflow Prompt Registry · MLflow Tracing(토큰/비용 추적) |
+    | LLM / Agent |  MLflow 3.12.0 · OpenRouter(Claude · OpenAI) |
     | ML 모델 | LightGBM · XGBoost · ExtraTrees · ElasticNet · Huber · PatchTST(Transformer) · Markov Switching AR(국면 탐지) |
-    | Pipeline | Apache Airflow (CeleryExecutor + Redis) |
+    | Pipeline | Apache Airflow 3.0.6 |
     | Data | Aiven MySQL(서비스 DB) · AWS S3(뉴스·모델 아티팩트) ·  pykrx / FinanceDataReader |
     | Infra / CI·CD | Docker · AWS EC2 Ubuntu 24.04.4 LTS   · AWS ECR · GitHub Actions · MLflow(Postgres backend),  |
 
@@ -184,12 +184,17 @@ flowchart LR
         D3["finance_regime_update_daily<br/>국면 탐지+LLM 요약→DB"]
         D4["finance_stock_predict_daily<br/>D+5 예측 + 드리프트 감지"]
         D5["finance_model_retrain<br/>2순위 모델 재학습 트리거"]
+        D6["finance_regime_news_summary_daily<br/>국면별 뉴스 LLM 요약"]
+        D7["finance_factor_insights_daily<br/>퀀트 팩터 분석 & 인사이트"]
     end
 
     D1 --> D3
     D2 --> D3
     D1 --> D4
     D4 -->|drift| D5
+    D2 --> D6
+    D3 --> D6
+    D6 --> D7
 
     subgraph STORE["저장소"]
         S3[("S3<br/>raw / preprocessed / summary")]
@@ -200,6 +205,11 @@ flowchart LR
     D3 --> S3
     D3 --> MYSQL
     D4 --> MYSQL
+    
+    %% 신규 DAG 저장소 연결
+    D6 --> S3
+    D6 --> MYSQL
+    D7 --> MYSQL
 
     subgraph SERVE["서비스 (FastAPI + Next.js)"]
         API["/api/v1<br/>news · prices · report · favorites"]
@@ -259,7 +269,7 @@ flowchart LR
     df["regime_change"]   = regime_switch_flag
     df["target"]          = np.log(df["close"].shift(-5) / df["close"])  # D+5 로그수익률
     
-    # 종목별 최종 모델 추론 (예: 신한지주 XGBRegressor, MAPE 2.36%)
+    # 종목별 최종 모델 추론 (예: 신한지주 Prophet MAPE 1.72%)
     with open("data/saved_models/final/055550.pkl", "rb") as f:
         model = pickle.load(f)
     log_return_d5  = model.predict(np.nan_to_num(X))[0]
