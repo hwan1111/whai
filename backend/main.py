@@ -10,7 +10,6 @@ from backend.db import engine, Base
 from backend.limiter import limiter
 from backend.routers import auth, news, prices, report, favorites
 import backend.models.user         # noqa: F401 — Base에 모델 등록
-import backend.models.news         # noqa: F401
 import backend.models.user_portfolio  # noqa: F401
 import backend.models.favorite     # noqa: F401
 import backend.models.correlation  # noqa: F401
